@@ -25,3 +25,8 @@ tsanet:
       # Must be a Connect-1 account (login is proxied). Mapped to Beta via DB setup (users.company_id = 2).
       username: "admin@tsanet.org"
       password: "T123456!"
+  sync:
+    enabled: true
+    initial-delay-ms: 10000
+    interval-ms: 60000
+    poll-scenario-accounts: true

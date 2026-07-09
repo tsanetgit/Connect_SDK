@@ -4,3 +4,5 @@ tsanet:
       enabled: false
   scenarios:
     run-on-startup: false
+  sync:
+    enabled: false

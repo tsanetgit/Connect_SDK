@@ -25,6 +25,22 @@ public final class TsaNetApiSessionFactory {
         return TsaNetApi.initialize(configuration);
     }
 
+    public TsaNetApiSession openSessionForAccount(String username, String password) {
+        return openSession(AccountSessionLabel.fromUsername(username), username, password);
+    }
+
+    public String sessionLabelForAccount(String username) {
+        return AccountSessionLabel.fromUsername(username);
+    }
+
+    public String sqlitePathForAccount(String username) {
+        return sqlitePathFor(sessionLabelForAccount(username));
+    }
+
+    public String sqlitePathForLabel(String sessionLabel) {
+        return sqlitePathFor(sessionLabel);
+    }
+
     String sqlitePathFor(String sessionLabel) {
         String sqliteBasePath = connectionSettings.sqliteBasePath();
         if (sqliteBasePath.endsWith(".db")) {

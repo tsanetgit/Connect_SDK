@@ -1,5 +1,6 @@
 package com.tsanet.facade.cli.commands;
 
+import static com.tsanet.facade.cli.TerminalColors.BLUE;
 import static com.tsanet.facade.cli.TerminalColors.GREEN;
 import static com.tsanet.facade.cli.TerminalColors.RED;
 import static com.tsanet.facade.cli.TerminalColors.RESET;
@@ -7,6 +8,8 @@ import static com.tsanet.facade.cli.TerminalColors.YELLOW;
 
 import com.tsanet.facade.cli.CliRunContext;
 import com.tsanet.api.TsaNetApiSession;
+import com.tsanet.facade.session.AccountCacheSummary;
+import com.tsanet.facade.session.AccountSessionView;
 import java.util.Scanner;
 import org.springframework.stereotype.Component;
 
@@ -58,8 +61,19 @@ public class LoginCommand implements Command {
                 return;
             }
             println(GREEN, "Login successful. Session ready.");
+            printAccountContext();
         } catch (Exception ex) {
             println(RED, "Login failed: " + ex.getMessage());
+        }
+    }
+
+    private void printAccountContext() {
+        if (session instanceof AccountSessionView accountSession) {
+            accountSession.activeSqlitePath().ifPresent(path -> println(BLUE, "SQLite cache: " + path));
+        }
+        try {
+            println(BLUE, AccountCacheSummary.from(session).describe());
+        } catch (Exception ignored) {
         }
     }
 

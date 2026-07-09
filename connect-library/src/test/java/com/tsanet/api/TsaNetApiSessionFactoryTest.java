@@ -13,6 +13,7 @@ class TsaNetApiSessionFactoryTest {
 
         assertThat(factory.sqlitePathFor("acme")).isEqualTo("/tmp/demo/data-acme.db");
         assertThat(factory.sqlitePathFor("beta")).isEqualTo("/tmp/demo/data-beta.db");
+        assertThat(factory.sqlitePathForAccount("api@appko.com")).isEqualTo("/tmp/demo/data-api-appko.com.db");
     }
 
     @Test

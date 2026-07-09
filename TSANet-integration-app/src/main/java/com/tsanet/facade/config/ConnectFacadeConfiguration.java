@@ -4,6 +4,8 @@ import com.tsanet.api.TsaNetApi;
 import com.tsanet.api.TsaNetApiConnectionSettings;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.TsaNetApiSessionFactory;
+import com.tsanet.facade.session.AccountScopedTsaNetApiSession;
+import java.util.Optional;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,10 +26,13 @@ public class ConnectFacadeConfiguration {
         TsaNetApiSessionFactory sessionFactory,
         ConnectFacadeProperties properties
     ) {
-        return sessionFactory.openSession(
-            "default",
-            properties.auth().username(),
-            properties.auth().password()
-        );
+        Optional<AccountScopedTsaNetApiSession.ConfiguredCredentials> configuredCredentials =
+            properties.auth().isConfigured()
+                ? Optional.of(new AccountScopedTsaNetApiSession.ConfiguredCredentials(
+                    properties.auth().username(),
+                    properties.auth().password()
+                ))
+                : Optional.empty();
+        return new AccountScopedTsaNetApiSession(sessionFactory, configuredCredentials);
     }
 }

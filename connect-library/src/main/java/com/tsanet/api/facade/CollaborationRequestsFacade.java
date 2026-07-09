@@ -3,6 +3,7 @@ package com.tsanet.api.facade;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormTemplateDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
+import com.tsanet.api.connectapi.dto.CommunicationSyncSnapshot;
 import java.util.List;
 import java.util.Map;
 
@@ -45,4 +46,6 @@ public interface CollaborationRequestsFacade {
     CollaborationRequestStatusDto fetchRequestByToken(String caseToken);
 
     void syncAllDetails();
+
+    CommunicationSyncSnapshot syncCommunicationContext();
 }

@@ -16,6 +16,6 @@ class ConnectFacadeApplicationTest {
     void itStartsWithTsaNetApiSessionBean() {
         assertThat(tsaNetApiSession).isNotNull();
         assertThat(tsaNetApiSession.auth()).isNotNull();
-        assertThat(tsaNetApiSession.collaborationRequests()).isNotNull();
+        assertThat(tsaNetApiSession.auth().isAuthorized()).isFalse();
     }
 }

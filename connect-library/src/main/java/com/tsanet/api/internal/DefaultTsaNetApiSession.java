@@ -10,6 +10,7 @@ import com.tsanet.api.connectapi.CollaborationRequestFormValidation;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormTemplateDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
+import com.tsanet.api.connectapi.dto.CommunicationSyncSnapshot;
 import com.tsanet.api.connectapi.dto.PartnerSelectionDto;
 import com.tsanet.api.connectapi.dto.UserContextDto;
 import com.tsanet.api.connectapi.dto.NormalizedHttpsAttachmentConfigDto;
@@ -349,10 +350,54 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
 
     @Override
     public void syncAllDetails() {
+        syncCommunicationContext();
+    }
+
+    @Override
+    public CommunicationSyncSnapshot syncCommunicationContext() {
+        boolean userContextSynced = false;
+        if (auth().isAuthorized()) {
+            try {
+                users().getCurrentUser();
+                userContextSynced = true;
+            } catch (RuntimeException ignored) {
+            }
+        }
+
         List<CollaborationRequestStatusDto> requests = listRequests();
-        fetchNotesForRequests(requests);
-        fetchResponsesForRequests(requests);
+        List<CaseNoteDto> notes = fetchNotesForRequests(requests);
+        List<CaseResponseDto> responses = fetchResponsesForRequests(requests);
         fetchAttachmentConfigsForRequests(requests);
+
+        int webhookSubscriptionCount = 0;
+        if (auth().isAuthorized()) {
+            try {
+                webhookSubscriptionCount = webhooks().listSubscriptions().size();
+            } catch (RuntimeException ignored) {
+            }
+        }
+
+        return new CommunicationSyncSnapshot(
+            requests.size(),
+            notes.size(),
+            responses.size(),
+            countAttachmentConfigs(requests),
+            webhookSubscriptionCount,
+            userContextSynced
+        );
+    }
+
+    private int countAttachmentConfigs(List<CollaborationRequestStatusDto> requests) {
+        int count = 0;
+        for (CollaborationRequestStatusDto request : requests) {
+            if (request.token() == null || request.token().isBlank()) {
+                continue;
+            }
+            if (!attachmentConfigStorageService.findByCaseToken(request.token()).isEmpty()) {
+                count++;
+            }
+        }
+        return count;
     }
 
     @Override

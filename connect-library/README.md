@@ -56,9 +56,12 @@ TsaNetApiSessionFactory factory = TsaNetApi.sessionFactory(
 
 TsaNetApiSession acme = factory.openSession("acme", "acme-user", "secret");
 TsaNetApiSession beta = factory.openSession("beta", "beta-user", "secret");
+
+// Or derive the SQLite file from the login username:
+TsaNetApiSession account = factory.openSessionForAccount("api@appko.com", "secret");
 ```
 
-Each `sessionLabel` gets its own database file: `data-acme.db`, `data-beta.db` (when the base path ends with `.db`).
+Each `sessionLabel` gets its own database file: `data-acme.db`, `data-beta.db` (when the base path ends with `.db`). `openSessionForAccount()` uses `AccountSessionLabel.fromUsername()` so `api@appko.com` maps to `data-api-appko.com.db`.
 
 ## SQLite persistence
 

@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(TsaNetApplicationProperties.class)
+@EnableConfigurationProperties({TsaNetApplicationProperties.class, TsaNetSyncProperties.class})
 public class TsaNetApiConfigurationBean {
     @Bean
     TsaNetApiSessionFactory tsaNetApiSessionFactory(TsaNetApplicationProperties properties) {
