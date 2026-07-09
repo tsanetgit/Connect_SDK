@@ -30,16 +30,16 @@ class SyncStatusControllerTest {
         when(pollingCoordinator.lastPollAt()).thenReturn(java.util.Optional.of(Instant.parse("2026-01-01T00:00:00Z")));
         when(pollingCoordinator.lastSnapshots()).thenReturn(
             Map.of(
-                "api@appko.com",
+                "acme",
                 new CommunicationSyncSnapshot(2, 5, 1, 2, 1, true)
             )
         );
 
         mockMvc.perform(get("/api/sync/status"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.accounts['api@appko.com'].requests").value(2))
-            .andExpect(jsonPath("$.accounts['api@appko.com'].notes").value(5))
-            .andExpect(jsonPath("$.accounts['api@appko.com'].responses").value(1));
+            .andExpect(jsonPath("$.accounts.acme.requests").value(2))
+            .andExpect(jsonPath("$.accounts.acme.notes").value(5))
+            .andExpect(jsonPath("$.accounts.acme.responses").value(1));
     }
 
     @Test

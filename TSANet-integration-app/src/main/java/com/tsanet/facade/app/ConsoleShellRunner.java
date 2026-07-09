@@ -12,8 +12,9 @@ import com.tsanet.facade.cli.CliRunContext;
 import com.tsanet.facade.cli.commands.Command;
 import com.tsanet.facade.cli.commands.CommandRegistry;
 import com.tsanet.facade.cli.commands.ExitSignal;
+import com.tsanet.api.ApplicationUserAccountRegistry;
 import com.tsanet.facade.config.CliProperties;
-import com.tsanet.facade.config.ConnectFacadeProperties;
+import com.tsanet.facade.config.CliProperties;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -25,7 +26,7 @@ import org.springframework.stereotype.Component;
 public class ConsoleShellRunner implements CommandLineRunner {
     private final CommandRegistry commandRegistry;
     private final CliCommandDispatcher commandDispatcher;
-    private final ConnectFacadeProperties connectFacadeProperties;
+    private final ApplicationUserAccountRegistry accountRegistry;
     private final TsaNetApiSession session;
     private final CliRunContext cliRunContext;
     private final CliProperties cliProperties;
@@ -33,14 +34,14 @@ public class ConsoleShellRunner implements CommandLineRunner {
     public ConsoleShellRunner(
         CommandRegistry commandRegistry,
         CliCommandDispatcher commandDispatcher,
-        ConnectFacadeProperties connectFacadeProperties,
+        ApplicationUserAccountRegistry accountRegistry,
         TsaNetApiSession session,
         CliRunContext cliRunContext,
         CliProperties cliProperties
     ) {
         this.commandRegistry = commandRegistry;
         this.commandDispatcher = commandDispatcher;
-        this.connectFacadeProperties = connectFacadeProperties;
+        this.accountRegistry = accountRegistry;
         this.session = session;
         this.cliRunContext = cliRunContext;
         this.cliProperties = cliProperties;
@@ -92,7 +93,7 @@ public class ConsoleShellRunner implements CommandLineRunner {
             return;
         }
 
-        if (connectFacadeProperties.auth().isConfigured()) {
+        if (!accountRegistry.isEmpty()) {
             try {
                 session.auth().loginWithConfiguredCredentials();
                 println(GREEN, "Auto login succeeded. Ready to consume commands.");
@@ -110,7 +111,7 @@ public class ConsoleShellRunner implements CommandLineRunner {
         }
 
         if (!cliRunContext.isPlainOutput()) {
-            println(YELLOW, "Credentials are not fully configured in properties.");
+            println(YELLOW, "No application users configured under tsaet.accounts.");
             println(RED, "Current state: UNAUTHORIZED");
             println(BLUE, "Use 'login' command to authenticate interactively.");
         }

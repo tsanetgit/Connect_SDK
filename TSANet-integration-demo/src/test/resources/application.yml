@@ -1,4 +1,13 @@
 tsanet:
+  api:
+    base-url: "http://localhost:8080"
+  storage:
+    sqlite-path: "${java.io.tmpdir}/tsanet-test"
+  accounts:
+    - id: test
+      username: "test-user"
+      password: "test-password"
+      sqlite-path: "${java.io.tmpdir}/tsanet-test/test.db"
   demo:
     setup:
       enabled: false

@@ -2,7 +2,7 @@ package com.tsanet.facade.cli.commands;
 
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.facade.session.AccountCacheSummary;
-import com.tsanet.facade.session.AccountSessionView;
+import com.tsanet.api.session.AccountSessionView;
 import java.util.Scanner;
 import org.springframework.stereotype.Component;
 

@@ -4,8 +4,8 @@ import com.tsanet.api.TsaNetApi;
 import com.tsanet.api.TsaNetApiConnectionSettings;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.TsaNetApiSessionFactory;
-import com.tsanet.facade.session.AccountScopedTsaNetApiSession;
-import java.util.Optional;
+import com.tsanet.api.ApplicationUserAccountRegistry;
+import com.tsanet.api.session.AccountScopedTsaNetApiSession;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,22 +17,20 @@ public class ConnectFacadeConfiguration {
     TsaNetApiSessionFactory tsaNetApiSessionFactory(ConnectFacadeProperties properties) {
         return TsaNetApi.sessionFactory(TsaNetApiConnectionSettings.of(
             properties.api().baseUrl(),
-            properties.storage().sqlitePath()
+            properties.storage() != null ? properties.storage().sqlitePath() : "data.db"
         ));
+    }
+
+    @Bean
+    ApplicationUserAccountRegistry applicationUserAccountRegistry(ConnectFacadeProperties properties) {
+        return properties.toAccountRegistry();
     }
 
     @Bean
     TsaNetApiSession tsaNetApiSession(
         TsaNetApiSessionFactory sessionFactory,
-        ConnectFacadeProperties properties
+        ApplicationUserAccountRegistry accountRegistry
     ) {
-        Optional<AccountScopedTsaNetApiSession.ConfiguredCredentials> configuredCredentials =
-            properties.auth().isConfigured()
-                ? Optional.of(new AccountScopedTsaNetApiSession.ConfiguredCredentials(
-                    properties.auth().username(),
-                    properties.auth().password()
-                ))
-                : Optional.empty();
-        return new AccountScopedTsaNetApiSession(sessionFactory, configuredCredentials);
+        return new AccountScopedTsaNetApiSession(sessionFactory, accountRegistry);
     }
 }

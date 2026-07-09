@@ -1,11 +1,10 @@
 package com.tsanet.application.sync;
 
+import com.tsanet.api.ApplicationUserAccount;
+import com.tsanet.api.ApplicationUserAccountRegistry;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.TsaNetApiSessionFactory;
 import com.tsanet.api.connectapi.dto.CommunicationSyncSnapshot;
-import com.tsanet.application.config.TsaNetApplicationProperties;
-import com.tsanet.application.config.TsaNetScenarioProperties;
-import com.tsanet.application.config.TsaNetSyncProperties;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -21,39 +20,29 @@ public class ConnectApiPollingCoordinator {
     private static final Logger log = LoggerFactory.getLogger(ConnectApiPollingCoordinator.class);
 
     private final TsaNetApiSessionFactory sessionFactory;
-    private final TsaNetApplicationProperties applicationProperties;
-    private final TsaNetScenarioProperties scenarioProperties;
-    private final TsaNetSyncProperties syncProperties;
+    private final ApplicationUserAccountRegistry accountRegistry;
 
     private volatile Instant lastPollAt;
     private volatile Map<String, CommunicationSyncSnapshot> lastSnapshots = Map.of();
 
     public ConnectApiPollingCoordinator(
         TsaNetApiSessionFactory sessionFactory,
-        TsaNetApplicationProperties applicationProperties,
-        TsaNetScenarioProperties scenarioProperties,
-        TsaNetSyncProperties syncProperties
+        ApplicationUserAccountRegistry accountRegistry
     ) {
         this.sessionFactory = sessionFactory;
-        this.applicationProperties = applicationProperties;
-        this.scenarioProperties = scenarioProperties;
-        this.syncProperties = syncProperties;
+        this.accountRegistry = accountRegistry;
     }
 
     public void pollConfiguredAccounts() {
-        List<PollingAccountRegistry.PollingAccount> accounts = PollingAccountRegistry.resolve(
-            applicationProperties,
-            scenarioProperties,
-            syncProperties.pollScenarioAccounts()
-        );
+        List<ApplicationUserAccount> accounts = PollingAccountRegistry.resolve(accountRegistry);
         if (accounts.isEmpty()) {
-            log.warn("Polling skipped: no accounts configured");
+            log.warn("Polling skipped: configure tsaet.accounts in application.yml");
             return;
         }
 
         Map<String, CommunicationSyncSnapshot> snapshots = new LinkedHashMap<>();
-        for (PollingAccountRegistry.PollingAccount account : accounts) {
-            snapshots.put(account.username(), pollAccount(account));
+        for (ApplicationUserAccount account : accounts) {
+            snapshots.put(account.id(), pollAccount(account));
         }
         lastPollAt = Instant.now();
         lastSnapshots = Collections.unmodifiableMap(snapshots);
@@ -67,21 +56,34 @@ public class ConnectApiPollingCoordinator {
         return lastSnapshots;
     }
 
-    private CommunicationSyncSnapshot pollAccount(PollingAccountRegistry.PollingAccount account) {
+    private CommunicationSyncSnapshot pollAccount(ApplicationUserAccount account) {
         try {
-            TsaNetApiSession session = sessionFactory.openSessionForAccount(account.username(), account.password());
-            session.auth().login(account.username(), account.password());
+            String password = requirePassword(account);
+            TsaNetApiSession session = sessionFactory.openSessionWithSqlitePath(
+                account.sqlitePath(),
+                account.username(),
+                password
+            );
+            session.auth().login(account.username(), password);
             CommunicationSyncSnapshot snapshot = session.collaborationRequests().syncCommunicationContext();
             log.info(
-                "Polled account {} (sqlite={}): {}",
+                "Polled application user {} ({}, sqlite={}): {}",
+                account.id(),
                 account.username(),
-                sessionFactory.sqlitePathForAccount(account.username()),
+                account.sqlitePath(),
                 snapshot.summarize()
             );
             return snapshot;
         } catch (RuntimeException ex) {
-            log.error("Polling failed for account {}: {}", account.username(), ex.getMessage());
+            log.error("Polling failed for application user {}: {}", account.id(), ex.getMessage());
             return new CommunicationSyncSnapshot(0, 0, 0, 0, 0, false);
         }
+    }
+
+    private static String requirePassword(ApplicationUserAccount account) {
+        if (account.password() == null || account.password().isBlank()) {
+            throw new IllegalStateException("Password is required for application user '" + account.id() + "'");
+        }
+        return account.password();
     }
 }

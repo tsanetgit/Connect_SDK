@@ -6,8 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record TsaNetSyncProperties(
     boolean enabled,
     long initialDelayMs,
-    long intervalMs,
-    boolean pollScenarioAccounts
+    long intervalMs
 ) {
     public TsaNetSyncProperties {
         if (initialDelayMs <= 0) {

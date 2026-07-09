@@ -8,8 +8,9 @@ import static com.tsanet.facade.cli.TerminalColors.YELLOW;
 
 import com.tsanet.facade.cli.CliRunContext;
 import com.tsanet.api.TsaNetApiSession;
+import com.tsanet.api.ApplicationUserAccountRegistry;
 import com.tsanet.facade.session.AccountCacheSummary;
-import com.tsanet.facade.session.AccountSessionView;
+import com.tsanet.api.session.AccountSessionView;
 import java.util.Scanner;
 import org.springframework.stereotype.Component;
 

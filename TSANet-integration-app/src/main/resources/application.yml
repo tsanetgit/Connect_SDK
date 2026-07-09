@@ -5,11 +5,13 @@ spring:
 tsanet:
   api:
     base-url: "http://localhost:8080"
-  auth:
-    username: "api@appko.com"
-    password: "T123456!"
   storage:
-    sqlite-path: "${user.home}/.tsanet-client-demo/data.db"
+    sqlite-path: "${user.home}/.tsanet-client-demo"
+  accounts:
+    - id: acme
+      username: "api@appko.com"
+      password: "T123456!"
+      sqlite-path: "${user.home}/.tsanet-client-demo/acme.db"
   cli:
     enabled: false
   webhook:

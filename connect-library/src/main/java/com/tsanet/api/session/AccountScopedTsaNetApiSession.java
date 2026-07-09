@@ -1,5 +1,7 @@
-package com.tsanet.facade.session;
+package com.tsanet.api.session;
 
+import com.tsanet.api.ApplicationUserAccount;
+import com.tsanet.api.ApplicationUserAccountRegistry;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.TsaNetApiSessionFactory;
 import com.tsanet.api.facade.AttachmentsFacade;
@@ -15,27 +17,28 @@ import java.util.Optional;
 
 public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, AccountSessionView {
     private final TsaNetApiSessionFactory sessionFactory;
-    private final Optional<ConfiguredCredentials> configuredCredentials;
+    private final ApplicationUserAccountRegistry accountRegistry;
 
     private volatile TsaNetApiSession delegate;
-    private volatile String activeAccountLabel;
+    private volatile String activeAccountId;
+    private volatile String activeSqlitePath;
 
     public AccountScopedTsaNetApiSession(
         TsaNetApiSessionFactory sessionFactory,
-        Optional<ConfiguredCredentials> configuredCredentials
+        ApplicationUserAccountRegistry accountRegistry
     ) {
         this.sessionFactory = Objects.requireNonNull(sessionFactory, "sessionFactory");
-        this.configuredCredentials = configuredCredentials != null ? configuredCredentials : Optional.empty();
+        this.accountRegistry = Objects.requireNonNull(accountRegistry, "accountRegistry");
     }
 
     @Override
     public Optional<String> activeAccountLabel() {
-        return Optional.ofNullable(activeAccountLabel);
+        return Optional.ofNullable(activeAccountId);
     }
 
     @Override
     public Optional<String> activeSqlitePath() {
-        return activeAccountLabel().map(sessionFactory::sqlitePathForLabel);
+        return Optional.ofNullable(activeSqlitePath);
     }
 
     @Override
@@ -79,12 +82,13 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
     }
 
     private synchronized void activateAccount(String username, String password) {
-        String label = sessionFactory.sessionLabelForAccount(username);
-        if (delegate != null && label.equals(activeAccountLabel)) {
+        ApplicationUserAccount account = accountRegistry.requireByUsername(username);
+        if (delegate != null && account.id().equals(activeAccountId)) {
             return;
         }
-        delegate = sessionFactory.openSessionForAccount(username, password);
-        activeAccountLabel = label;
+        delegate = sessionFactory.openSessionWithSqlitePath(account.sqlitePath(), username, password);
+        activeAccountId = account.id();
+        activeSqlitePath = account.sqlitePath();
     }
 
     void bindAccountForTesting(String username, String password) {
@@ -108,10 +112,13 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
 
         @Override
         public String loginWithConfiguredCredentials() {
-            ConfiguredCredentials credentials = configuredCredentials.orElseThrow(
-                () -> new IllegalStateException("Configured username and password are required")
+            ApplicationUserAccount account = accountRegistry.defaultAccount().orElseThrow(
+                () -> new IllegalStateException("No application users configured under tsaet.accounts")
             );
-            return login(credentials.username(), credentials.password());
+            String password = account.password() != null && !account.password().isBlank()
+                ? account.password()
+                : throwMissingPassword(account);
+            return login(account.username(), password);
         }
 
         @Override
@@ -141,8 +148,9 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
                 delegate.auth().logout();
             }
         }
-    }
 
-    public record ConfiguredCredentials(String username, String password) {
+        private String throwMissingPassword(ApplicationUserAccount account) {
+            throw new IllegalStateException("Password is required for application user '" + account.id() + "'");
+        }
     }
 }

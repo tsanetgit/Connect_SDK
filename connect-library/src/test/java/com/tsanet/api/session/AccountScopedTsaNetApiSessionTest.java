@@ -1,8 +1,10 @@
-package com.tsanet.facade.session;
+package com.tsanet.api.session;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.tsanet.api.ApplicationUserAccount;
+import com.tsanet.api.ApplicationUserAccountRegistry;
 import com.tsanet.api.TsaNetApi;
 import com.tsanet.api.TsaNetApiConnectionSettings;
 import com.tsanet.api.TsaNetApiSessionFactory;
@@ -11,7 +13,6 @@ import com.tsanet.api.storage.CollaborationRequestRepository;
 import com.tsanet.api.storage.DatabaseInitializer;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -22,61 +23,49 @@ class AccountScopedTsaNetApiSessionTest {
     Path tempDir;
 
     @Test
-    void itUsesSeparateSqliteFilesPerAccount() throws Exception {
-        Path basePath = tempDir.resolve("cache.db");
-        TsaNetApiSessionFactory factory = TsaNetApi.sessionFactory(
-            TsaNetApiConnectionSettings.of("http://localhost:8080", basePath.toString())
+    void itUsesConfiguredSqlitePathsPerApplicationUser() {
+        Path alphaDb = tempDir.resolve("alpha.db");
+        Path betaDb = tempDir.resolve("beta.db");
+        ApplicationUserAccountRegistry registry = ApplicationUserAccountRegistry.of(
+            List.of(
+                new ApplicationUserAccount("alpha", "alpha@test.com", "secret", alphaDb.toString()),
+                new ApplicationUserAccount("beta", "beta@test.com", "secret", betaDb.toString())
+            )
         );
-        AccountScopedTsaNetApiSession session = new AccountScopedTsaNetApiSession(factory, Optional.empty());
+        TsaNetApiSessionFactory factory = TsaNetApi.sessionFactory(
+            TsaNetApiConnectionSettings.of("http://localhost:8080", tempDir.resolve("unused.db").toString())
+        );
+        AccountScopedTsaNetApiSession session = new AccountScopedTsaNetApiSession(factory, registry);
 
-        seedRepository(factory.sqlitePathForLabel("alpha-test.com"), 1L, "Alpha request");
-        seedRepository(factory.sqlitePathForLabel("beta-test.com"), 2L, "Beta request");
+        seedRepository(alphaDb.toString(), 1L, "Alpha request");
+        seedRepository(betaDb.toString(), 2L, "Beta request");
 
         session.bindAccountForTesting("alpha@test.com", "secret");
+        assertThat(session.activeAccountLabel()).contains("alpha");
+        assertThat(session.activeSqlitePath()).contains(alphaDb.toString());
         assertThat(session.collaborationRequests().listStoredRequests())
             .singleElement()
             .extracting(CollaborationRequestStatusDto::summary)
             .isEqualTo("Alpha request");
 
         session.bindAccountForTesting("beta@test.com", "secret");
+        assertThat(session.activeAccountLabel()).contains("beta");
         assertThat(session.collaborationRequests().listStoredRequests())
             .singleElement()
             .extracting(CollaborationRequestStatusDto::summary)
             .isEqualTo("Beta request");
-
-        session.bindAccountForTesting("alpha@test.com", "secret");
-        assertThat(session.collaborationRequests().listStoredRequests())
-            .singleElement()
-            .extracting(CollaborationRequestStatusDto::summary)
-            .isEqualTo("Alpha request");
     }
 
     @Test
-    void itKeepsAccountCacheAfterLogout() {
-        Path basePath = tempDir.resolve("cache.db");
-        TsaNetApiSessionFactory factory = TsaNetApi.sessionFactory(
-            TsaNetApiConnectionSettings.of("http://localhost:8080", basePath.toString())
-        );
-        AccountScopedTsaNetApiSession session = new AccountScopedTsaNetApiSession(factory, Optional.empty());
-
-        seedRepository(factory.sqlitePathForLabel("alpha-test.com"), 1L, "Persisted request");
-        session.bindAccountForTesting("alpha@test.com", "secret");
-        session.auth().logout();
-
-        assertThat(session.auth().isAuthorized()).isFalse();
-        assertThat(session.collaborationRequests().listStoredRequests()).hasSize(1);
-    }
-
-    @Test
-    void itRequiresLoginBeforeRemoteOperationsWithoutActiveAccount() {
+    void itRejectsUnknownApplicationUsers() {
         AccountScopedTsaNetApiSession session = new AccountScopedTsaNetApiSession(
             TsaNetApi.sessionFactory(TsaNetApiConnectionSettings.of("http://localhost:8080", tempDir.resolve("x.db").toString())),
-            Optional.empty()
+            ApplicationUserAccountRegistry.empty()
         );
 
-        assertThatThrownBy(() -> session.collaborationRequests().listStoredRequests())
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("login");
+        assertThatThrownBy(() -> session.auth().login("unknown@test.com", "secret"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Unknown application user");
     }
 
     private static void seedRepository(String sqlitePath, long id, String summary) {
