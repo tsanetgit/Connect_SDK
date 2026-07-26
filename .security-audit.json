@@ -1,0 +1,24 @@
+{
+  "_comment": "Written by the Security Review persona. Do not hand-edit.",
+  "schema": 1,
+  "reviewed_commit": "586ced41a6af31904eec6ac9ac3beaa56ac590ea",
+  "reviewed_at": "2026-07-25",
+  "taxonomy_version": 1,
+  "reviewer": "tsanet-ops-security-review",
+  "mechanical": {
+    "pass": 6,
+    "fail": 0,
+    "warn": 0,
+    "skip": 1
+  },
+  "findings": {
+    "high": 0,
+    "medium": 0,
+    "low": 0
+  },
+  "open_findings": [],
+  "notes": [
+    "Baseline mechanical audit only. A full design review against the taxonomy (credential lifecycle, data handling, authorization boundaries, audit trail) has NOT yet been performed on this repo.",
+    "Release-integrity checks report SKIP: this repo has no CI workflows and no releases. They become live when a release pipeline exists, at which point the release should also gain the informed-decision gate used by Zendesk_App."
+  ]
+}
