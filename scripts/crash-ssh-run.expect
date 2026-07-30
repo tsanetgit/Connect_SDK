@@ -1,0 +1,73 @@
+#!/usr/bin/expect -f
+if {![info exists env(CRASH_SSH_PASS)]} {
+    puts stderr "CRASH_SSH_PASS is not set"
+    exit 2
+}
+set password $env(CRASH_SSH_PASS)
+log_user 0
+set timeout 45
+
+proc crash_ssh_emit_output {buffer} {
+    set lines [split $buffer "\n\r"]
+    set out ""
+    foreach line $lines {
+        if {$line eq ""} {
+            continue
+        }
+        if {[string match "Warning: Permanently added*" $line]} {
+            continue
+        }
+        if {$line eq "Password authentication"} {
+            continue
+        }
+        if {[regexp {^\(.*\) Password:\s*$} $line]} {
+            continue
+        }
+        if {[regexp -nocase {^[^:]*'s password:\s*$} $line]} {
+            continue
+        }
+        if {[regexp -nocase {^password for .*:?\s*$} $line]} {
+            continue
+        }
+        append out "${line}\n"
+    }
+    if {$out ne ""} {
+        puts -nonewline $out
+    }
+}
+
+eval spawn ssh $argv
+expect {
+    timeout {
+        puts stderr "expect: timed out after ${timeout}s (no eof from ssh — is CRaSH responding?)"
+        catch {close $spawn_id}
+        catch {wait}
+        exit 124
+    }
+    -nocase -re {\(crash@[^)]+\) Password:\s*} {
+        send -- "$password\r"
+        exp_continue
+    }
+    -nocase -re {crash@[^:\r\n]*'s password:\s*} {
+        send -- "$password\r"
+        exp_continue
+    }
+    -nocase -re {password for[^:\r\n]*:\s*} {
+        send -- "$password\r"
+        exp_continue
+    }
+    -re {\(yes/no/\?\)} {
+        send "yes\r"
+        exp_continue
+    }
+    eof {
+        crash_ssh_emit_output $expect_out(buffer)
+    }
+}
+set res [wait]
+set oserr [lindex $res 2]
+set raw [lindex $res 3]
+if {$oserr != 0} {
+    exit 1
+}
+exit [expr {($raw >> 8) & 255}]

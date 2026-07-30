@@ -1,0 +1,36 @@
+server:
+  port: 9090
+
+tsanet:
+  api:
+    base-url: "http://localhost:8080"
+  storage:
+    sqlite-path: "${user.home}/.tsanet-client-demo"
+  accounts:
+    - id: acme
+      username: "api@appko.com"
+      password: "T123456!"
+      sqlite-path: "${user.home}/.tsanet-client-demo/acme.db"
+    - id: beta
+      username: "admin@tsanet.org"
+      password: "T123456!"
+      sqlite-path: "${user.home}/.tsanet-client-demo/beta.db"
+  connect-db:
+    url: "jdbc:postgresql://localhost:5432/tsa"
+    username: "admin"
+    password: "admin"
+  demo:
+    setup:
+      enabled: true
+  scenarios:
+    run-on-startup: true
+    acme:
+      username: "api@appko.com"
+      password: "T123456!"
+    beta:
+      username: "admin@tsanet.org"
+      password: "T123456!"
+  sync:
+    enabled: true
+    initial-delay-ms: 10000
+    interval-ms: 60000

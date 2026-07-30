@@ -1,7 +1,0 @@
-app:
-  api:
-    base-url: "http://localhost:8080"
-    login-path: "/v1/login"
-  auth:
-    username: ""
-    password: ""

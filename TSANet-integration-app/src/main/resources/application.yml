@@ -1,0 +1,30 @@
+spring:
+  config:
+    import: optional:classpath:tsanet-demo-crash-ssh.properties
+
+tsanet:
+  api:
+    base-url: "http://localhost:8080"
+  storage:
+    sqlite-path: "${user.home}/.tsanet-client-demo"
+  accounts:
+    - id: acme
+      username: "api@appko.com"
+      password: "T123456!"
+      sqlite-path: "${user.home}/.tsanet-client-demo/acme.db"
+  cli:
+    enabled: false
+  webhook:
+    enabled: true
+    port: 8090
+    path: /webhooks/tsanet
+    public-base-url: http://localhost:8090
+
+server:
+  port: ${tsanet.webhook.port:8090}
+
+crash:
+  enabled: true
+  ssh-port: 2000
+  auth-username: crash
+  auth-password: crash

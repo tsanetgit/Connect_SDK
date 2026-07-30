@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
@@ -11,42 +12,23 @@
     </parent>
 
     <groupId>com.tsanet</groupId>
-    <artifactId>client-demo</artifactId>
+    <artifactId>tsanet-client-parent</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>TSANet Client Demo</name>
-    <description>Console Spring Boot client demo for Connect API</description>
+    <packaging>pom</packaging>
+    <name>TSANet Client Parent</name>
+    <description>TSANet Connect API library and sample application</description>
+
+    <modules>
+        <module>connect-library</module>
+        <module>TSANet-integration-demo</module>
+        <module>TSANet-integration-app</module>
+    </modules>
 
     <properties>
         <java.version>21</java.version>
+        <openapi.generator.version>7.8.0</openapi.generator.version>
+        <jackson.databind.nullable.version>0.2.6</jackson.databind.nullable.version>
+        <connect.openapi.spec>${maven.multiModuleProjectDirectory}/../Connect-API-Code/connect-core-api/src/main/resources/openapi.yaml</connect.openapi.spec>
+        <crash.jvm.opens>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED</crash.jvm.opens>
     </properties>
-
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-configuration-processor</artifactId>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
 </project>
