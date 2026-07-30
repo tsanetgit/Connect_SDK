@@ -4,16 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tsanet.api.ApplicationUserAccount;
 import com.tsanet.api.ApplicationUserAccountRegistry;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class PollingAccountRegistryTest {
     @Test
-    void itReturnsConfiguredApplicationUsers() {
+    void itReturnsAllConfiguredAccounts() {
         ApplicationUserAccountRegistry registry = ApplicationUserAccountRegistry.of(
-            List.of(
-                new ApplicationUserAccount("acme", "api@appko.com", "pass-a", "/tmp/acme.db"),
-                new ApplicationUserAccount("beta", "beta@corp.com", "pass-b", "/tmp/beta.db")
+            java.util.List.of(
+                ApplicationUserAccount.passwordAccount("acme", "/tmp/acme.db", "api@appko.com", "pass-a"),
+                ApplicationUserAccount.passwordAccount("beta", "/tmp/beta.db", "beta@corp.com", "pass-b")
             )
         );
 

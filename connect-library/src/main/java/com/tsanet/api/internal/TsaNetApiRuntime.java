@@ -20,6 +20,7 @@ import com.tsanet.api.generated.api.EntitySearchApi;
 import com.tsanet.api.generated.api.FormRequestApi;
 import com.tsanet.api.generated.api.IdentityApi;
 import com.tsanet.api.generated.api.WebhooksApi;
+import com.tsanet.api.generated.api.WebhooksV1Api;
 import com.tsanet.api.generated.invoker.ApiClient;
 import com.tsanet.api.storage.AttachmentConfigRepository;
 import com.tsanet.api.storage.AttachmentConfigStorageService;
@@ -42,9 +43,15 @@ import com.tsanet.api.storage.WebhookInboundEventRepository;
 import com.tsanet.api.storage.WebhookInboundEventStorageService;
 import com.tsanet.api.storage.WebhookSubscriptionRepository;
 import com.tsanet.api.storage.WebhookSubscriptionStorageService;
-import com.tsanet.api.webhook.WebhookInboundService;
+import com.tsanet.api.auth.AuthMode;
+import com.tsanet.api.connectapi.internal.OAuth401RetryInterceptor;
+import com.tsanet.api.connectapi.internal.OAuthTokenGateway;
+import com.tsanet.api.connectapi.internal.TokenManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import org.springframework.http.client.BufferingClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.sqlite.SQLiteDataSource;
 
@@ -55,16 +62,33 @@ public final class TsaNetApiRuntime {
     public static TsaNetApiSession create(TsaNetApiConfiguration configuration) {
         ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
 
-        ApiClient apiClient = new ApiClient();
+        RestTemplate restTemplate = new RestTemplate(
+            new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory())
+        );
+        ApiClient apiClient = new ApiClient(restTemplate);
         apiClient.setBasePath(configuration.apiBaseUrl());
-        apiClient.setBearerToken(() -> sessionStore.getBearerToken().orElse(null));
 
         IdentityApi identityApi = new IdentityApi(apiClient);
+        ConnectApiAuthGateway authGateway = new ConnectApiAuthGateway(identityApi);
+        OAuthTokenGateway oauthTokenGateway = new OAuthTokenGateway();
+        TokenManager tokenManager = new TokenManager(
+            sessionStore,
+            authGateway,
+            oauthTokenGateway,
+            configuration.accountId(),
+            configuration.auth()
+        );
+        if (configuration.auth().mode() == AuthMode.CLIENT_CREDENTIALS) {
+            restTemplate.getInterceptors().add(new OAuth401RetryInterceptor(tokenManager));
+        }
+        apiClient.setBearerToken(() -> bearerTokenForRequest(sessionStore, tokenManager, configuration));
+
         CollaborationRequestsApi collaborationRequestsApi = new CollaborationRequestsApi(apiClient);
         CaseNotesApi caseNotesApi = new CaseNotesApi(apiClient);
         CaseAttachmentsApi caseAttachmentsApi = new CaseAttachmentsApi(apiClient);
         CaseResponsesApi caseResponsesApi = new CaseResponsesApi(apiClient);
         WebhooksApi webhooksApi = new WebhooksApi(apiClient);
+        WebhooksV1Api webhooksV1Api = new WebhooksV1Api(apiClient);
         EntitySearchApi entitySearchApi = new EntitySearchApi(apiClient);
         FormRequestApi formRequestApi = new FormRequestApi(apiClient);
 
@@ -102,7 +126,6 @@ public final class TsaNetApiRuntime {
         AttachmentForwardResultStorageService attachmentForwardResultStorageService =
             new AttachmentForwardResultStorageService(attachmentForwardResultRepository);
 
-        ConnectApiAuthGateway authGateway = new ConnectApiAuthGateway(identityApi);
         ConnectApiCollaborationGateway collaborationGateway = new ConnectApiCollaborationGateway(
             collaborationRequestsApi,
             sessionStore,
@@ -127,6 +150,7 @@ public final class TsaNetApiRuntime {
             userContextStorageService
         );
         ConnectApiWebhooksGateway webhooksGateway = new ConnectApiWebhooksGateway(
+            webhooksV1Api,
             webhooksApi,
             sessionStore,
             webhookSubscriptionStorageService
@@ -146,6 +170,7 @@ public final class TsaNetApiRuntime {
         return new DefaultTsaNetApiSession(
             configuration,
             sessionStore,
+            tokenManager,
             authGateway,
             collaborationGateway,
             formGateway,
@@ -166,6 +191,20 @@ public final class TsaNetApiRuntime {
             attachmentConfigStorageService,
             attachmentForwardResultStorageService
         );
+    }
+
+    private static String bearerTokenForRequest(
+        ConnectApiSessionStore sessionStore,
+        TokenManager tokenManager,
+        TsaNetApiConfiguration configuration
+    ) {
+        if (!sessionStore.getBearerToken().isPresent()) {
+            return null;
+        }
+        if (configuration.auth().mode() == AuthMode.CLIENT_CREDENTIALS) {
+            return tokenManager.ensureValidAccessToken();
+        }
+        return sessionStore.getBearerToken().orElse(null);
     }
 
     private static JdbcTemplate createJdbcTemplate(String sqlitePath) {

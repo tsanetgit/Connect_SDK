@@ -36,7 +36,7 @@ public class ConnectApiPollingCoordinator {
     public void pollConfiguredAccounts() {
         List<ApplicationUserAccount> accounts = PollingAccountRegistry.resolve(accountRegistry);
         if (accounts.isEmpty()) {
-            log.warn("Polling skipped: configure tsaet.accounts in application.yml");
+            log.warn("Polling skipped: configure tsanet.accounts in application.yml");
             return;
         }
 
@@ -58,18 +58,13 @@ public class ConnectApiPollingCoordinator {
 
     private CommunicationSyncSnapshot pollAccount(ApplicationUserAccount account) {
         try {
-            String password = requirePassword(account);
-            TsaNetApiSession session = sessionFactory.openSessionWithSqlitePath(
-                account.sqlitePath(),
-                account.username(),
-                password
-            );
-            session.auth().login(account.username(), password);
+            TsaNetApiSession session = sessionFactory.openSessionForApplicationUser(account);
+            session.auth().authenticate();
             CommunicationSyncSnapshot snapshot = session.collaborationRequests().syncCommunicationContext();
             log.info(
                 "Polled application user {} ({}, sqlite={}): {}",
                 account.id(),
-                account.username(),
+                account.usernameForDisplay(),
                 account.sqlitePath(),
                 snapshot.summarize()
             );
@@ -78,12 +73,5 @@ public class ConnectApiPollingCoordinator {
             log.error("Polling failed for application user {}: {}", account.id(), ex.getMessage());
             return new CommunicationSyncSnapshot(0, 0, 0, 0, 0, false);
         }
-    }
-
-    private static String requirePassword(ApplicationUserAccount account) {
-        if (account.password() == null || account.password().isBlank()) {
-            throw new IllegalStateException("Password is required for application user '" + account.id() + "'");
-        }
-        return account.password();
     }
 }

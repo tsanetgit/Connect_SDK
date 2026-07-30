@@ -101,18 +101,70 @@ session.partners();
 session.attachments();
 ```
 
-Unless noted, remote operations require a prior successful `login()`. Unauthenticated calls throw `IllegalStateException: Not logged in`.
+Unless noted, remote operations require a prior successful `authenticate()` or `login()`. Unauthenticated calls throw `IllegalStateException: Not logged in`.
 
 ### Auth — `session.auth()`
 
 | Method | Description |
 |--------|-------------|
-| `login(username, password)` | Authenticates against Connect API and stores the bearer token in the session. Returns the JWT. |
-| `loginWithConfiguredCredentials()` | Logs in using `username` / `password` from `TsaNetApiConfiguration`. |
-| `isAuthorized()` | `true` when a bearer token is present in the session. |
+| `authenticate()` | Uses configured auth: Azure AD client-credentials for production accounts, or Connect1 password when configured. Refreshes OAuth tokens proactively before expiry. |
+| `login(username, password)` | Connect1 username/password login. Only available when the session is configured for `connect1-password` auth. |
+| `loginWithConfiguredCredentials()` | Alias for `authenticate()`. |
+| `isAuthorized()` | `true` when a valid bearer token is present in the session. |
 | `currentUsername()` | Username from the last successful login, if any. |
+| `currentAccountId()` | Application user id for OAuth sessions. |
+| `authMode()` | `CLIENT_CREDENTIALS` or `CONNECT1_PASSWORD`. |
+| `tokenExpiresAt()` | OAuth token expiry (OAuth sessions only). |
 | `currentBearerToken()` | Current JWT, if any. |
 | `logout()` | Clears in-memory session state (token and username). Does not delete SQLite data. |
+
+#### OAuth client-credentials (Azure AD M2M)
+
+```java
+import com.tsanet.api.ApplicationUserAccount;
+import com.tsanet.api.ApplicationUserAccountConfigMapper;
+import com.tsanet.api.TsaNetApiConfiguration;
+
+ApplicationUserAccount account = ApplicationUserAccountConfigMapper.clientCredentialsAccount(
+    "production",
+    System.getProperty("user.home") + "/.tsanet/production.db",
+    "your-tenant-id",
+    null,
+    "your-client-id",
+    System.getenv("TSANET_CLIENT_SECRET"),
+    "api://your-connect-api-audience",
+    null
+);
+
+TsaNetApiSession session = TsaNetApi.sessionFactory(
+    TsaNetApiConnectionSettings.of("https://connect.example.com", account.sqlitePath())
+).openSessionForApplicationUser(account);
+
+session.auth().authenticate();
+```
+
+Spring Boot apps can configure accounts in `application.yml`:
+
+```yaml
+tsanet:
+  accounts:
+    - id: production
+      sqlite-path: "${user.home}/.tsanet/production.db"
+      auth:
+        type: client-credentials
+        tenant-id: "..."
+        client-id: "..."
+        client-secret: "${TSANET_CLIENT_SECRET}"
+        audience: "api://..."
+    - id: local-dev
+      sqlite-path: "${user.home}/.tsanet/local.db"
+      auth:
+        type: connect1-password
+        username: "api@appko.com"
+        password: "..."
+```
+
+Legacy top-level `username` / `password` on an account entry still map to `connect1-password`.
 
 ### Collaboration requests — `session.collaborationRequests()`
 

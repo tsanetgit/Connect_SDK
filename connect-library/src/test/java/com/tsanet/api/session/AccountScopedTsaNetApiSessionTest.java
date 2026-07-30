@@ -28,8 +28,8 @@ class AccountScopedTsaNetApiSessionTest {
         Path betaDb = tempDir.resolve("beta.db");
         ApplicationUserAccountRegistry registry = ApplicationUserAccountRegistry.of(
             List.of(
-                new ApplicationUserAccount("alpha", "alpha@test.com", "secret", alphaDb.toString()),
-                new ApplicationUserAccount("beta", "beta@test.com", "secret", betaDb.toString())
+                ApplicationUserAccount.passwordAccount("alpha", alphaDb.toString(), "alpha@test.com", "secret"),
+                ApplicationUserAccount.passwordAccount("beta", betaDb.toString(), "beta@test.com", "secret")
             )
         );
         TsaNetApiSessionFactory factory = TsaNetApi.sessionFactory(
@@ -40,7 +40,7 @@ class AccountScopedTsaNetApiSessionTest {
         seedRepository(alphaDb.toString(), 1L, "Alpha request");
         seedRepository(betaDb.toString(), 2L, "Beta request");
 
-        session.bindAccountForTesting("alpha@test.com", "secret");
+        session.bindAccountForTesting("alpha");
         assertThat(session.activeAccountLabel()).contains("alpha");
         assertThat(session.activeSqlitePath()).contains(alphaDb.toString());
         assertThat(session.collaborationRequests().listStoredRequests())
@@ -48,7 +48,7 @@ class AccountScopedTsaNetApiSessionTest {
             .extracting(CollaborationRequestStatusDto::summary)
             .isEqualTo("Alpha request");
 
-        session.bindAccountForTesting("beta@test.com", "secret");
+        session.bindAccountForTesting("beta");
         assertThat(session.activeAccountLabel()).contains("beta");
         assertThat(session.collaborationRequests().listStoredRequests())
             .singleElement()

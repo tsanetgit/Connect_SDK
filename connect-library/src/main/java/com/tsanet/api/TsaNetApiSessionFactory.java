@@ -30,11 +30,17 @@ public final class TsaNetApiSessionFactory {
     }
 
     public TsaNetApiSession openSessionWithSqlitePath(String sqlitePath, String username, String password) {
-        TsaNetApiConfiguration configuration = TsaNetApiConfiguration.of(
+        return openSessionForApplicationUser(
+            ApplicationUserAccount.passwordAccount("default", sqlitePath, username, password)
+        );
+    }
+
+    public TsaNetApiSession openSessionForApplicationUser(ApplicationUserAccount account) {
+        TsaNetApiConfiguration configuration = TsaNetApiConfiguration.forAccount(
             connectionSettings.apiBaseUrl(),
-            sqlitePath,
-            username,
-            password
+            account.sqlitePath(),
+            account.id(),
+            account.auth()
         );
         return TsaNetApi.initialize(configuration);
     }
