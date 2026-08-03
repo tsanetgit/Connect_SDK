@@ -29,7 +29,10 @@ import xml.etree.ElementTree as ET
 RESULTS = []
 POM_NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 
-SOURCE_EXT = (".java", ".xml", ".properties", ".yaml", ".yml", ".json")
+# ".sh" is included because shell scripts are a normal place for a hardcoded
+# login to sit, and omitting them was not a neutral gap: scripts/simple-test.sh
+# carried a real credential past every prior run of this audit.
+SOURCE_EXT = (".java", ".xml", ".properties", ".yaml", ".yml", ".json", ".sh")
 SKIP_DIRS = {".git", "target", "node_modules", ".idea"}
 
 
@@ -116,13 +119,30 @@ def check_dependency_pinning(root):
 
 # ── Credentials ─────────────────────────────────────────────────────────
 
+def names_itself(match):
+    """True when a credential-shaped literal is just the key's own name.
+
+    `MODE_PASSWORD = "password"` and `KEY_API_KEY = "api_key"` are mode and
+    property names, not secrets: the value carries no entropy beyond the
+    identifier that introduces it. Comparing the two with separators and case
+    stripped keeps those quiet without weakening the check, because any real
+    secret differs from its own key name.
+
+    Only applies to the keyword pattern, which is the one with two groups.
+    """
+    if match.re.groups < 2:
+        return False
+    normalize = lambda s: re.sub(r"[^a-z0-9]", "", s.lower())
+    return normalize(match.group(1)) == normalize(match.group(2))
+
+
 def check_no_embedded_secrets(root):
     cat = "credentials"
     patterns = [
         # The value must be single-line: without excluding newlines a prompt
         # such as System.out.print("Password: ") matches across the following
         # lines and reports a literal that does not exist.
-        (re.compile(r"(?i)(password|client[_-]?secret|api[_-]?key|apikey)\s*[=:]\s*[\"'][^\"'{$<\n][^\"'\n]{7,}[\"']"),
+        (re.compile(r"(?i)(password|client[_-]?secret|api[_-]?key|apikey)\s*[=:]\s*[\"']([^\"'{$<\n][^\"'\n]{7,})[\"']"),
          "credential-shaped literal"),
         (re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}"), "Slack token"),
         (re.compile(r"ghp_[A-Za-z0-9]{20,}"), "GitHub PAT"),
@@ -134,6 +154,8 @@ def check_no_embedded_secrets(root):
         for pat, label in patterns:
             for m in pat.finditer(body):
                 if placeholders.search(m.group(0)):
+                    continue
+                if names_itself(m):
                     continue
                 hits.append(f"{rel}: {label}")
     if hits:
