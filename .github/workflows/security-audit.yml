@@ -1,0 +1,69 @@
+name: security-audit
+
+# Runs the mechanical security checks in scripts/security-audit.py. Those checks
+# have existed since #33 but had no runner, so a FAIL could sit on main
+# unnoticed. They are the floor, not the review: the design review is performed
+# by a reviewer against the connector security taxonomy.
+#
+# scripts/security-audit.py exit codes:
+#   0  clean
+#   1  at least one FAIL      -> fails this job
+#   2  WARN only, no FAIL     -> job passes, warning annotated
+#   3  usage / setup error    -> fails this job
+#
+# WARN is deliberately non-blocking. There is a pre-existing WARN on main
+# (credential-shaped identifiers near log statements) that wants a judgement
+# call rather than a mechanical fix, and a check that is red on arrival is a
+# check people learn to ignore. FAIL blocks.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least privilege: the audit only reads the checked-out tree.
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      # Pinned to a commit SHA, not a moving tag. security-audit.py's own
+      # release-pipeline check warns on any `uses:` that is not a 40-character
+      # SHA, so an unpinned action here would make the audit flag itself.
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run mechanical security audit
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/security-audit.py | tee audit.txt
+          status=${PIPESTATUS[0]}
+
+          {
+            echo '## Mechanical security audit'
+            echo
+            echo '```'
+            cat audit.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          case "$status" in
+            0)
+              echo "Audit clean."
+              ;;
+            2)
+              echo "::warning title=Security audit::Audit reported warnings but no failures (exit 2). Not blocking."
+              ;;
+            1)
+              echo "::error title=Security audit::Audit reported at least one FAIL (exit 1)."
+              exit 1
+              ;;
+            *)
+              echo "::error title=Security audit::Audit could not run (exit $status)."
+              exit "$status"
+              ;;
+          esac
