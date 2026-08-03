@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Connect API credentials — edit these for your environment.
-LOGIN_USERNAME="api@appko.com"
-LOGIN_PASSWORD="T123456!"
+# Connect API credentials. This is a public repository, so these are read from
+# the environment and never committed:
+#
+#   export LOGIN_USERNAME=... LOGIN_PASSWORD=...
+#
+LOGIN_USERNAME="${LOGIN_USERNAME:?set LOGIN_USERNAME in the environment}"
+LOGIN_PASSWORD="${LOGIN_PASSWORD:?set LOGIN_PASSWORD in the environment}"
 
-# CRaSH SSH credentials (default for the running demo app).
-CRASH_USER="crash"
-CRASH_PASSWORD="crash"
+# CRaSH SSH credentials, matching whatever the running demo app was started with.
+CRASH_USER="${CRASH_USER:?set CRASH_USER in the environment}"
+CRASH_PASSWORD="${CRASH_PASSWORD:?set CRASH_PASSWORD in the environment}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=crash-ssh-common.sh

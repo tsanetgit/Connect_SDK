@@ -7,11 +7,25 @@ tsanet:
     base-url: "http://localhost:8080"
   storage:
     sqlite-path: "${user.home}/.tsanet-client-demo"
-  accounts:
-    - id: acme
-      username: "api@appko.com"
-      password: "T123456!"
-      sqlite-path: "${user.home}/.tsanet-client-demo/acme.db"
+  # No accounts are configured here. This is a public repository, so credentials
+  # must never be committed. Supply them at run time instead, for example
+  #
+  #   tsanet:
+  #     accounts:
+  #       - id: acme
+  #         username: "${TSANET_ACME_USER}"
+  #         password: "${TSANET_ACME_PASSWORD}"
+  #         sqlite-path: "${user.home}/.tsanet-client-demo/acme.db"
+  #
+  # in an untracked application-local.yml activated with
+  # --spring.profiles.active=local, or via SPRING_APPLICATION_JSON.
+  #
+  # Omit the entry entirely rather than leaving blank values. PasswordAuthConfig
+  # rejects a null or blank username/password in its compact constructor, and
+  # every entry under `accounts` is mapped through it, so a placeholder that
+  # resolves to empty fails startup with "username is required for
+  # connect1-password auth". With no entries the registry is simply empty and
+  # the session starts unauthenticated.
   cli:
     enabled: false
   webhook:
