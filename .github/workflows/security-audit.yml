@@ -39,9 +39,16 @@ jobs:
       - name: Run mechanical security audit
         shell: bash
         run: |
-          set -o pipefail
-          python3 scripts/security-audit.py | tee audit.txt
-          status=${PIPESTATUS[0]}
+          # GitHub runs this with `bash -e -o pipefail`, so the audit's non-zero
+          # exit would abort the step before the exit-code handling below ever
+          # ran, making every WARN a job failure. Disable errexit around the
+          # call and inspect the status explicitly. Writing to a file rather
+          # than piping also keeps $? unambiguous.
+          set +e
+          python3 scripts/security-audit.py > audit.txt 2>&1
+          status=$?
+          set -e
+          cat audit.txt
 
           {
             echo '## Mechanical security audit'
