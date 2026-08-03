@@ -29,7 +29,10 @@ import xml.etree.ElementTree as ET
 RESULTS = []
 POM_NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 
-SOURCE_EXT = (".java", ".xml", ".properties", ".yaml", ".yml", ".json")
+# ".sh" is included because shell scripts are a normal place for a hardcoded
+# login to sit, and omitting them was not a neutral gap: scripts/simple-test.sh
+# carried a real credential past every prior run of this audit.
+SOURCE_EXT = (".java", ".xml", ".properties", ".yaml", ".yml", ".json", ".sh")
 SKIP_DIRS = {".git", "target", "node_modules", ".idea"}
 
 
