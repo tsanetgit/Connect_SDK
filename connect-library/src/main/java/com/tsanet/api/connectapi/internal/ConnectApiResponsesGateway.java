@@ -218,7 +218,8 @@ public class ConnectApiResponsesGateway {
             dto.getReceiveCompanyId(),
             dto.getToken(),
             formatDateTime(dto.getCreatedAt()),
-            formatDateTime(dto.getUpdatedAt())
+            formatDateTime(dto.getUpdatedAt()),
+            dto.getTestCase()
         );
     }
 
