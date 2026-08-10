@@ -1,0 +1,103 @@
+name: publish
+
+# A published GitHub Release is what cuts a version, deliberately rather than on
+# every push: consumers pin a version, so a library change reaches them only when
+# someone decides it should. Same pattern as Connect_Gateway's connector-core
+# publish. Publishes the root pom (connect-library's parent, which consumers must
+# be able to resolve) and connect-library ONLY; the app and demo modules are
+# never published.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish, no leading v (e.g. 0.1.0)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # connect-library's codegen reads the Connect OpenAPI spec from a sibling
+      # checkout of Connect-API-Code (the connect.openapi.spec property), which is
+      # a PRIVATE repository, so this checkout needs a token with read access to
+      # it. If the secret is missing, FAIL LOUDLY rather than skip: a green
+      # publish run that shipped no artifact is the skip-reads-as-success trap
+      # Fin-Intercom_App's CI documented after living it. The two checkout paths
+      # below place the repos as siblings, which is the layout the pom expects.
+      - name: Require the spec-repo token
+        env:
+          HAVE_TOKEN: ${{ secrets.CONNECT_API_CODE_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$HAVE_TOKEN" != "true" ]; then
+            echo "::error::The CONNECT_API_CODE_TOKEN secret is not configured. Publishing builds connect-library from the Connect-API-Code spec (a private repo), so a read token for it is required. Configure the secret and re-run."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          path: Connect_SDK
+          persist-credentials: false
+
+      - uses: actions/checkout@v4
+        with:
+          repository: tsanetgit/Connect-API-Code
+          ref: beta
+          token: ${{ secrets.CONNECT_API_CODE_TOKEN }}
+          path: Connect-API-Code
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          # Writes the ~/.m2/settings.xml server entry that the root pom's
+          # distributionManagement <id>github</id> resolves against.
+          server-id: github
+          server-username: MAVEN_USERNAME
+          server-password: MAVEN_TOKEN
+
+      - name: Resolve the version to publish
+        id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          TAG: ${{ github.ref_name }}
+          INPUT: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" = "release" ]; then V="${TAG#v}"; else V="$INPUT"; fi
+
+          # Refuse a SNAPSHOT: a consumer pinned to a SNAPSHOT is pinned to
+          # nothing, which reintroduces the silent drift publishing removes.
+          case "$V" in
+            *-SNAPSHOT) echo "::error::Refusing to publish a SNAPSHOT ($V)."; exit 1 ;;
+          esac
+          if ! printf '%s' "$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version '$V' is not x.y.z."; exit 1
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "publishing $V"
+
+      - name: Set the project version
+        working-directory: Connect_SDK
+        run: |
+          mvn -B --no-transfer-progress versions:set \
+            -DnewVersion="${{ steps.v.outputs.version }}" -DgenerateBackupPoms=false
+
+      # `deploy` runs the full lifecycle, so connect-library's tests gate the
+      # release: a broken client cannot be published. Reactor selection publishes
+      # the parent pom and the library only.
+      - name: Build, test and publish connect-library
+        working-directory: Connect_SDK
+        env:
+          MAVEN_USERNAME: ${{ github.actor }}
+          MAVEN_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: mvn -B --no-transfer-progress -pl .,connect-library deploy

@@ -31,4 +31,17 @@
         <connect.openapi.spec>${maven.multiModuleProjectDirectory}/../Connect-API-Code/connect-core-api/src/main/resources/openapi.yaml</connect.openapi.spec>
         <crash.jvm.opens>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED</crash.jvm.opens>
     </properties>
+
+    <!-- Where `mvn deploy` publishes. The workflow deploys the root pom (this file is
+         connect-library's parent, so consumers need it resolvable) plus connect-library
+         only, via reactor selection (-pl .,connect-library); the app and demo modules
+         are never published. The server id `github` is wired to credentials by the
+         publish workflow's setup-java step. -->
+    <distributionManagement>
+        <repository>
+            <id>github</id>
+            <name>GitHub Packages - tsanetgit/Connect_SDK</name>
+            <url>https://maven.pkg.github.com/tsanetgit/Connect_SDK</url>
+        </repository>
+    </distributionManagement>
 </project>
