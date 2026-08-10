@@ -28,8 +28,9 @@ public class CollaborationRequestRepository {
             """
             INSERT INTO collaboration_request (
                 id, status, summary, submit_company_name, submit_company_id,
-                receive_company_name, receive_company_id, token, created_at, updated_at, fetched_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                receive_company_name, receive_company_id, token, created_at, updated_at,
+                test_case, fetched_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 status = excluded.status,
                 summary = excluded.summary,
@@ -40,6 +41,7 @@ public class CollaborationRequestRepository {
                 token = excluded.token,
                 created_at = excluded.created_at,
                 updated_at = excluded.updated_at,
+                test_case = excluded.test_case,
                 fetched_at = excluded.fetched_at
             """,
             requests,
@@ -55,7 +57,8 @@ public class CollaborationRequestRepository {
                 ps.setString(8, request.token());
                 ps.setString(9, request.createdAt());
                 ps.setString(10, request.updatedAt());
-                ps.setString(11, fetchedAt);
+                ps.setObject(11, toStoredBoolean(request.testCase()));
+                ps.setString(12, fetchedAt);
             }
         );
     }
@@ -64,7 +67,8 @@ public class CollaborationRequestRepository {
         return jdbcTemplate.query(
             """
             SELECT id, status, summary, submit_company_name, submit_company_id,
-                   receive_company_name, receive_company_id, token, created_at, updated_at
+                   receive_company_name, receive_company_id, token, created_at, updated_at,
+                   test_case
             FROM collaboration_request
             ORDER BY id
             """,
@@ -76,7 +80,8 @@ public class CollaborationRequestRepository {
         return jdbcTemplate.query(
             """
             SELECT id, status, summary, submit_company_name, submit_company_id,
-                   receive_company_name, receive_company_id, token, created_at, updated_at
+                   receive_company_name, receive_company_id, token, created_at, updated_at,
+                   test_case
             FROM collaboration_request
             WHERE submit_company_id = ? OR receive_company_id = ?
             ORDER BY id
@@ -98,7 +103,19 @@ public class CollaborationRequestRepository {
             rs.getObject("receive_company_id", Long.class),
             rs.getString("token"),
             rs.getString("created_at"),
-            rs.getString("updated_at")
+            rs.getString("updated_at"),
+            readStoredBoolean(rs, "test_case")
         );
+    }
+
+    private static Integer toStoredBoolean(Boolean value) {
+        return value == null ? null : (value ? 1 : 0);
+    }
+
+    // The SQLite driver's typed getObject(col, Integer.class) throws on NULL, so read
+    // the JDBC-1 way: primitive get plus wasNull.
+    private static Boolean readStoredBoolean(ResultSet rs, String column) throws SQLException {
+        int raw = rs.getInt(column);
+        return rs.wasNull() ? null : raw != 0;
     }
 }

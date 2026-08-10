@@ -15,6 +15,7 @@ public final class DatabaseInitializer {
             token TEXT NOT NULL UNIQUE,
             created_at TEXT,
             updated_at TEXT,
+            test_case INTEGER,
             fetched_at TEXT NOT NULL
         )
         """;
@@ -151,6 +152,7 @@ public final class DatabaseInitializer {
 
     public static void createSchema(JdbcTemplate jdbcTemplate) {
         jdbcTemplate.execute(COLLABORATION_REQUEST_TABLE);
+        ensureColumn(jdbcTemplate, "collaboration_request", "test_case", "INTEGER");
         jdbcTemplate.execute(CASE_NOTE_TABLE);
         jdbcTemplate.execute(CASE_RESPONSE_TABLE);
         jdbcTemplate.execute(USER_CONTEXT_TABLE);
