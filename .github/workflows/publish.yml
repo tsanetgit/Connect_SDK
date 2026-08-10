@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish, no leading v (e.g. 0.1.0)"
+        description: "Version to publish (e.g. 0.1.0; a leading v is tolerated)"
         required: true
 
 permissions:
@@ -73,7 +73,7 @@ jobs:
           INPUT: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          if [ "$EVENT" = "release" ]; then V="${TAG#v}"; else V="$INPUT"; fi
+          if [ "$EVENT" = "release" ]; then V="${TAG#v}"; else V="${INPUT#v}"; fi
 
           # Refuse a SNAPSHOT: a consumer pinned to a SNAPSHOT is pinned to
           # nothing, which reintroduces the silent drift publishing removes.
