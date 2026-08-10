@@ -308,10 +308,11 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         long receiverCompanyId,
         String caseNumber,
         String summary,
-        String description
+        String description,
+        boolean testSubmission
     ) {
         CollaborationRequestFormTemplateDto template = getCreateFormByCompanyId(receiverCompanyId);
-        return createRequest(template, caseNumber, summary, description, Collections.emptyMap());
+        return createRequest(template, caseNumber, summary, description, Collections.emptyMap(), testSubmission);
     }
 
     @Override
@@ -320,7 +321,8 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         String caseNumber,
         String summary,
         String description,
-        Map<Long, String> customFieldValues
+        Map<Long, String> customFieldValues,
+        boolean testSubmission
     ) {
         CollaborationRequestDTO form = formGateway.getFormByDocumentId(formTemplate.documentId());
         long storageCompanyId = formTemplate.receiverCompanyId() != null
@@ -333,7 +335,8 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
             caseNumber,
             summary,
             description,
-            customFieldValues
+            customFieldValues,
+            testSubmission
         );
     }
 
@@ -344,7 +347,8 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         String caseNumber,
         String summary,
         String description,
-        Map<Long, String> customFieldValues
+        Map<Long, String> customFieldValues,
+        boolean testSubmission
     ) {
         storeFormMetadata(storageCompanyId, departmentId, form);
         FormTemplateMapper.applyCustomFieldValues(form, customFieldValues);
@@ -358,7 +362,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         form.setInternalCaseNumber(caseNumber);
         form.setProblemSummary(summary);
         form.setProblemDescription(description);
-        form.setTestSubmission(true);
+        form.setTestSubmission(testSubmission);
         if (form.getPriority() == null) {
             form.setPriority(CasePriority.MEDIUM);
         }

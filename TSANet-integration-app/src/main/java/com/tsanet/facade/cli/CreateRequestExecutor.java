@@ -37,7 +37,8 @@ public class CreateRequestExecutor {
                 caseNumber,
                 summary,
                 description,
-                customFieldValues
+                customFieldValues,
+                true
             );
             CollaborationRequestPrinter.printList(cliRunContext, "Created collaboration request", List.of(created));
             System.out.println(EntityPrinter.info(
