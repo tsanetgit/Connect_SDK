@@ -100,4 +100,6 @@ jobs:
         env:
           MAVEN_USERNAME: ${{ github.actor }}
           MAVEN_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: mvn -B --no-transfer-progress -pl .,connect-library deploy
+        # -Dmaven.deploy.skip=false arms the deploy that the root pom disarms by
+        # default, so this workflow is the only path that publishes.
+        run: mvn -B --no-transfer-progress -pl .,connect-library deploy -Dmaven.deploy.skip=false

@@ -30,6 +30,11 @@
         <jackson.databind.nullable.version>0.2.6</jackson.databind.nullable.version>
         <connect.openapi.spec>${maven.multiModuleProjectDirectory}/../Connect-API-Code/connect-core-api/src/main/resources/openapi.yaml</connect.openapi.spec>
         <crash.jvm.opens>--add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.lang.reflect=ALL-UNNAMED</crash.jvm.opens>
+        <!-- Deploy is disarmed by default so a bare local `mvn deploy` with configured
+             credentials cannot accidentally publish (the SNAPSHOT gate lives in the
+             workflow, which is the only place that arms this with
+             -Dmaven.deploy.skip=false). Same toggle pattern as Connect_Gateway. -->
+        <maven.deploy.skip>true</maven.deploy.skip>
     </properties>
 
     <!-- Where `mvn deploy` publishes. The workflow deploys the root pom (this file is
