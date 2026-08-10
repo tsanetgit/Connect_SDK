@@ -32,6 +32,14 @@
             <artifactId>jackson-databind</artifactId>
         </dependency>
         <dependency>
+            <!-- The client relies on findAndRegisterModules(); outside Spring Boot nothing
+                 else puts the java.time module on the classpath, and date serialization
+                 fails with InvalidDefinitionException. Declared here so every consumer
+                 gets it, not only Boot apps. -->
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-jdbc</artifactId>
         </dependency>
