@@ -28,20 +28,66 @@ public interface CollaborationRequestsFacade {
 
     List<CollaborationRequestFormDto> listStoredFormsForDocument(long documentId);
 
+    /**
+     * @param testSubmission whether the case is created test-flagged. There is no
+     *     default on purpose: every case that is not test-flagged pages a real
+     *     engineer at a real partner, so the choice is made per call, deliberately.
+     */
     CollaborationRequestStatusDto createRequest(
         long receiverCompanyId,
         String caseNumber,
         String summary,
-        String description
+        String description,
+        boolean testSubmission
     );
 
+    /**
+     * @param testSubmission whether the case is created test-flagged. See
+     *     {@link #createRequest(long, String, String, String, boolean)}.
+     */
     CollaborationRequestStatusDto createRequest(
         CollaborationRequestFormTemplateDto formTemplate,
         String caseNumber,
         String summary,
         String description,
-        Map<Long, String> customFieldValues
+        Map<Long, String> customFieldValues,
+        boolean testSubmission
     );
+
+    /**
+     * Compatibility form from before the flag was per-call; keeps the pre-existing
+     * behavior of always creating a TEST submission.
+     *
+     * @deprecated pass {@code testSubmission} explicitly; scheduled for removal at
+     *     the next release boundary.
+     */
+    @Deprecated(forRemoval = true)
+    default CollaborationRequestStatusDto createRequest(
+        long receiverCompanyId,
+        String caseNumber,
+        String summary,
+        String description
+    ) {
+        return createRequest(receiverCompanyId, caseNumber, summary, description, true);
+    }
+
+    /**
+     * Compatibility form from before the flag was per-call; keeps the pre-existing
+     * behavior of always creating a TEST submission.
+     *
+     * @deprecated pass {@code testSubmission} explicitly; scheduled for removal at
+     *     the next release boundary.
+     */
+    @Deprecated(forRemoval = true)
+    default CollaborationRequestStatusDto createRequest(
+        CollaborationRequestFormTemplateDto formTemplate,
+        String caseNumber,
+        String summary,
+        String description,
+        Map<Long, String> customFieldValues
+    ) {
+        return createRequest(formTemplate, caseNumber, summary, description, customFieldValues, true);
+    }
 
     CollaborationRequestStatusDto fetchRequestByToken(String caseToken);
 
