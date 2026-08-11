@@ -33,8 +33,8 @@ The working steps, in order:
   The pin is the record of what was certified, not the commit to build today.
   The `oauth` branch itself remains only as history; do not build or consume
   from it.
-- No release is tagged yet. When one is cut, `connect-library` publishes to
-  GitHub Packages (`tsanetgit/Connect_SDK#43`).
+- `v0.1.0` is released; `connect-library 0.1.0` is published to GitHub Packages
+  (`tsanetgit/Connect_SDK#43`).
 
 An alternative to the sibling clone, for consumers who need a hermetic build, is
 vendoring the specification into the repository and pointing `connect.openapi.spec`
