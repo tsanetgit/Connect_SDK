@@ -18,23 +18,23 @@ The working steps, in order:
 1. Clone `tsanetgit/Connect-API-Code` beside this repository (the directory must be
    named `Connect-API-Code`) and check out the `beta` branch. The generated symbols
    depend on which specification the sibling provides, so the branch matters.
-2. In this repository, check out the commit you are building (see the branch notes
-   below).
+2. In this repository, check out `main` (see the branch notes below).
 3. `mvn install` from the root, or `mvn -pl connect-library -am install` for the
    library alone. JDK 21.
 
 ## Branch notes: what builds today
 
-- **`oauth` at `0f57facd3326` builds against the beta specification and passes the
-  live BETA contract suite.** This is the commit the Connect Gateway's `v0.1.0`
-  certifies against, and the pin to use until `oauth` merges and a release is
-  tagged.
-- **`main` at `332e5c7` does not compile against the beta specification**:
-  `ConnectApiWebhooksGateway` references generated symbols that specification does
-  not produce (cannot-find-symbol at its webhook-gateway call sites), because that
-  code tracks a newer specification than the sibling's `beta` branch carries. This
-  is a known condition on the release path, not a local setup problem; do not
-  debug your environment over it.
+- **`main` builds.** `tsanetgit/Connect_SDK#44` merged the `oauth` branch on
+  2026-08-11 (commit `66f44fe`). `main` builds against the sibling `beta`
+  specification and passes the full suite (verified 2026-08-11: `mvn install`,
+  JDK 21, 122 tests, 0 failures). Build from `main`; no commit pin is needed.
+- **Historical: the Connect Gateway `v0.1.0` certification pin.** Gateway
+  `v0.1.0` certified against `oauth` at `0f57facd3326`, from before the merge.
+  The pin is the record of what was certified, not the commit to build today.
+  The `oauth` branch itself remains only as history; do not build or consume
+  from it.
+- No release is tagged yet. When one is cut, `connect-library` publishes to
+  GitHub Packages (`tsanetgit/Connect_SDK#43`).
 
 An alternative to the sibling clone, for consumers who need a hermetic build, is
 vendoring the specification into the repository and pointing `connect.openapi.spec`
