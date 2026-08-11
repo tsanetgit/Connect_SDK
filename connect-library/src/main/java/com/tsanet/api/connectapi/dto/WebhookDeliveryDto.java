@@ -2,7 +2,7 @@ package com.tsanet.api.connectapi.dto;
 
 public record WebhookDeliveryDto(
     Long id,
-    Long integrationId,
+    String cloudEventId,
     String eventType,
     Integer httpStatus,
     Integer attemptNumber,

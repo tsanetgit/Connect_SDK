@@ -80,7 +80,8 @@ public class ConnectApiCollaborationGateway {
             dto.getReceiveCompanyId(),
             dto.getToken(),
             formatDateTime(dto.getCreatedAt()),
-            formatDateTime(dto.getUpdatedAt())
+            formatDateTime(dto.getUpdatedAt()),
+            dto.getTestCase()
         );
     }
 

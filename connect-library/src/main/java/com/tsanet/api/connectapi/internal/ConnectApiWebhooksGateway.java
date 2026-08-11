@@ -8,6 +8,7 @@ import com.tsanet.api.connectapi.dto.WebhookDeliveryPageDto;
 import com.tsanet.api.connectapi.dto.WebhookSubscriptionDto;
 import com.tsanet.api.connectapi.dto.WebhookSubscriptionResponseDto;
 import com.tsanet.api.generated.api.WebhooksApi;
+import com.tsanet.api.generated.api.WebhooksV1Api;
 import com.tsanet.api.generated.model.CreateWebhookSubscriptionRequestDTO;
 import com.tsanet.api.generated.model.WebhookDeliveryLogDTO;
 import com.tsanet.api.generated.model.WebhookDeliveryLogPageDTO;
@@ -20,15 +21,18 @@ import java.util.Collections;
 import java.util.List;
 
 public class ConnectApiWebhooksGateway {
+    private final WebhooksV1Api webhooksV1Api;
     private final WebhooksApi webhooksApi;
     private final ConnectApiSessionStore sessionStore;
     private final WebhookSubscriptionStorageService storageService;
 
     public ConnectApiWebhooksGateway(
+        WebhooksV1Api webhooksV1Api,
         WebhooksApi webhooksApi,
         ConnectApiSessionStore sessionStore,
         WebhookSubscriptionStorageService storageService
     ) {
+        this.webhooksV1Api = webhooksV1Api;
         this.webhooksApi = webhooksApi;
         this.sessionStore = sessionStore;
         this.storageService = storageService;
@@ -37,7 +41,7 @@ public class ConnectApiWebhooksGateway {
     public List<WebhookSubscriptionDto> listWebhookSubscriptions() {
         requireLogin();
 
-        List<WebhookSubscriptionDTO> body = webhooksApi.listWebhookSubscriptions();
+        List<WebhookSubscriptionDTO> body = webhooksV1Api.listWebhookSubscriptions();
         if (body == null) {
             return Collections.emptyList();
         }
@@ -55,12 +59,11 @@ public class ConnectApiWebhooksGateway {
             request.setEventTypes(eventTypes.stream().map(WebhookEventType::fromValue).toList());
         }
 
-        WebhookSubscriptionResponseDTO response = webhooksApi.createWebhookSubscription(request);
+        WebhookSubscriptionResponseDTO response = webhooksV1Api.createWebhookSubscription(request);
         if (response == null) {
             throw new IllegalStateException("Create webhook subscription returned empty response");
         }
 
-        // Refresh stored list after mutation.
         listWebhookSubscriptions();
         storageService.storeSecret(response.getId(), response.getSecret());
         return toResponseDto(response);
@@ -86,7 +89,6 @@ public class ConnectApiWebhooksGateway {
     public void deleteWebhookSubscription(Long id) {
         requireLogin();
         webhooksApi.deleteWebhookSubscription(id);
-        // Refresh stored list after mutation.
         listWebhookSubscriptions();
     }
 
@@ -115,7 +117,7 @@ public class ConnectApiWebhooksGateway {
     private WebhookDeliveryDto toDeliveryDto(WebhookDeliveryLogDTO dto) {
         return new WebhookDeliveryDto(
             dto.getId(),
-            dto.getIntegrationId(),
+            dto.getCloudEventId(),
             dto.getEventType(),
             dto.getHttpStatus(),
             dto.getAttemptNumber(),

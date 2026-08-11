@@ -1,6 +1,7 @@
 package com.tsanet.application.config;
 
 import com.tsanet.api.ApplicationUserAccount;
+import com.tsanet.api.ApplicationUserAccountConfigMapper;
 import com.tsanet.api.ApplicationUserAccountRegistry;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -24,20 +25,50 @@ public record TsaNetApplicationProperties(
     public record Storage(String sqlitePath) {
     }
 
-    public record ApplicationUserAccountConfig(String id, String username, String password, String sqlitePath) {
+    public record ApplicationUserAccountConfig(
+        String id,
+        String sqlitePath,
+        String username,
+        String password,
+        AccountAuthProperties auth
+    ) {
+        public ApplicationUserAccount toAccount() {
+            if (auth != null) {
+                return ApplicationUserAccountConfigMapper.fromAuthType(
+                    id,
+                    sqlitePath,
+                    auth.type(),
+                    auth.username() != null ? auth.username() : username,
+                    auth.password() != null ? auth.password() : password,
+                    auth.tenantId(),
+                    auth.tokenUrl(),
+                    auth.clientId(),
+                    auth.clientSecret(),
+                    auth.audience(),
+                    auth.scope()
+                );
+            }
+            return ApplicationUserAccountConfigMapper.fromLegacyFields(id, sqlitePath, username, password);
+        }
+    }
+
+    public record AccountAuthProperties(
+        String type,
+        String username,
+        String password,
+        String tenantId,
+        String tokenUrl,
+        String clientId,
+        String clientSecret,
+        String audience,
+        String scope
+    ) {
     }
 
     public ApplicationUserAccountRegistry toAccountRegistry() {
         if (accounts != null && !accounts.isEmpty()) {
             return ApplicationUserAccountRegistry.of(
-                accounts.stream()
-                    .map(account -> new ApplicationUserAccount(
-                        account.id(),
-                        account.username(),
-                        account.password(),
-                        account.sqlitePath()
-                    ))
-                    .toList()
+                accounts.stream().map(ApplicationUserAccountConfig::toAccount).toList()
             );
         }
         if (auth != null && auth.isConfigured() && storage != null && storage.sqlitePath() != null) {

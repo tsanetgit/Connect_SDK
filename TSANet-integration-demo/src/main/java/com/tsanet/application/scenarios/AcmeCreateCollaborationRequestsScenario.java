@@ -124,7 +124,8 @@ public class AcmeCreateCollaborationRequestsScenario implements IntegrationScena
             BETA_COMPANY_ID,
             caseNumber,
             summary,
-            description
+            description,
+            true
         );
         existing.add(created);
         log.info("Created id={} status={} token={}", created.id(), created.status(), created.token());

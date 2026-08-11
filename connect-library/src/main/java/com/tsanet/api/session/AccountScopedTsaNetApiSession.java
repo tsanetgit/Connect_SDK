@@ -4,6 +4,8 @@ import com.tsanet.api.ApplicationUserAccount;
 import com.tsanet.api.ApplicationUserAccountRegistry;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.TsaNetApiSessionFactory;
+import com.tsanet.api.auth.AuthMode;
+import com.tsanet.api.auth.PasswordAuthConfig;
 import com.tsanet.api.facade.AttachmentsFacade;
 import com.tsanet.api.facade.AuthFacade;
 import com.tsanet.api.facade.CaseNotesFacade;
@@ -12,6 +14,7 @@ import com.tsanet.api.facade.CollaborationRequestsFacade;
 import com.tsanet.api.facade.PartnersFacade;
 import com.tsanet.api.facade.UserFacade;
 import com.tsanet.api.facade.WebhooksFacade;
+import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -81,44 +84,52 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
         return requireDelegate().attachments();
     }
 
-    private synchronized void activateAccount(String username, String password) {
-        ApplicationUserAccount account = accountRegistry.requireByUsername(username);
+    private synchronized void activateAccount(ApplicationUserAccount account) {
         if (delegate != null && account.id().equals(activeAccountId)) {
             return;
         }
-        delegate = sessionFactory.openSessionWithSqlitePath(account.sqlitePath(), username, password);
+        delegate = sessionFactory.openSessionForApplicationUser(account);
         activeAccountId = account.id();
         activeSqlitePath = account.sqlitePath();
     }
 
-    void bindAccountForTesting(String username, String password) {
-        activateAccount(username, password);
+    void bindAccountForTesting(String accountId) {
+        activateAccount(accountRegistry.requireById(accountId));
     }
 
     private TsaNetApiSession requireDelegate() {
         TsaNetApiSession current = delegate;
         if (current == null) {
-            throw new IllegalStateException("No account session. Use 'login' first.");
+            throw new IllegalStateException("No account session. Use 'login' or 'authenticate' first.");
         }
         return current;
     }
 
     private final class AccountAuthFacade implements AuthFacade {
         @Override
+        public String authenticate() {
+            ApplicationUserAccount account = accountRegistry.defaultAccount().orElseThrow(
+                () -> new IllegalStateException("No application users configured under tsanet.accounts")
+            );
+            activateAccount(account);
+            return requireDelegate().auth().authenticate();
+        }
+
+        @Override
         public String login(String username, String password) {
-            activateAccount(username, password);
+            ApplicationUserAccount account = accountRegistry.requireByUsername(username);
+            if (account.auth().mode() != AuthMode.CONNECT1_PASSWORD) {
+                throw new IllegalStateException(
+                    "Account '" + account.id() + "' uses client-credentials auth. Use authenticate()."
+                );
+            }
+            activateAccount(account);
             return requireDelegate().auth().login(username, password);
         }
 
         @Override
         public String loginWithConfiguredCredentials() {
-            ApplicationUserAccount account = accountRegistry.defaultAccount().orElseThrow(
-                () -> new IllegalStateException("No application users configured under tsaet.accounts")
-            );
-            String password = account.password() != null && !account.password().isBlank()
-                ? account.password()
-                : throwMissingPassword(account);
-            return login(account.username(), password);
+            return authenticate();
         }
 
         @Override
@@ -135,6 +146,30 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
         }
 
         @Override
+        public Optional<String> currentAccountId() {
+            if (delegate == null) {
+                return Optional.empty();
+            }
+            return delegate.auth().currentAccountId();
+        }
+
+        @Override
+        public Optional<AuthMode> authMode() {
+            if (delegate == null) {
+                return Optional.empty();
+            }
+            return delegate.auth().authMode();
+        }
+
+        @Override
+        public Optional<Instant> tokenExpiresAt() {
+            if (delegate == null) {
+                return Optional.empty();
+            }
+            return delegate.auth().tokenExpiresAt();
+        }
+
+        @Override
         public Optional<String> currentBearerToken() {
             if (delegate == null) {
                 return Optional.empty();
@@ -147,10 +182,6 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
             if (delegate != null) {
                 delegate.auth().logout();
             }
-        }
-
-        private String throwMissingPassword(ApplicationUserAccount account) {
-            throw new IllegalStateException("Password is required for application user '" + account.id() + "'");
         }
     }
 }

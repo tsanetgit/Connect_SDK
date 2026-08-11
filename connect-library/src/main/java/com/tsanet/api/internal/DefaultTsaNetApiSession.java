@@ -53,7 +53,10 @@ import com.tsanet.api.storage.UserContextStorageService;
 import com.tsanet.api.storage.WebhookInboundEventStorageService;
 import com.tsanet.api.storage.WebhookSubscriptionStorageService;
 import com.tsanet.api.webhook.WebhookInboundService;
+import com.tsanet.api.auth.AuthMode;
+import com.tsanet.api.connectapi.internal.TokenManager;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -65,6 +68,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
 
     private final TsaNetApiConfiguration configuration;
     private final ConnectApiSessionStore sessionStore;
+    private final TokenManager tokenManager;
     private final ConnectApiAuthGateway authGateway;
     private final ConnectApiCollaborationGateway collaborationGateway;
     private final ConnectApiFormGateway formGateway;
@@ -89,6 +93,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     DefaultTsaNetApiSession(
         TsaNetApiConfiguration configuration,
         ConnectApiSessionStore sessionStore,
+        TokenManager tokenManager,
         ConnectApiAuthGateway authGateway,
         ConnectApiCollaborationGateway collaborationGateway,
         ConnectApiFormGateway formGateway,
@@ -111,6 +116,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     ) {
         this.configuration = configuration;
         this.sessionStore = sessionStore;
+        this.tokenManager = tokenManager;
         this.authGateway = authGateway;
         this.collaborationGateway = collaborationGateway;
         this.formGateway = formGateway;
@@ -180,19 +186,23 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     }
 
     @Override
+    public String authenticate() {
+        return tokenManager.authenticate();
+    }
+
+    @Override
     public String login(String username, String password) {
+        if (configuration.auth().mode() != AuthMode.CONNECT1_PASSWORD) {
+            throw new IllegalStateException("Password login is not configured for this session. Use authenticate().");
+        }
         String token = authGateway.login(username, password);
-        sessionStore.save(username, token);
+        sessionStore.savePassword(username, token);
         return token;
     }
 
     @Override
     public String loginWithConfiguredCredentials() {
-        if (configuration.username() == null || configuration.username().isBlank()
-            || configuration.password() == null || configuration.password().isBlank()) {
-            throw new IllegalStateException("Configured username and password are required");
-        }
-        return login(configuration.username(), configuration.password());
+        return authenticate();
     }
 
     @Override
@@ -206,7 +216,25 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     }
 
     @Override
+    public Optional<String> currentAccountId() {
+        return sessionStore.getAccountId().or(() -> Optional.of(configuration.accountId()));
+    }
+
+    @Override
+    public Optional<AuthMode> authMode() {
+        return sessionStore.getAuthMode().or(() -> Optional.of(configuration.auth().mode()));
+    }
+
+    @Override
+    public Optional<Instant> tokenExpiresAt() {
+        return tokenManager.tokenExpiresAt();
+    }
+
+    @Override
     public Optional<String> currentBearerToken() {
+        if (!sessionStore.isAuthorized()) {
+            return Optional.empty();
+        }
         return sessionStore.getBearerToken();
     }
 
@@ -280,10 +308,11 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         long receiverCompanyId,
         String caseNumber,
         String summary,
-        String description
+        String description,
+        boolean testSubmission
     ) {
         CollaborationRequestFormTemplateDto template = getCreateFormByCompanyId(receiverCompanyId);
-        return createRequest(template, caseNumber, summary, description, Collections.emptyMap());
+        return createRequest(template, caseNumber, summary, description, Collections.emptyMap(), testSubmission);
     }
 
     @Override
@@ -292,7 +321,8 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         String caseNumber,
         String summary,
         String description,
-        Map<Long, String> customFieldValues
+        Map<Long, String> customFieldValues,
+        boolean testSubmission
     ) {
         CollaborationRequestDTO form = formGateway.getFormByDocumentId(formTemplate.documentId());
         long storageCompanyId = formTemplate.receiverCompanyId() != null
@@ -305,7 +335,8 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
             caseNumber,
             summary,
             description,
-            customFieldValues
+            customFieldValues,
+            testSubmission
         );
     }
 
@@ -316,7 +347,8 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         String caseNumber,
         String summary,
         String description,
-        Map<Long, String> customFieldValues
+        Map<Long, String> customFieldValues,
+        boolean testSubmission
     ) {
         storeFormMetadata(storageCompanyId, departmentId, form);
         FormTemplateMapper.applyCustomFieldValues(form, customFieldValues);
@@ -330,7 +362,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         form.setInternalCaseNumber(caseNumber);
         form.setProblemSummary(summary);
         form.setProblemDescription(description);
-        form.setTestSubmission(true);
+        form.setTestSubmission(testSubmission);
         if (form.getPriority() == null) {
             form.setPriority(CasePriority.MEDIUM);
         }
@@ -666,7 +698,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
 
     private void ensureAuthenticatedForWebhook() {
         if (!auth().isAuthorized()) {
-            auth().loginWithConfiguredCredentials();
+            auth().authenticate();
         }
     }
 }
