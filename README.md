@@ -3,7 +3,9 @@
 Demonstration of Integration with TSANet API - In Java.
 
 Modules: `connect-library` (the Java client for the TSANet Connect API),
-`TSANet-integration-app` (console app), `TSANet-integration-demo` (demo scenarios).
+`TSANet-integration-app` (console app), `TSANet-integration-demo` (demo scenarios),
+`attachment-receiver` (the attachment receive endpoint), and `demo-ui` (the branded
+web demo over the SDK facades).
 
 ## Building
 
@@ -40,3 +42,18 @@ An alternative to the sibling clone, for consumers who need a hermetic build, is
 vendoring the specification into the repository and pointing `connect.openapi.spec`
 at the vendored file (the pattern the Fin adapter uses). That is a maintainer
 decision and is deliberately not part of this document.
+
+## Demo UI documentation
+
+The `demo-ui` module (adopted from `shawn-tsanet/connect-sdk-demo` in
+`tsanetgit/Connect_SDK#59`) is documented under [`docs/`](docs/):
+
+- [USER_GUIDE](docs/USER_GUIDE.md): what the demo does and how to drive it
+- [RUNBOOK](docs/RUNBOOK.md): build, start, credentials, tunnel, shutdown
+- [azure-deployment](docs/azure-deployment.md) and
+  [aws-hosting-options](docs/aws-hosting-options.md): hosting
+- [porting-scope](docs/porting-scope.md): Python/JS/TS follow-on scoping
+
+The root `Dockerfile` builds the demo-ui runtime image; the jar is built outside
+docker first (see the Dockerfile header). A hosted deploy must set
+`TSANET_DEMO_AUTH_PASSWORD`, or the app runs with no auth gate.
