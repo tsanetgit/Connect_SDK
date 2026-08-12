@@ -1,0 +1,73 @@
+name: verify
+
+# Full-reactor build and test on every PR and on main. Until this workflow
+# existed the repo's only PR check was the security audit, so Java compile and
+# test breakage could reach main unseen; the receipts lived on whichever
+# machine last ran `mvn install`. This is the clean-machine counterpart.
+#
+# Runs the WHOLE reactor deliberately (no -pl selection): the publish workflow
+# selects modules because publishing is selective, but verification is not —
+# every module, including ones never published, must build and pass its tests.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# A superseded push to the same PR doesn't need its old run to finish. Pushes
+# to main get a per-commit group instead: a shared group would let a newer
+# push cancel a PENDING older one, leaving that commit with no verify result.
+concurrency:
+  group: verify-${{ github.event_name == 'push' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # connect-library's codegen reads the Connect OpenAPI spec from a sibling
+      # checkout of Connect-API-Code (the connect.openapi.spec property), which
+      # is a PRIVATE repository, so this checkout needs a token with read access
+      # to it. Same fail-loudly rule as the publish workflow: a skipped build
+      # that reads as success is worse than a red one. Note this means PRs from
+      # FORKS fail here by design — fork runs do not receive repository
+      # secrets; org members should push branches to this repository instead.
+      - name: Require the spec-repo token
+        env:
+          HAVE_TOKEN: ${{ secrets.CONNECT_API_CODE_TOKEN != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$HAVE_TOKEN" != "true" ]; then
+            echo "::error::The CONNECT_API_CODE_TOKEN secret is not available. The build generates connect-library's client from the Connect-API-Code spec (a private repo), so a read token for it is required. Fork PRs do not receive secrets; push the branch to this repository instead."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          path: Connect_SDK
+          persist-credentials: false
+
+      # The spec BRANCH matters: the generated symbols depend on which
+      # specification the sibling provides (see the README's build notes), and
+      # this repo builds against beta.
+      - uses: actions/checkout@v4
+        with:
+          repository: tsanetgit/Connect-API-Code
+          ref: beta
+          token: ${{ secrets.CONNECT_API_CODE_TOKEN }}
+          path: Connect-API-Code
+          persist-credentials: false
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      - name: Build and test the full reactor
+        working-directory: Connect_SDK
+        run: mvn -B --no-transfer-progress verify
