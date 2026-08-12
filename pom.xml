@@ -22,6 +22,7 @@
         <module>connect-library</module>
         <module>TSANet-integration-demo</module>
         <module>TSANet-integration-app</module>
+        <module>demo-ui</module>
     </modules>
 
     <properties>

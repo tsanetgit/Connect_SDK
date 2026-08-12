@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TSANet Connect SDK Demo</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="tsanet-header">
+    <img src="assets/tsanet-logo.png" alt="TSANet" class="tsanet-logo">
+    <div>
+        <h1>Connect SDK Demo</h1>
+        <p class="subtitle" id="env-subtitle">TSANet Connect</p>
+    </div>
+    <span id="env-chip" class="badge env-chip"></span>
+    <span id="auth-badge" class="badge">Checking...</span>
+</header>
+
+<nav class="tabs">
+    <button class="tab active" data-view="dashboard">Dashboard</button>
+    <button class="tab" data-view="new-collab">New Collaboration</button>
+    <button class="tab" data-view="webhooks">Webhooks</button>
+    <button class="tab" data-view="settings">Settings</button>
+</nav>
+
+<main>
+    <!-- ============ Dashboard ============ -->
+    <div id="view-dashboard" class="view">
+        <section class="panel">
+            <div class="panel-header">
+                <h2>Collaboration Cases</h2>
+                <div class="button-row">
+                    <select id="direction-filter">
+                        <option value="all">All cases</option>
+                        <option value="outbound">Outbound (submitted by us)</option>
+                        <option value="inbound">Inbound (received from partners)</option>
+                    </select>
+                    <button id="refresh-btn">Refresh</button>
+                </div>
+            </div>
+            <table id="requests-table">
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Direction</th>
+                    <th>Status</th>
+                    <th>Summary</th>
+                    <th>Partner</th>
+                    <th>Updated</th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </section>
+    </div>
+
+    <!-- ============ Case detail ============ -->
+    <div id="view-case" class="view hidden">
+        <section class="panel">
+            <div class="panel-header">
+                <h2 id="case-title">Case</h2>
+                <button id="back-to-dashboard" class="secondary">&larr; Back to Dashboard</button>
+            </div>
+            <div id="case-summary" class="case-summary"></div>
+
+            <div class="panel-header" style="margin-top:1rem">
+                <h3>Actions</h3>
+            </div>
+            <div id="case-actions" class="button-row wrap"></div>
+            <div id="action-form-host"></div>
+            <p id="case-action-status" class="status"></p>
+        </section>
+
+        <section class="panel">
+            <h3>Notes Timeline</h3>
+            <div id="case-notes" class="timeline"></div>
+        </section>
+
+        <section class="panel">
+            <h3>Response History</h3>
+            <div id="case-responses" class="timeline"></div>
+        </section>
+
+        <section class="panel">
+            <div class="panel-header">
+                <h3>Attachments</h3>
+                <button id="load-attach-config" class="secondary">Load Config</button>
+            </div>
+            <div id="attach-config" class="muted"></div>
+            <form id="attach-form" class="hidden">
+                <label>Description
+                    <input type="text" name="description" required>
+                </label>
+                <label>Files
+                    <input type="file" name="files" multiple required>
+                </label>
+                <button type="submit">Forward Attachments</button>
+            </form>
+            <p id="attach-status" class="status"></p>
+        </section>
+    </div>
+
+    <!-- ============ New Collaboration ============ -->
+    <div id="view-new-collab" class="view hidden">
+        <section class="panel">
+            <h2>1. Find a Partner</h2>
+            <form id="partner-search-form" class="inline-form">
+                <input type="text" id="partner-search-input" placeholder="Search member companies..." required>
+                <button type="submit">Search</button>
+            </form>
+            <div id="partner-results" class="partner-results"></div>
+        </section>
+
+        <section class="panel hidden" id="form-panel">
+            <h2>2. Partner Process Form</h2>
+            <p id="selected-partner" class="muted"></p>
+            <form id="collab-form">
+                <div class="form-grid">
+                    <label>Internal Case Number
+                        <input type="text" name="caseNumber" required>
+                    </label>
+                    <label>Summary
+                        <input type="text" name="summary" required>
+                    </label>
+                </div>
+                <label>Description / Problem Statement
+                    <textarea name="description" rows="4" required></textarea>
+                </label>
+                <div id="custom-fields"></div>
+                <button type="submit">Submit Collaboration Request</button>
+            </form>
+            <p id="collab-status" class="status"></p>
+        </section>
+    </div>
+
+    <!-- ============ Webhooks ============ -->
+    <div id="view-webhooks" class="view hidden">
+        <section class="panel">
+            <div class="panel-header">
+                <h2>Webhook Subscriptions</h2>
+                <button id="refresh-webhooks">Refresh</button>
+            </div>
+            <table id="webhooks-table">
+                <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Callback URL</th>
+                    <th>Event Types</th>
+                    <th>Active</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <div id="webhook-deliveries" class="hidden">
+                <h3>Deliveries <span id="deliveries-sub" class="muted"></span></h3>
+                <table id="deliveries-table">
+                    <thead>
+                    <tr>
+                        <th>Event</th>
+                        <th>HTTP</th>
+                        <th>Attempt</th>
+                        <th>Success</th>
+                        <th>At</th>
+                    </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+        <section class="panel">
+            <h3>New Subscription</h3>
+            <form id="webhook-form">
+                <label>Callback URL
+                    <input type="url" name="callbackUrl" placeholder="https://..." required>
+                </label>
+                <label>Event Types (comma-separated)
+                    <input type="text" name="eventTypes" placeholder="collaboration-request.created, note.created" required>
+                </label>
+                <button type="submit">Create Subscription</button>
+            </form>
+            <p id="webhook-status" class="status"></p>
+        </section>
+    </div>
+
+    <!-- ============ Settings ============ -->
+    <div id="view-settings" class="view hidden">
+        <section class="panel">
+            <div class="panel-header">
+                <h2>Settings — Environments</h2>
+                <span id="settings-status" class="status"></span>
+            </div>
+            <p class="muted">Credentials are stored per environment. Switching the active
+                environment repoints every tab; each environment keeps its own local cache.</p>
+            <div id="env-settings"></div>
+        </section>
+    </div>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
