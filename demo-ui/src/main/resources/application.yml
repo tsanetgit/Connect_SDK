@@ -1,0 +1,30 @@
+server:
+  port: 8090
+
+tsanet:
+  demo:
+    # Per-env sqlite caches, credentials files, and the active-environment
+    # marker all live under this directory.
+    data-dir: ${TSANET_DEMO_DATA_DIR:${user.home}/.tsanet-demo-ui}
+    default-environment: beta
+    # Production is connect2.tsanet.org — deliberately NOT listed here.
+    # entra-tenant-id / entra-audience enable the OAuth client-credentials
+    # login mode for an environment. Tenant is shared; audiences differ per
+    # environment. Real values come from the environment at launch (never
+    # committed - this is a public repo); when unset, the OAuth mode simply
+    # does not appear for that environment. The member's client id and secret
+    # are entered at runtime in Settings and never live here either.
+    environments:
+      beta:
+        label: BETA
+        api-base-url: https://connect2.tsanet.net
+        entra-tenant-id: ${TSANET_DEMO_ENTRA_TENANT:}
+        entra-audience: ${TSANET_DEMO_ENTRA_AUDIENCE_BETA:}
+      dev:
+        label: DEV
+        api-base-url: https://connect2.tahoelab.us
+        entra-tenant-id: ${TSANET_DEMO_ENTRA_TENANT:}
+        entra-audience: ${TSANET_DEMO_ENTRA_AUDIENCE_DEV:}
+    auth:
+      username: ${TSANET_DEMO_AUTH_USER:demo}
+      password: ${TSANET_DEMO_AUTH_PASSWORD:}

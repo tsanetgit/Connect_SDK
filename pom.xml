@@ -23,6 +23,7 @@
         <module>TSANet-integration-demo</module>
         <module>TSANet-integration-app</module>
         <module>attachment-receiver</module>
+        <module>demo-ui</module>
     </modules>
 
     <properties>
