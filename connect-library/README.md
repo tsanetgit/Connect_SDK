@@ -320,7 +320,7 @@ session.partners().searchPartnersSemantic("partners specializing in cloud infras
 
 ## Integration with TSANet-integration-app
 
-The console and CRASH SSH application (`TSANet-integration-app`) exposes CLI commands that call this library. Examples:
+The console application (`TSANet-integration-app`) exposes CLI commands that call this library. Examples:
 
 | CLI command | Library call |
 |-------------|--------------|
@@ -387,15 +387,6 @@ Attachment file does not exist: /tmp/missing.txt
 HTTPS attachment path must start with '/'.
 ```
 
-Over CRASH SSH:
-
-```text
-attachmentsConfig 123
-attachmentsAdd 123 "Diagnostic logs" /tmp/logs.txt
-attachmentsList 123
-storedAttachments
-```
-
 ### Search partners and create a collaboration request
 
 Keyword search, numbered results, and create with partner selection:
@@ -450,15 +441,6 @@ Validation examples:
 No partners matched the search. Try a different --search value or use --semantic for natural language search.
 Partner index 4 is out of range (1-3).
 Provide --company-id ID or --search TERM to find a partner (optional --partner-index N).
-```
-
-Over CRASH SSH:
-
-```text
-partners Beta
-partnersSemantic "partners specializing in AWS networking"
-createRequestBySearch Beta 1 CASE-001 "Issue" "Details"
-createRequest 2 CASE-001 "Issue" "Details"
 ```
 
 ### Inbound webhooks
@@ -543,14 +525,6 @@ Request must be in INFORMATION status to reject (current status=OPEN).
 Request is already rejected (status=REJECTED).
 ```
 
-Over CRASH SSH for reject:
-
-```text
-rejectRequest 123 "Engineer" engineer@example.com "+1-555-0100" "Insufficient details"
-rejectRequestForToken abc-case-token-xyz "Engineer" engineer@example.com "-" "Insufficient details"
-requestsReject 123 "Engineer" engineer@example.com "-" "Insufficient details"
-```
-
 ### Request additional information (OPEN / ACCEPTED)
 
 Request information transitions the case to `INFORMATION` status:
@@ -596,17 +570,6 @@ Validation examples:
 Information response requires status INFORMATION (current status=OPEN).
 ```
 
-Over CRASH SSH for information exchange:
-
-```text
-requestInformation 123 "Engineer" engineer@example.com "-" "Please provide serial number"
-requestInformationForToken abc-case-token-xyz "Engineer" engineer@example.com "+1-555-0100" "Please provide logs"
-respondInformation 123 "Serial number is SN-12345"
-respondInformationForToken abc-case-token-xyz "Logs attached via partner portal"
-requestsInfoRequest 123 "Engineer" engineer@example.com "-" "Please provide serial number"
-requestsInfoResponse 123 "Serial number is SN-12345"
-```
-
 ### Add a note to a collaboration request
 
 Interactive console (prompts for note text when `--text` / `--description` omitted):
@@ -635,24 +598,6 @@ Note text exceeds maximum length of 5000 characters.
 Cannot add notes to a closed request (status=CLOSED).
 ```
 
-Over CRASH SSH (port 2000 by default) for notes:
-
-```text
-notesAdd 123 "Investigating on our side."
-notesAddForToken abc-case-token-xyz "Investigating on our side."
-notesAddDetailed 123 "Update" "Full note body text."
-add_note 123 "Investigating on our side."
-```
-
-Over CRASH SSH for close:
-
-```text
-closeRequest 123
-closeRequestForToken abc-case-token-xyz
-requestsClose 123
-close_request 123
-```
-
 #### Inbound webhooks
 
 Bridge app listens on `tsanet.webhook.port` (default 8090) at `tsanet.webhook.path`:
@@ -666,15 +611,6 @@ webhooks delete --id 1
 webhooks deliveries --id 1
 webhook-events
 stored-requests
-```
-
-Over CRASH SSH:
-
-```text
-createWebhook
-deleteWebhook 1
-webhookDeliveries 1
-webhookEvents
 ```
 
 See `TSANet-integration-app` for full CLI usage and flags.

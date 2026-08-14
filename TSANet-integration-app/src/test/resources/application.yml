@@ -16,6 +16,3 @@ tsanet:
     enabled: false
   webhook:
     enabled: false
-
-crash:
-  enabled: false
