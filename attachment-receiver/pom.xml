@@ -18,7 +18,32 @@
         (tsanetgit/Connect-API-Code#140) and nothing in this module may assume its wire shape.
     </description>
 
+    <properties>
+        <!-- The Boot parent pins httpclient5 5.3.x; the AWS SDK's apache5 HTTP client
+             needs TlsSocketStrategy, which exists only from httpclient5 5.4. Without
+             this override every real S3Client construction dies with
+             NoClassDefFoundError - found by the live acceptance, invisible offline. -->
+        <httpclient5.version>5.6.1</httpclient5.version>
+        <httpcore5.version>5.4.2</httpcore5.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>software.amazon.awssdk</groupId>
+                <artifactId>bom</artifactId>
+                <version>2.46.7</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
     <dependencies>
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
