@@ -1,0 +1,50 @@
+{
+  "skill_name": "connect-sdk-deploy",
+  "evals": [
+    {
+      "id": 0,
+      "eval_name": "local-demo",
+      "prompt": "We're a TSANet member on the BETA environment and I want to run the Connect SDK demo locally on my MacBook (Apple Silicon, Homebrew tooling) so our support team can click through a case lifecycle. Write me the exact step-by-step plan, commands included, plus anything that usually trips people up. Save it as demo-local-plan.md",
+      "expected_output": "A runbook-style plan: sibling clone of the private Connect-API-Code repo on the beta branch, JDK 21 JAVA_HOME setup, the two Maven build commands, running the demo-ui jar on localhost:8090, entering member credentials in Settings, and the known traps (500-on-bad-login badge, wrong sibling branch).",
+      "files": [],
+      "assertions": [
+        "Instructs cloning tsanetgit/Connect-API-Code as a sibling directory and checking out the beta branch",
+        "Notes that Connect-API-Code is private / requires access from TSANet",
+        "Specifies JDK 21 with explicit JAVA_HOME setup for Homebrew keg-only openjdk@21",
+        "Builds connect-library and demo-ui with Maven and runs the demo-ui jar",
+        "States the app listens on localhost:8090 and credentials are entered in the Settings tab",
+        "Explains that a bad login shows as 'Connect API returned 500', not a 401"
+      ]
+    },
+    {
+      "id": 1,
+      "eval_name": "spring-boot",
+      "prompt": "Our platform team wants to call the TSANet Connect API from our existing Spring Boot service using TSANet's official Java SDK. Produce the setup guide for us: how we get the dependency, how auth works for a production application account (we're a Microsoft Entra shop), and code that lists collaboration requests and approves an inbound one. Save it as sdk-integration-guide.md",
+      "expected_output": "A guide covering GitHub Packages consumption (repo URL, read:packages PAT, settings.xml server id matching), the client-credentials auth mode configured via tsanet.accounts in application.yml with the secret from an environment variable, and facade code for listRequests plus approveRequest.",
+      "files": [],
+      "assertions": [
+        "Gives the GitHub Packages repository URL maven.pkg.github.com/tsanetgit/Connect_SDK and says a PAT with read:packages is required even for public artifacts",
+        "Shows a settings.xml server entry whose id matches the pom repository id",
+        "Configures client-credentials auth (tenant-id, client-id, client-secret, audience) with the secret sourced from an environment variable, not a literal",
+        "Uses the session facade API (authenticate/login, collaborationRequests().listRequests(), caseResponses().approveRequest(...))",
+        "Does not hardcode a version without pointing at the releases page as the source of the current one",
+        "Surfaces at least one platform business rule (engineer email on registered domain, testSubmission/testCase asymmetry, or 500 legacy error mode)"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "hosted-demo",
+      "prompt": "I need the TSANet Connect SDK demo reachable by a few colleagues for about a week for an evaluation. We have Docker locally and a container host in the cloud. Give me the deployment steps and the security must-dos. Save it as hosted-demo-plan.md",
+      "expected_output": "A hosted deployment plan: jar built outside Docker, amd64 platform flag, the mandatory TSANET_DEMO_AUTH_USER/PASSWORD gate, /healthz for health checks, ephemeral credential storage requiring re-entry after redeploys, and pause/scale-to-zero guidance rather than deleting the service.",
+      "files": [],
+      "assertions": [
+        "States the jar must be built outside Docker because the image is runtime-only (codegen needs the spec sibling)",
+        "Uses --platform linux/amd64 for the image build",
+        "Requires setting TSANET_DEMO_AUTH_USER and TSANET_DEMO_AUTH_PASSWORD and warns the app is open when the password is unset",
+        "Mentions /healthz as the open health-check endpoint",
+        "Warns that container storage is ephemeral so member credentials must be re-entered after each deploy/restart",
+        "Advises pausing/scaling to zero between uses rather than deleting the service, or flags App Runner's closure to new customers"
+      ]
+    }
+  ]
+}
