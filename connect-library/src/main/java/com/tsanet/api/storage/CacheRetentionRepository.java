@@ -42,11 +42,8 @@ final class CacheRetentionRepository {
 
     /**
      * Terminal set: CLOSED + REJECTED. OPEN, INFORMATION, and ACCEPTED are not
-     * terminal and never age out via this query, however old (QA round 3 on #66: the
-     * prior comment named a PENDINGACTION status that doesn't exist in this API's
-     * CaseStatus). Phase 1 only — the phase-2 orphan sweep can still evict a live
-     * case's children if the parent row was never cached, independent of status; see
-     * the pending product decision on finding 3 of that same review.
+     * terminal and never age out, however old (QA round 3 on #66: the prior comment
+     * named a PENDINGACTION status that doesn't exist in this API's CaseStatus).
      */
     List<String> findDoomedTokens(String cutoff) throws SQLException {
         List<String> tokens = new ArrayList<>();
@@ -73,16 +70,6 @@ final class CacheRetentionRepository {
             for (int i = 0; i < tokens.size(); i++) {
                 ps.setString(i + 1, tokens.get(i));
             }
-            return ps.executeUpdate();
-        }
-    }
-
-    /** NOT IN is NULL-safe here: collaboration_request.token is NOT NULL UNIQUE. */
-    int deleteOrphans(String table, String ageColumn, String cutoff) throws SQLException {
-        try (PreparedStatement ps = connection.prepareStatement(
-                "DELETE FROM " + table + " WHERE " + ageColumn + " < ?"
-                        + " AND case_token NOT IN (SELECT token FROM collaboration_request)")) {
-            ps.setString(1, cutoff);
             return ps.executeUpdate();
         }
     }

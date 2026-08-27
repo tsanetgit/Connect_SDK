@@ -84,12 +84,14 @@ class CacheRetentionTest {
         assertThat(r.notes()).isEqualTo(1);
         assertThat(r.responses()).isEqualTo(1);
         assertThat(r.attachConfigs()).isEqualTo(1);
-        assertThat(r.attachForwards()).isEqualTo(1);
         assertThat(tokens("SELECT token FROM collaboration_request ORDER BY token"))
                 .containsExactly("stay-fresh", "stay-open");
         assertThat(tokens("SELECT case_token FROM case_note ORDER BY case_token"))
                 .as("children of survivors are untouched")
                 .containsExactly("stay-fresh", "stay-open");
+        assertThat(tokens("SELECT case_token FROM attachment_forward_result ORDER BY case_token"))
+                .as("attachment_forward_result is never swept, not even for a doomed case (round-3 QA on #66)")
+                .containsExactly("gone-closed", "stay-fresh", "stay-open");
     }
 
     @Test
@@ -101,16 +103,22 @@ class CacheRetentionTest {
     }
 
     @Test
-    void orphanChildrenAgeOut_freshOrphansSurvive() {
+    void parentlessChildrenAreNeverSwept_regardlessOfAge() {
+        // Round-3 QA on #66: getNotes/getResponses/getAttachmentConfig cache children
+        // by case_token without ever writing the parent collaboration_request row, so
+        // for a webhook-driven consumer a parentless child is the steady state, not a
+        // transient race. This class used to age these out by fetched_at; it no
+        // longer touches them at all -- the inverse of the prior behavior, proven
+        // here with both an old and a fresh parentless row surviving identically.
         jdbc.update("INSERT INTO case_note (id, case_token, summary, description, token, fetched_at)"
                 + " VALUES (1,?,?,?,?,?)", "no-parent", "note", "text", "orphan-old", OLD);
         jdbc.update("INSERT INTO case_note (id, case_token, summary, description, token, fetched_at)"
                 + " VALUES (2,?,?,?,?,?)", "no-parent-2", "note", "text", "orphan-fresh", FRESH);
         CacheRetention.SweepResult r = CacheRetention.sweep(jdbc, WINDOW, NOW);
-        assertThat(r.orphanNotes()).isEqualTo(1);
-        assertThat(tokens("SELECT token FROM case_note"))
-                .as("the fresh orphan survives (mid-fetch protection)")
-                .containsExactly("orphan-fresh");
+        assertThat(r.notes()).as("no phase deletes parentless children anymore").isZero();
+        assertThat(tokens("SELECT token FROM case_note ORDER BY token"))
+                .as("both survive -- age no longer matters with no parent to judge terminality by")
+                .containsExactly("orphan-fresh", "orphan-old");
     }
 
     @Test
@@ -130,7 +138,7 @@ class CacheRetentionTest {
     void partialFailureKeepsCommittedPhases_andTheExceptionSaysSo() {
         seedCase(1, "gone-closed", "CLOSED", OLD, OLD);
         seedChildren("gone-closed", OLD);
-        jdbc.execute("DROP TABLE webhook_inbound_event"); // phase 3 fails by construction
+        jdbc.execute("DROP TABLE webhook_inbound_event"); // the webhook-events phase fails by construction
 
         assertThatThrownBy(() -> CacheRetention.sweep(jdbc, WINDOW, NOW))
                 .isInstanceOf(CacheRetention.RetentionSweepException.class)
@@ -138,7 +146,7 @@ class CacheRetentionTest {
                     CacheRetention.RetentionSweepException rse = (CacheRetention.RetentionSweepException) e;
                     assertThat(rse.phase()).isEqualTo("webhook-events");
                     assertThat(rse.committed().cases())
-                            .as("phase 1 committed before the phase-3 failure").isEqualTo(1);
+                            .as("phase 1 committed before the webhook-events failure").isEqualTo(1);
                 });
         assertThat(tokens("SELECT token FROM collaboration_request"))
                 .as("committed deletes survive the later failure").isEmpty();
