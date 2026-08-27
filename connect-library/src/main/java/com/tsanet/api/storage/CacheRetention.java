@@ -30,9 +30,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *       {@code webhook_inbound_event} by {@code received_at}.</li>
  *   <li>Reference/config tables ({@code user_context}, {@code partner_selection},
  *       {@code collaboration_request_form}, {@code webhook_subscription}) untouched.</li>
- *   <li>Timestamps here are {@code Instant.toString()} (see the repositories), so a
- *       lexicographic compare against a same-format cutoff is correct to within
- *       fraction-length noise at the boundary — irrelevant at retention scale.</li>
+ *   <li>{@code fetched_at}, {@code forwarded_at}, and {@code received_at} are
+ *       {@code Instant.toString()} (see the repositories) — UTC, so a lexicographic
+ *       compare against a same-format cutoff is correct to within fraction-length
+ *       noise at the boundary. {@code updated_at}, the first {@code COALESCE} term
+ *       phase 1 ages by, is written as {@code OffsetDateTime.toString()} straight from
+ *       the API response instead and can carry a non-UTC offset, so its lexicographic
+ *       compare against the cutoff isn't the same tight guarantee — bounded skew, not
+ *       exact, and not a concern at retention-window scale, but a real gap versus the
+ *       other three columns (QA round 3 on #66).</li>
  * </ul>
  *
  * <p>The library stays silent (no logging): the result carries the per-table counts
@@ -67,7 +73,7 @@ public final class CacheRetention {
         private final String phase;
         private final SweepResult committed;
 
-        RetentionSweepException(String phase, SweepResult committed, SQLException cause) {
+        RetentionSweepException(String phase, SweepResult committed, Exception cause) {
             super("retention sweep failed in phase " + phase + " (committed so far: "
                     + committed.total() + " rows)", cause);
             this.phase = phase;
@@ -88,8 +94,8 @@ public final class CacheRetention {
      * Evicts terminal-case content older than {@code window} as of {@code now}.
      *
      * @throws IllegalArgumentException for a null, zero or negative window
-     * @throws RetentionSweepException on a mid-run SQL failure, carrying the failed
-     *         phase and the committed-so-far counts
+     * @throws RetentionSweepException on a mid-run failure, carrying the failed phase
+     *         and the committed-so-far counts
      */
     public static SweepResult sweep(JdbcTemplate jdbc, Duration window, Instant now) {
         Objects.requireNonNull(jdbc, "jdbc");
@@ -139,11 +145,15 @@ public final class CacheRetention {
             c.commit();
             return new SweepResult(cases, notes, responses, attachCfg, attachFwd,
                     orphanNotes, orphanResponses, orphanAttachCfg, orphanAttachFwd, events);
-        } catch (SQLException e) {
+        } catch (Exception e) {
             // Roll back the failing phase EXPLICITLY before the finally restores
             // autocommit: setAutoCommit(true) on a connection with an open
             // transaction COMMITS it, which would silently land a partial phase and
             // falsify the exception's committed-so-far contract (gate on the PR).
+            // Catches Exception, not just SQLException: a RuntimeException from
+            // anywhere in the try block hits this same finally-autocommit hazard, and
+            // the caller needs the phase + committed-so-far contract regardless of
+            // what kind of failure it was (round-3 QA on #66).
             try {
                 c.rollback();
             } catch (SQLException rollbackFailed) {
@@ -162,6 +172,16 @@ public final class CacheRetention {
                     orphansCommitted ? orphanAttachCfg : 0,
                     orphansCommitted ? orphanAttachFwd : 0,
                     0), e);
+        } catch (Error e) {
+            // Same partial-commit hazard as above, but an Error isn't wrapped: don't
+            // allocate app-level exception state while the JVM may be in trouble, and
+            // Error isn't part of this method's own failure contract.
+            try {
+                c.rollback();
+            } catch (SQLException rollbackFailed) {
+                e.addSuppressed(rollbackFailed);
+            }
+            throw e;
         } finally {
             // Connection hygiene: the template may hand this connection to others.
             try {

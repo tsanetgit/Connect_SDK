@@ -18,7 +18,11 @@ import java.util.List;
  * transaction (explicit commit per phase, explicit rollback on failure), rather than a
  * {@link org.springframework.jdbc.core.JdbcTemplate} that checks out its own connection
  * per call. It only works called within that caller-managed transaction — not a
- * general-purpose repository.
+ * general-purpose repository. Two reasons this can't be JdbcTemplate-shaped without
+ * changing behavior: JdbcTemplate would check out its own connection per call instead of
+ * sharing the sweep's one connection across phases, and it wraps {@link SQLException} in
+ * {@code DataAccessException} — a different type than the one {@link CacheRetention}'s
+ * phase-attribution catch block is written against.
  */
 final class CacheRetentionRepository {
 
@@ -36,7 +40,14 @@ final class CacheRetentionRepository {
         }
     }
 
-    /** Terminal set: CLOSED + REJECTED; PENDINGACTION is deliberately not terminal. */
+    /**
+     * Terminal set: CLOSED + REJECTED. OPEN, INFORMATION, and ACCEPTED are not
+     * terminal and never age out via this query, however old (QA round 3 on #66: the
+     * prior comment named a PENDINGACTION status that doesn't exist in this API's
+     * CaseStatus). Phase 1 only — the phase-2 orphan sweep can still evict a live
+     * case's children if the parent row was never cached, independent of status; see
+     * the pending product decision on finding 3 of that same review.
+     */
     List<String> findDoomedTokens(String cutoff) throws SQLException {
         List<String> tokens = new ArrayList<>();
         try (PreparedStatement ps = connection.prepareStatement(
