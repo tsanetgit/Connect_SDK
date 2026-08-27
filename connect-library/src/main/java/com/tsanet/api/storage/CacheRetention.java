@@ -1,13 +1,9 @@
 package com.tsanet.api.storage;
 
 import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -117,37 +113,29 @@ public final class CacheRetention {
         int orphanAttachCfg = 0;
         int orphanAttachFwd = 0;
         boolean originalAutoCommit = c.getAutoCommit();
+        CacheRetentionRepository repo = new CacheRetentionRepository(c);
         try {
-            try (Statement s = c.createStatement()) {
-                // busy_timeout only; journal_mode is persistent per-database and is the
-                // store's own concern.
-                s.execute("PRAGMA busy_timeout = 5000");
-            }
+            repo.setBusyTimeout(5000);
             c.setAutoCommit(false);
-            List<String> doomed = doomedTokens(c, cutoff);
+            List<String> doomed = repo.findDoomedTokens(cutoff);
             for (int i = 0; i < doomed.size(); i += CHUNK) {
                 List<String> chunk = doomed.subList(i, Math.min(i + CHUNK, doomed.size()));
-                notes += deleteByTokens(c, "case_note", "case_token", chunk);
-                responses += deleteByTokens(c, "case_response", "case_token", chunk);
-                attachCfg += deleteByTokens(c, "attachment_config", "case_token", chunk);
-                attachFwd += deleteByTokens(c, "attachment_forward_result", "case_token", chunk);
-                cases += deleteByTokens(c, "collaboration_request", "token", chunk);
+                notes += repo.deleteByTokens("case_note", "case_token", chunk);
+                responses += repo.deleteByTokens("case_response", "case_token", chunk);
+                attachCfg += repo.deleteByTokens("attachment_config", "case_token", chunk);
+                attachFwd += repo.deleteByTokens("attachment_forward_result", "case_token", chunk);
+                cases += repo.deleteByTokens("collaboration_request", "token", chunk);
             }
             c.commit();
             phase = "orphans";
             // The age check protects a child cached mid-fetch before its parent lands.
-            orphanNotes = orphanDelete(c, "case_note", "fetched_at", cutoff);
-            orphanResponses = orphanDelete(c, "case_response", "fetched_at", cutoff);
-            orphanAttachCfg = orphanDelete(c, "attachment_config", "fetched_at", cutoff);
-            orphanAttachFwd = orphanDelete(c, "attachment_forward_result", "forwarded_at", cutoff);
+            orphanNotes = repo.deleteOrphans("case_note", "fetched_at", cutoff);
+            orphanResponses = repo.deleteOrphans("case_response", "fetched_at", cutoff);
+            orphanAttachCfg = repo.deleteOrphans("attachment_config", "fetched_at", cutoff);
+            orphanAttachFwd = repo.deleteOrphans("attachment_forward_result", "forwarded_at", cutoff);
             c.commit();
             phase = "webhook-events";
-            int events;
-            try (PreparedStatement ps = c.prepareStatement(
-                    "DELETE FROM webhook_inbound_event WHERE received_at < ?")) {
-                ps.setString(1, cutoff);
-                events = ps.executeUpdate();
-            }
+            int events = repo.deleteExpiredWebhookEvents(cutoff);
             c.commit();
             return new SweepResult(cases, notes, responses, attachCfg, attachFwd,
                     orphanNotes, orphanResponses, orphanAttachCfg, orphanAttachFwd, events);
@@ -181,48 +169,6 @@ public final class CacheRetention {
             } catch (SQLException ignored) {
                 // restoring autocommit failed; the connection is being discarded anyway
             }
-        }
-    }
-
-    /** Terminal set: CLOSED + REJECTED; PENDINGACTION is deliberately not terminal. */
-    private static List<String> doomedTokens(Connection c, String cutoff) throws SQLException {
-        List<String> tokens = new ArrayList<>();
-        try (PreparedStatement ps = c.prepareStatement(
-                "SELECT token FROM collaboration_request WHERE status IN ('CLOSED','REJECTED')"
-                        + " AND COALESCE(updated_at, fetched_at) < ?")) {
-            ps.setString(1, cutoff);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    tokens.add(rs.getString(1));
-                }
-            }
-        }
-        return tokens;
-    }
-
-    private static int deleteByTokens(Connection c, String table, String column, List<String> tokens)
-            throws SQLException {
-        StringBuilder in = new StringBuilder();
-        for (int i = 0; i < tokens.size(); i++) {
-            in.append(i == 0 ? "?" : ",?");
-        }
-        try (PreparedStatement ps = c.prepareStatement(
-                "DELETE FROM " + table + " WHERE " + column + " IN (" + in + ")")) {
-            for (int i = 0; i < tokens.size(); i++) {
-                ps.setString(i + 1, tokens.get(i));
-            }
-            return ps.executeUpdate();
-        }
-    }
-
-    /** NOT IN is NULL-safe here: collaboration_request.token is NOT NULL UNIQUE. */
-    private static int orphanDelete(Connection c, String table, String ageColumn, String cutoff)
-            throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement(
-                "DELETE FROM " + table + " WHERE " + ageColumn + " < ?"
-                        + " AND case_token NOT IN (SELECT token FROM collaboration_request)")) {
-            ps.setString(1, cutoff);
-            return ps.executeUpdate();
         }
     }
 }
