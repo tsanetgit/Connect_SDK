@@ -38,6 +38,14 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <!-- Boot 4 moved @WebMvcTest out of spring-boot-test-autoconfigure into
+                 its own module (org.springframework.boot.webmvc.test.autoconfigure);
+                 spring-boot-starter-test no longer brings it transitively. -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>

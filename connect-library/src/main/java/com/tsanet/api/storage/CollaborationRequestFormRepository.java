@@ -1,7 +1,7 @@
 package com.tsanet.api.storage;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormDto;
 import com.tsanet.api.connectapi.dto.FormFieldDto;
 import java.sql.ResultSet;

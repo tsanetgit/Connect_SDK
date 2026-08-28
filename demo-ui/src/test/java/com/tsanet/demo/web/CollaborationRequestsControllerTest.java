@@ -13,9 +13,13 @@ import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormTemplateDto;
 import com.tsanet.api.facade.CollaborationRequestsFacade;
 import java.util.Map;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -39,6 +43,13 @@ class CollaborationRequestsControllerTest {
         when(guard.session()).thenReturn(session);
         mvc = MockMvcBuilders.standaloneSetup(new CollaborationRequestsController(guard))
             .setControllerAdvice(new ApiErrorHandler())
+            // standaloneSetup does not read application.yml, so the converter is
+            // configured here to match it. Without this the test would assert
+            // Jackson's default primitive handling rather than the app's.
+            .setMessageConverters(new JacksonJsonHttpMessageConverter(
+                JsonMapper.builder()
+                    .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+                    .build()))
             .build();
     }
 
