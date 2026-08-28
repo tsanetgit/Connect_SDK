@@ -1,7 +1,7 @@
 package com.tsanet.api.connectapi.internal;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.tsanet.api.auth.ClientCredentialsAuthConfig;
 import com.tsanet.api.auth.OAuthAccessToken;
 import java.util.List;

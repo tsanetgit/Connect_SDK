@@ -1,3 +1,13 @@
+spring:
+  jackson:
+    deserialization:
+      # Jackson 3 flipped FAIL_ON_NULL_FOR_PRIMITIVES to true by default, so a
+      # payload that omits a primitive creator property is now rejected where
+      # Jackson 2 defaulted it (0/false). Restored to the Jackson 2 default so
+      # the Boot 4 upgrade does not change the accepted wire format. Tightening
+      # this is a deliberate contract change, not an upgrade side effect.
+      fail-on-null-for-primitives: false
+
 tsanet:
   api:
     base-url: "http://localhost:8080"
