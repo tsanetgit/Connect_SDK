@@ -1,7 +1,9 @@
 package com.tsanet.api.storage;
 
 import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormDto;
 import com.tsanet.api.connectapi.dto.FormFieldDto;
 import java.sql.ResultSet;
@@ -13,7 +15,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
 public class CollaborationRequestFormRepository {
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    // Jackson 3 defaults FAIL_ON_NULL_FOR_PRIMITIVES to true. This mapper is
+    // constructed outside Spring, so the apps' application.yml setting does not
+    // reach it; without this, a cached row whose JSON omits FormFieldDto's
+    // primitive `required` would fail to read back where Jackson 2 defaulted it
+    // to false. Kept aligned with the apps so the library behaves the same way.
+    private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder()
+        .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
+        .build();
     private static final TypeReference<List<FormFieldDto>> FIELD_LIST_TYPE = new TypeReference<>() {};
 
     private final JdbcTemplate jdbcTemplate;
