@@ -22,7 +22,7 @@ its root `README.md`, `docs/RUNBOOK.md`, `docs/USER_GUIDE.md`, and
 answering; this skill tells you what matters, where the traps are, and what has changed
 recently, but the repo docs win on any conflict.
 
-Facts below were verified against `main` on 2026-08-18. If months have passed, re-verify
+Facts below were verified against `main` on 2026-09-02 (release v1.0.0). If months have passed, re-verify
 the release version, branch names, and module list against the live repository.
 
 ## Repository map
@@ -33,7 +33,7 @@ the release version, branch names, and module list against the live repository.
 | `TSANet-integration-app` | Console reference app exposing the library as CLI commands (`login`, `requests`, `notes add`, `webhooks create`, ...) | Spring Boot jar |
 | `TSANet-integration-demo` | Scripted demo scenarios over the library | Spring Boot jar |
 | `demo-ui` | The branded web demo: dashboard, partner search, dynamic process forms, full case lifecycle from the browser. This is "the SDK demo" most people mean. | Spring Boot jar, port 8090 |
-| `attachment-receiver` | Attachment receive endpoint with pluggable storage (S3, Azure Files). Early stage; no standalone docs yet. | Spring Boot jar |
+| `attachment-receiver` | The storage half of receiving pushed files: a streaming storage SPI with AWS S3, Azure Files, and Google Cloud Storage adapters, an encrypted per-tenant config store, and a go-live verifier. The HTTPS endpoint that accepts the push is not built yet; no standalone docs yet. | Spring Boot jar |
 
 ## Access model (read this first, it shapes everything)
 
@@ -77,7 +77,8 @@ Prerequisites: JDK 21, Maven, and read access to `tsanetgit/Connect-API-Code`.
 1. Clone both repositories side by side. The spec sibling **must** be named
    `Connect-API-Code` and **must** have the `beta` branch checked out. The generated
    symbols depend on which specification the sibling provides, so the branch matters:
-   `develop` currently breaks the build (V2 webhook APIs).
+   `beta` is the branch CI builds and certifies against; other branches are
+   unsupported and have broken the build before.
 
    ```bash
    git clone https://github.com/tsanetgit/Connect_SDK.git
@@ -108,7 +109,8 @@ These bite regardless of path, and none of them are visible in the OpenAPI schem
 - **Test-mode asymmetry.** You *write* the `testSubmission` flag when creating a case
   but *read* it back as `testCase`. The library's create API takes an explicit
   per-call `testSubmission` flag with no silent default; older always-test method
-  signatures are deprecated shims scheduled for removal in 0.2.0.
+  signatures remain as deprecated shims (still present in 1.0.0) and will be removed
+  at a later release boundary.
 - **Engineer emails must be on the member's registered domain.** The platform rejects
   collaboration requests whose engineer email is off the member company's registered
   domain. This is a business rule, not a schema rule, and the error is not

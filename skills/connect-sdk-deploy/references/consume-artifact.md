@@ -54,8 +54,12 @@ not send credentials and you get an opaque 401. The parent pom
 (`tsanet-client-parent`) is published alongside the library and resolves from the same
 repository.
 
-The library works outside Spring Boot: `jackson-datatype-jsr310` is a declared
-dependency as of 0.1.0, so plain-Java embedding does not fail on time serialization.
+Three versions are published: 0.1.0, 0.2.0, and 1.0.0. **1.0.0 requires Jackson 3**
+(`tools.jackson.core:jackson-databind`) and is built on the Spring Boot 4.1 line; a
+service still on Jackson 2 or Spring Boot 3 should take 0.2.0, which has the same
+facade surface on the older runtime. The library works outside Spring Boot; from 1.0.0
+`java.time` support comes from Jackson 3's databind itself, so no `jsr310` module is
+declared or needed.
 
 ## Opening a session
 
@@ -164,7 +168,8 @@ session.collaborationRequests().syncAllDetails();       // pull everything into 
 var partners = session.partners().searchPartners("<PARTNER_NAME>");
 session.collaborationRequests().createRequest(
     partners.get(0).companyId(), "<YOUR_CASE_NUMBER>",
-    "Problem summary", "Detailed description");
+    "Problem summary", "Detailed description",
+    true);   // testSubmission: explicit per call; false pages a real partner engineer
 session.caseResponses().approveRequest(token, "<CASE_NUMBER>", "<ENGINEER_NAME>",
     "<ENGINEER_EMAIL_ON_REGISTERED_DOMAIN>", "<PHONE>", "Next steps");
 ```
@@ -178,6 +183,19 @@ tsanet-connect skill rather than inferring from method signatures.
 
 ## Upgrading
 
-Watch the release notes on each release. Known deprecation: the always-test create
-signatures (pre-0.1.0 behavior) are shims scheduled for removal in 0.2.0; migrate
-callers to the explicit per-call `testSubmission` flag.
+Watch the release notes on each release.
+
+- **0.2.0** added `CacheRetention.sweep(JdbcTemplate, Duration, Instant)`: age-based
+  eviction of closed and rejected cases from the SQLite cache. Open cases are never
+  evicted; attachment forward results are never touched. Nothing runs it for you;
+  call it from your own schedule if the cache should not grow forever.
+- **1.0.0** moved to Spring Boot 4.1 and Jackson 3. Facade signatures are unchanged.
+  Breaking for consumers: Jackson 3 is required; Jackson 3 parse exceptions are
+  unchecked, so a `catch (IOException)` around a mapper call compiles but stops
+  catching malformed JSON; `FAIL_ON_NULL_FOR_PRIMITIVES` is on by default in your own
+  mappers (the library's cache reader keeps the old behavior); the `JsonNullable`
+  accessors on `CaseApprovalUpdateDTO` and `CollaborationRequestSubmitterUpdateDTO`
+  are gone (plain accessors unchanged).
+- Known deprecation: the always-test create signatures (pre-0.1.0 behavior) are still
+  present in 1.0.0 as `@Deprecated(forRemoval = true)` shims; migrate callers to the
+  explicit per-call `testSubmission` flag before they are removed.
