@@ -225,7 +225,7 @@ public final class GcsAttachmentStorage implements AttachmentStorage {
             return content.readNBytes(buffer, 0, buffer.length);
         } catch (IOException e) {
             throw new AttachmentStorageException(
-                    "stream failed mid-read for " + key + "; upload abandoned", e);
+                    "stream failed mid-read for " + key + "; nothing stored", e);
         }
     }
 

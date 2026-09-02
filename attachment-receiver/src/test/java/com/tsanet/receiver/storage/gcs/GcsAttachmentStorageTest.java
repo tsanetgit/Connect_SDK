@@ -82,7 +82,7 @@ class GcsAttachmentStorageTest extends AttachmentStorageContractTest {
         assertThrows(AttachmentStorageException.class,
                 () -> storage.store(attachment("truncated.bin"), dying));
         assertEquals(1, gcs.abandonCount, "a mid-stream failure must abandon, never finish");
-        assertNull(gcs.contentOf("truncated.bin"), "an abandoned upload leaves no visible object");
+        assertNull(gcs.contentOf("01234567/truncated.bin"), "an abandoned upload leaves no visible object");
     }
 
     @Test

@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -83,6 +84,60 @@ class RegisteringStorageFactoryTest {
         AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
                 () -> factory.create(config("azure", Map.of("directoryPrefix", "x"))));
         assertTrue(e.getMessage().contains("connectionString"), e.getMessage());
+    }
+
+    // The wrong-but-well-formed inputs for the azure branch: each is a value an operator
+    // could plausibly paste, and each carries a marker standing in for a secret. The
+    // property under test is that the marker reaches no exception anywhere in the chain,
+    // and that the escaping type is the factory's contract exception rather than the SDK's.
+
+    @Test
+    void azureMalformedSasUrlNeverEchoesItsValue() {
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure", Map.of("sasUrl", "not a url at all sig=MARKER"))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+        assertTrue(e.getMessage().contains("sasUrl"), e.getMessage());
+    }
+
+    @Test
+    void azureConnectionStringPastedIntoSasUrlNeverEchoesTheAccountKey() {
+        // The realistic mistake: the whole connection string, account key included, dropped
+        // into the sasUrl key. Before the guard this surfaced as
+        // "MalformedURLException: no protocol: DefaultEndpointsProtocol=...;AccountKey=...".
+        String pasted = "DefaultEndpointsProtocol=https;AccountName=acct;"
+                + "AccountKey=MARKER;EndpointSuffix=core.windows.net";
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure", Map.of("sasUrl", pasted))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+    }
+
+    @Test
+    void azureSasUrlWithoutShareNameIsAContractErrorNotAnNpe() {
+        // A well-formed URL with no share path made the SDK throw a bare NullPointerException,
+        // which is not the StorageFactory contract's declared exception.
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure", Map.of(
+                        "sasUrl", "https://acct.file.core.windows.net/?sv=2024-01-01&sig=MARKER"))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+    }
+
+    @Test
+    void azureMalformedConnectionStringNeverEchoesItsValue() {
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure", Map.of(
+                        "connectionString", "this is not a connection string AccountKey=MARKER",
+                        "shareName", "attachments"))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+        assertTrue(e.getMessage().contains("connectionString"), e.getMessage());
+    }
+
+    /** Every message in the cause chain, so a leak two causes deep is still caught. */
+    private static String fullChain(Throwable t) {
+        StringBuilder chain = new StringBuilder();
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            chain.append(c.getClass().getName()).append(": ").append(c.getMessage()).append('\n');
+        }
+        return chain.toString();
     }
 
     @Test

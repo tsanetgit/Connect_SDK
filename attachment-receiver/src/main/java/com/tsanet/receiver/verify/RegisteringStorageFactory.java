@@ -89,14 +89,30 @@ public final class RegisteringStorageFactory implements StorageFactory {
     private AttachmentStorage azure(Map<String, String> props) throws AttachmentStorageException {
         String sasUrl = props.get("sasUrl");
         ShareClientBuilder builder = new ShareClientBuilder();
+        ShareClient share;
+        // The Azure SDK echoes a malformed endpoint or connection string back inside its
+        // own exception chain (MalformedURLException: no protocol: <the whole value>), so a
+        // connection string pasted into the sasUrl key would put an account key into any
+        // logged config error. Both branches therefore throw a value-free message and,
+        // unlike the gcs branch, deliberately attach NO cause: here the cause is the leak.
         if (!blank(sasUrl)) {
-            builder.endpoint(sasUrl);
+            try {
+                share = builder.endpoint(sasUrl).buildClient();
+            } catch (RuntimeException e) {
+                throw new AttachmentStorageException(
+                        "azure sasUrl is not a well-formed share SAS URL; it must be an https URL "
+                                + "that includes the share name");
+            }
         } else {
             String connectionString = require(props, "connectionString", "azure");
             String shareName = require(props, "shareName", "azure");
-            builder.connectionString(connectionString).shareName(shareName);
+            try {
+                share = builder.connectionString(connectionString).shareName(shareName).buildClient();
+            } catch (RuntimeException e) {
+                throw new AttachmentStorageException(
+                        "azure connectionString is not a well-formed storage connection string");
+            }
         }
-        ShareClient share = builder.buildClient();
         return AzureFilesAttachmentStorage.forShare(share, props.get("directoryPrefix"));
     }
 
