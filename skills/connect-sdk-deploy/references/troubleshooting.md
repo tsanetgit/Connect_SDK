@@ -8,8 +8,8 @@ Symptom-first. Each entry: what you see, what it actually means, what to do.
 The spec sibling is on the wrong branch. The build generates the client from
 `../Connect-API-Code/connect-core-api/src/main/resources/openapi.yaml`, and the
 generated symbols track that branch. Fix:
-`cd ../Connect-API-Code && git checkout beta`, then rebuild. The `develop` branch
-currently breaks the build (V2 webhook APIs).
+`cd ../Connect-API-Code && git checkout beta`, then rebuild. `beta` is the branch
+CI certifies; other branches are unsupported.
 
 **Build fails immediately, complains it cannot read the OpenAPI spec**
 There is no sibling checkout. Clone `tsanetgit/Connect-API-Code` (private; needs
@@ -22,6 +22,13 @@ GitHub Packages authenticates every Maven download, public or not. Checklist:
 a token with `read:packages`; a `<server>` entry in `~/.m2/settings.xml` whose
 `<id>` exactly matches the repository `<id>` in the pom (conventionally `github`);
 the repository URL `https://maven.pkg.github.com/tsanetgit/Connect_SDK`.
+
+**Upgraded to connect-library 1.0.0 and the consumer no longer compiles or fails at
+startup on Jackson classes**
+1.0.0 depends on Jackson 3 (`tools.jackson.core`), not Jackson 2
+(`com.fasterxml.jackson.core`). The consumer must be on Jackson 3 / Spring Boot 4.1,
+or stay on 0.2.0. Annotations kept their `com.fasterxml.jackson.annotation` package,
+so annotated DTOs are not the problem; mapper and exception types are.
 
 **JDK mismatch errors (release version, class file version)**
 The build wants JDK 21. On macOS with Homebrew, `openjdk@21` is keg-only: export
