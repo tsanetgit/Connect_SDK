@@ -3,6 +3,8 @@ package com.tsanet.api.internal;
 import com.tsanet.api.TsaNetApiConfiguration;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsGateway;
+import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsV2Api;
+import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsV2Gateway;
 import com.tsanet.api.connectapi.internal.ConnectApiAuthGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiCollaborationGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiFormGateway;
@@ -167,6 +169,11 @@ public final class TsaNetApiRuntime {
             attachmentForwardResultStorageService
         );
 
+        ConnectApiAttachmentsV2Gateway attachmentsV2Gateway = new ConnectApiAttachmentsV2Gateway(
+            new ConnectApiAttachmentsV2Api(apiClient),
+            sessionStore
+        );
+
         return new DefaultTsaNetApiSession(
             configuration,
             sessionStore,
@@ -180,6 +187,7 @@ public final class TsaNetApiRuntime {
             webhooksGateway,
             partnersGateway,
             attachmentsGateway,
+            attachmentsV2Gateway,
             collaborationRequestStorageService,
             collaborationRequestFormStorageService,
             caseNoteStorageService,

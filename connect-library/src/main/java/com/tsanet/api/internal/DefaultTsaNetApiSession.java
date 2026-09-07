@@ -22,6 +22,7 @@ import com.tsanet.api.connectapi.dto.WebhookInboundResultDto;
 import com.tsanet.api.connectapi.dto.WebhookSubscriptionDto;
 import com.tsanet.api.connectapi.dto.WebhookSubscriptionResponseDto;
 import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsGateway;
+import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsV2Gateway;
 import com.tsanet.api.connectapi.internal.ConnectApiAuthGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiCollaborationGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiFormGateway;
@@ -33,6 +34,7 @@ import com.tsanet.api.connectapi.internal.ConnectApiSessionStore;
 import com.tsanet.api.connectapi.internal.ConnectApiUserGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiWebhooksGateway;
 import com.tsanet.api.facade.AttachmentsFacade;
+import com.tsanet.api.facade.AttachmentsV2Facade;
 import com.tsanet.api.facade.AuthFacade;
 import com.tsanet.api.facade.CaseNotesFacade;
 import com.tsanet.api.facade.CaseResponsesFacade;
@@ -78,6 +80,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     private final ConnectApiWebhooksGateway webhooksGateway;
     private final ConnectApiPartnersGateway partnersGateway;
     private final ConnectApiAttachmentsGateway attachmentsGateway;
+    private final ConnectApiAttachmentsV2Gateway attachmentsV2Gateway;
     private final CollaborationRequestStorageService collaborationRequestStorageService;
     private final CollaborationRequestFormStorageService collaborationRequestFormStorageService;
     private final CaseNoteStorageService caseNoteStorageService;
@@ -103,6 +106,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         ConnectApiWebhooksGateway webhooksGateway,
         ConnectApiPartnersGateway partnersGateway,
         ConnectApiAttachmentsGateway attachmentsGateway,
+        ConnectApiAttachmentsV2Gateway attachmentsV2Gateway,
         CollaborationRequestStorageService collaborationRequestStorageService,
         CollaborationRequestFormStorageService collaborationRequestFormStorageService,
         CaseNoteStorageService caseNoteStorageService,
@@ -126,6 +130,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         this.webhooksGateway = webhooksGateway;
         this.partnersGateway = partnersGateway;
         this.attachmentsGateway = attachmentsGateway;
+        this.attachmentsV2Gateway = attachmentsV2Gateway;
         this.collaborationRequestStorageService = collaborationRequestStorageService;
         this.collaborationRequestFormStorageService = collaborationRequestFormStorageService;
         this.caseNoteStorageService = caseNoteStorageService;
@@ -178,6 +183,11 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     @Override
     public PartnersFacade partners() {
         return this;
+    }
+
+    @Override
+    public AttachmentsV2Facade attachmentsV2() {
+        return attachmentsV2Gateway;
     }
 
     @Override
