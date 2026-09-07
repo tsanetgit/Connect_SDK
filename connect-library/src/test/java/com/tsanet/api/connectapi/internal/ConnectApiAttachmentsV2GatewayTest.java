@@ -58,7 +58,8 @@ class ConnectApiAttachmentsV2GatewayTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        gateway = new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), executor);
+        gateway = new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), executor,
+            java.time.Duration.ZERO);
         file = tmp.resolve("diag.log");
         Files.write(file, "hello attachments".getBytes(StandardCharsets.UTF_8));
     }
@@ -200,7 +201,7 @@ class ConnectApiAttachmentsV2GatewayTest {
     @Test
     void everyCallRequiresALogin() {
         ConnectApiAttachmentsV2Gateway loggedOut =
-            new ConnectApiAttachmentsV2Gateway(api, new ConnectApiSessionStore(), executor);
+            new ConnectApiAttachmentsV2Gateway(api, new ConnectApiSessionStore(), executor, java.time.Duration.ZERO);
 
         assertThatThrownBy(() -> loggedOut.grant(TOKEN, new AttachmentGrantRequest("a", "b", 1, null, null)))
             .isInstanceOf(IllegalStateException.class);

@@ -87,8 +87,7 @@ public class AttachmentsController {
         AttachmentsV2Facade attachments = guard.session().attachmentsV2();
         // The browser's file name is client input; keep only its last segment before it
         // becomes a path under the temp directory.
-        String original = file.getOriginalFilename() != null && !file.getOriginalFilename().isBlank()
-            ? Path.of(file.getOriginalFilename()).getFileName().toString() : "attachment";
+        String original = lastSegmentOrDefault(file.getOriginalFilename());
         Path temp;
         try {
             temp = Files.createTempDirectory("tsanet-demo-deliver").resolve(original);
@@ -122,8 +121,18 @@ public class AttachmentsController {
         deliveries.shutdownNow();
     }
 
+    /** The browser's file name reduced to its last segment; a bare separator or blank becomes a default. */
+    static String lastSegmentOrDefault(String name) {
+        if (name == null || name.isBlank()) {
+            return "attachment";
+        }
+        Path last = Path.of(name).getFileName();
+        return last == null || last.toString().isBlank() ? "attachment" : last.toString();
+    }
+
     @GetMapping("/api/uploads/{uploadId}")
     public UploadState uploadState(@PathVariable String uploadId) {
+        guard.session(); // same login requirement as every other case endpoint
         UploadState state = uploads.get(uploadId);
         if (state == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "unknown upload");

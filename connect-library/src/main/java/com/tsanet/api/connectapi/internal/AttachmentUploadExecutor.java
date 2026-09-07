@@ -63,6 +63,13 @@ import java.util.concurrent.atomic.AtomicLong;
  * upload failure rather than re-granting on its own. Bodies are re-created per attempt from
  * the file region, so a retry never re-reads a consumed stream.
  *
+ * <p><b>URL scheme.</b> Upload URLs are executed as the platform returned them, {@code http}
+ * included: the contract's rule is that the client executes the block verbatim and never
+ * branches on the receiver, and these URLs come from the authenticated platform per grant,
+ * short-lived, not from operator configuration (where this repo does enforce https, since a
+ * pasted SAS URL is a standing credential). Rejecting a scheme here would also reject the
+ * relay and any test host the platform chooses to point at.
+ *
  * <p>Nothing here announces anything: the caller completes or abandons the grant.
  */
 final class AttachmentUploadExecutor {
@@ -118,7 +125,11 @@ final class AttachmentUploadExecutor {
                                   UploadProgressListener progress, boolean relay) {
         String mode = relay ? "relay" : "single";
         requireUrl(upload.url(), mode);
-        HttpRequest request = put(upload.url(), headers, new FileRegionPublisher(file, 0, size), size);
+        // Byte-level progress as the body streams (position within the region, so a retry
+        // truthfully restarts from zero), throttled to whole MiB; the final report says done.
+        FileRegionPublisher body = new FileRegionPublisher(file, 0, size, sent ->
+            progress.onProgress(new UploadProgress(mode, 0, 1, sent, size)));
+        HttpRequest request = put(upload.url(), headers, body, size);
         sendWithRetry(request, relay ? RetryScope.CONNECT_ONLY : RetryScope.TRANSIENT, mode + " upload");
         progress.onProgress(new UploadProgress(mode, 1, 1, size, size));
         return new UploadReceipts(mode, size, List.of());
@@ -131,6 +142,9 @@ final class AttachmentUploadExecutor {
             throw precondition("multipart grant carries no parts");
         }
         parts.sort(Comparator.comparingInt(AttachmentGrant.Part::partNumber));
+        if (parts.stream().mapToInt(AttachmentGrant.Part::partNumber).distinct().count() != parts.size()) {
+            throw precondition("multipart grant repeats a part number; the regions would overlap");
+        }
         long declared = parts.stream().mapToLong(AttachmentGrant.Part::sizeBytes).sum();
         if (declared != size) {
             throw precondition("multipart parts total " + declared + " bytes but the file is " + size + " bytes");
@@ -290,7 +304,7 @@ final class AttachmentUploadExecutor {
             AttachmentV2Exception.UPLOAD_REJECTED);
     }
 
-    private Duration backoff(int attempt, Optional<String> retryAfter) {
+    Duration backoff(int attempt, Optional<String> retryAfter) {
         if (retryAfter.isPresent()) {
             try {
                 long seconds = Long.parseLong(retryAfter.get().trim());
@@ -369,14 +383,23 @@ final class AttachmentUploadExecutor {
      * Single-subscriber, demand-driven, {@value #READ_BUFFER}-byte reads.
      */
     static final class FileRegionPublisher implements HttpRequest.BodyPublisher {
+        private static final long PROGRESS_STEP = 1024 * 1024;
+
         private final Path file;
         private final long offset;
         private final long length;
+        private final java.util.function.LongConsumer onBytes;
 
         FileRegionPublisher(Path file, long offset, long length) {
+            this(file, offset, length, null);
+        }
+
+        /** {@code onBytes} receives the bytes read so far in this subscription, once per whole MiB. */
+        FileRegionPublisher(Path file, long offset, long length, java.util.function.LongConsumer onBytes) {
             this.file = file;
             this.offset = offset;
             this.length = length;
+            this.onBytes = onBytes;
         }
 
         @Override
@@ -455,11 +478,16 @@ final class AttachmentUploadExecutor {
                             fail(new IOException("file ended " + remaining + " bytes before the declared region did"));
                             return;
                         }
+                        long before = position - offset;
                         position += read;
                         remaining -= read;
                         buffer.flip();
                         demand.decrementAndGet();
                         subscriber.onNext(buffer);
+                        long after = position - offset;
+                        if (onBytes != null && after / PROGRESS_STEP != before / PROGRESS_STEP) {
+                            onBytes.accept(after);
+                        }
                     }
                     if (!cancelled && !terminated && remaining == 0) {
                         terminated = true;
@@ -471,7 +499,7 @@ final class AttachmentUploadExecutor {
             }
 
             private void fail(Throwable error) {
-                if (terminated) {
+                if (terminated || cancelled) {
                     return;
                 }
                 terminated = true;

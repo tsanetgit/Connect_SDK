@@ -179,13 +179,34 @@ class ConnectApiAttachmentsV2ApiTest {
     }
 
     @Test
-    void aGrantWithoutAnUploadBlockIsRejectedClientSide() {
+    void aGrantWithoutAnUploadBlockIsRejectedClientSideWithTheRealStatus() {
         server.expect(requestTo(BASE + "/v2/collaboration-requests/" + TOKEN + "/attachments/grants"))
             .andRespond(withStatus(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON)
                 .body("{\"grantId\":\"" + GRANT_ID + "\",\"fileName\":\"a\"}"));
 
         assertThatThrownBy(() -> api.createGrant(TOKEN, new AttachmentGrantRequest("a", "text/plain", 1, null, null), null))
             .isInstanceOf(AttachmentV2Exception.class)
-            .hasMessageContaining("upload block");
+            .hasMessageContaining("upload block")
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).status()).isEqualTo(201));
+    }
+
+    @Test
+    void aConnectivityFailureNeverEchoesTheCaseTokenThatRidesInTheUrl() {
+        // A real RestTemplate against a closed port: Spring's own message carries the expanded
+        // request URL, and the V2 paths carry the case token in that URL.
+        ApiClient dead = new ApiClient(new RestTemplate());
+        dead.setBasePath("http://127.0.0.1:1");
+        dead.setBearerToken(() -> "bearer-123");
+        ConnectApiAttachmentsV2Api deadApi = new ConnectApiAttachmentsV2Api(dead);
+
+        assertThatThrownBy(() -> deadApi.createGrant("CASETOKEN-MARKER",
+            new AttachmentGrantRequest("a", "text/plain", 1, null, null), "k"))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.problemType()).isEqualTo(AttachmentV2Exception.CONNECTIVITY);
+                assertThat(ex.status()).isZero();
+                assertThat(ex.getMessage()).doesNotContain("MARKER").doesNotContain("127.0.0.1");
+            });
     }
 }

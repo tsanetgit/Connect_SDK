@@ -56,22 +56,24 @@ public final class ConnectApiAttachmentsV2Api implements AttachmentsV2Api {
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             headers.add("Idempotency-Key", idempotencyKey);
         }
-        AttachmentGrant grant = invoke("grant", GRANTS_PATH, HttpMethod.POST, Map.of("token", caseToken),
-            request, headers, new ParameterizedTypeReference<AttachmentGrant>() { });
+        ResponseEntity<AttachmentGrant> response = invoke("grant", GRANTS_PATH, HttpMethod.POST,
+            Map.of("token", caseToken), request, headers, new ParameterizedTypeReference<AttachmentGrant>() { });
+        AttachmentGrant grant = response.getBody();
         if (grant == null || grant.grantId() == null || grant.upload() == null) {
             throw new AttachmentV2Exception("grant returned no usable grant (missing grantId or upload block)",
-                200, AttachmentV2Exception.CLIENT_PRECONDITION);
+                response.getStatusCode().value(), AttachmentV2Exception.CLIENT_PRECONDITION);
         }
         return grant;
     }
 
     @Override
     public AttachmentCompleteResult complete(String caseToken, UUID grantId, AttachmentCompleteRequest request) {
-        AttachmentCompleteResult result = invoke("complete", COMPLETE_PATH, HttpMethod.POST,
+        ResponseEntity<AttachmentCompleteResult> response = invoke("complete", COMPLETE_PATH, HttpMethod.POST,
             Map.of("token", caseToken, "grantId", grantId.toString()),
             request, new HttpHeaders(), new ParameterizedTypeReference<AttachmentCompleteResult>() { });
+        AttachmentCompleteResult result = response.getBody();
         if (result == null || result.status() == null) {
-            throw new AttachmentV2Exception("complete returned no outcome status", 200,
+            throw new AttachmentV2Exception("complete returned no outcome status", response.getStatusCode().value(),
                 AttachmentV2Exception.CLIENT_PRECONDITION);
         }
         return result;
@@ -83,20 +85,22 @@ public final class ConnectApiAttachmentsV2Api implements AttachmentsV2Api {
             null, new HttpHeaders(), new ParameterizedTypeReference<Void>() { });
     }
 
-    private <T> T invoke(String operation, String path, HttpMethod method, Map<String, Object> pathParams,
-                         Object body, HttpHeaders headers, ParameterizedTypeReference<T> returnType) {
+    private <T> ResponseEntity<T> invoke(String operation, String path, HttpMethod method, Map<String, Object> pathParams,
+                                         Object body, HttpHeaders headers, ParameterizedTypeReference<T> returnType) {
         List<MediaType> accept = apiClient.selectHeaderAccept(ACCEPT);
         MediaType contentType = body == null ? null : apiClient.selectHeaderContentType(JSON);
         try {
-            ResponseEntity<T> response = apiClient.invokeAPI(path, method, pathParams, new LinkedMultiValueMap<>(),
+            return apiClient.invokeAPI(path, method, pathParams, new LinkedMultiValueMap<>(),
                 body, headers, new LinkedMultiValueMap<>(), new LinkedMultiValueMap<>(), accept, contentType,
                 AUTH_NAMES, returnType);
-            return response.getBody();
         } catch (HttpStatusCodeException e) {
             throw translate(operation, e);
         } catch (ResourceAccessException e) {
-            throw new AttachmentV2Exception(operation + " failed: cannot reach the Connect API: " + e.getMessage(),
-                0, AttachmentV2Exception.CONNECTIVITY, e);
+            // Spring's message carries the expanded request URL, and these paths carry the
+            // case token: name the failure by its cause type only.
+            Throwable root = e.getCause() != null ? e.getCause() : e;
+            throw new AttachmentV2Exception(operation + " failed: cannot reach the Connect API ("
+                + root.getClass().getSimpleName() + ")", 0, AttachmentV2Exception.CONNECTIVITY, e);
         } catch (RestClientException e) {
             throw new AttachmentV2Exception(operation + " failed: " + e.getClass().getSimpleName(),
                 0, AttachmentV2Exception.CONNECTIVITY, e);

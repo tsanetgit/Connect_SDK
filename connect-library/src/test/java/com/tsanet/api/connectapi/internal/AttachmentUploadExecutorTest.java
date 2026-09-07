@@ -346,6 +346,96 @@ class AttachmentUploadExecutorTest {
     }
 
     @Test
+    void retryAfterIsHonoredAndCapped() {
+        AttachmentUploadExecutor slow = new AttachmentUploadExecutor(HttpClient.newHttpClient(), Duration.ofSeconds(1));
+        assertThat(slow.backoff(1, java.util.Optional.of("2"))).isEqualTo(Duration.ofSeconds(2));
+        assertThat(slow.backoff(1, java.util.Optional.of("120"))).isEqualTo(Duration.ofSeconds(30));
+        // A date-formatted or malformed value falls through to exponential backoff with jitter.
+        Duration fallback = slow.backoff(2, java.util.Optional.of("Wed, 21 Oct 2026 07:28:00 GMT"));
+        assertThat(fallback).isBetween(Duration.ofSeconds(2), Duration.ofSeconds(3));
+    }
+
+    @Test
+    void relayRetriesWhenTheConnectionNeverOpens() throws IOException {
+        Path file = file("relay-closed.bin", 100);
+        // A closed port: every attempt fails before any byte flows, so the relay budget applies.
+        assertThatThrownBy(() -> executor.execute(grant(new AttachmentGrant.Upload("relay", "PUT",
+            "http://127.0.0.1:1/relay?sig=SECRET", Map.of(), null)), file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.problemType()).isEqualTo(AttachmentV2Exception.UPLOAD_UNREACHABLE);
+                assertThat(ex.getMessage()).contains("relay upload").doesNotContain("SECRET");
+                assertThat(ex.getCause()).isInstanceOf(java.net.ConnectException.class);
+            });
+    }
+
+    @Test
+    void aResumableSessionThatNeverReportsRangeFailsClosed() throws IOException {
+        Path file = file("resume-norange.bin", 4_096);
+        server.removeContext("/");
+        server.createContext("/", exchange -> {
+            attemptsByPath.computeIfAbsent("/norange", k -> new AtomicInteger()).incrementAndGet();
+            exchange.getRequestBody().readAllBytes();
+            exchange.sendResponseHeaders(308, -1); // no Range: nothing committed, by the protocol
+            exchange.close();
+        });
+
+        assertThatThrownBy(() -> executor.execute(grant(new AttachmentGrant.Upload("resumable", "PUT", base + "/norange",
+            Map.of(), null)), file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.problemType()).isEqualTo(AttachmentV2Exception.UPLOAD_UNREACHABLE);
+                assertThat(ex.getMessage()).contains("no progress");
+            });
+        assertThat(attemptsByPath.get("/norange").get()).isEqualTo(AttachmentUploadExecutor.MAX_ATTEMPTS);
+    }
+
+    @Test
+    void aResumableChunkAnsweredFiveHundredIsRePutWithTheSameContentRange() throws IOException {
+        int size = 2_048;
+        Path file = file("resume-503.bin", size);
+        failFirstAttemptsWith.put("/resumable/s3", 503);
+
+        UploadReceipts receipts = executor.execute(grant(new AttachmentGrant.Upload("resumable", "PUT",
+            base + "/resumable/s3", Map.of(), null)), file, null);
+
+        assertThat(receipts.bytesSent()).isEqualTo(size);
+        List<String> ranges = hits.stream().map(h -> h.headers().get("Content-Range")).toList();
+        assertThat(ranges).containsExactly("bytes 0-2047/2048", "bytes 0-2047/2048");
+        assertThat(hits.get(1).body()).isEqualTo(Files.readAllBytes(file));
+    }
+
+    @Test
+    void duplicatePartNumbersAreRejectedBeforeAnyRequest() throws IOException {
+        Path file = file("dup.bin", 200);
+
+        assertThatThrownBy(() -> executor.execute(grant(new AttachmentGrant.Upload("multipart", "PUT", null, Map.of(),
+            List.of(new AttachmentGrant.Part(1, base + "/dup/1", 100), new AttachmentGrant.Part(1, base + "/dup/1b", 100)))),
+            file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .hasMessageContaining("repeats a part number");
+        assertThat(hits).isEmpty();
+    }
+
+    @Test
+    void singleModeReportsByteLevelProgressWhileTheBodyStreams() throws IOException {
+        int size = 3 * 1024 * 1024 + 17;
+        Path file = file("single-progress.bin", size);
+        List<UploadProgress> progress = new ArrayList<>();
+
+        executor.execute(grant(new AttachmentGrant.Upload("single", "PUT", base + "/single/progress", Map.of(), null)),
+            file, progress::add);
+
+        assertThat(progress.size()).isGreaterThanOrEqualTo(4);
+        assertThat(progress.get(0).partsDone()).isZero();
+        assertThat(progress.get(0).bytesSent()).isEqualTo(1024 * 1024);
+        assertThat(progress).isSortedAccordingTo(java.util.Comparator.comparingLong(UploadProgress::bytesSent));
+        assertThat(progress.get(progress.size() - 1)).isEqualTo(new UploadProgress("single", 1, 1, size, size));
+    }
+
+    @Test
     void fileRegionPublisherDeclaresItsLengthAndReadsExactlyItsRegion() throws Exception {
         Path file = file("region.bin", 200_000);
         var publisher = new AttachmentUploadExecutor.FileRegionPublisher(file, 70_000, 100_000);

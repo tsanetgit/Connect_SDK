@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.util.HexFormat;
 import java.util.UUID;
 
@@ -32,16 +33,18 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     private final AttachmentsV2Api api;
     private final ConnectApiSessionStore sessionStore;
     private final AttachmentUploadExecutor executor;
+    private final Duration completeBackoff;
 
     public ConnectApiAttachmentsV2Gateway(AttachmentsV2Api api, ConnectApiSessionStore sessionStore) {
-        this(api, sessionStore, new AttachmentUploadExecutor());
+        this(api, sessionStore, new AttachmentUploadExecutor(), Duration.ofSeconds(1));
     }
 
     ConnectApiAttachmentsV2Gateway(AttachmentsV2Api api, ConnectApiSessionStore sessionStore,
-                                   AttachmentUploadExecutor executor) {
+                                   AttachmentUploadExecutor executor, Duration completeBackoff) {
         this.api = api;
         this.sessionStore = sessionStore;
         this.executor = executor;
+        this.completeBackoff = completeBackoff;
     }
 
     @Override
@@ -128,9 +131,23 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
                     throw e;
                 }
                 last = e;
+                pause(completeBackoff.multipliedBy(attempt));
             }
         }
         throw last;
+    }
+
+    private static void pause(Duration duration) {
+        if (duration.isZero() || duration.isNegative()) {
+            return;
+        }
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AttachmentV2Exception("interrupted while retrying complete", 0,
+                AttachmentV2Exception.CONNECTIVITY, e);
+        }
     }
 
     private static AttachmentCompleteRequest completeRequest(UploadReceipts receipts, String sha256) {
