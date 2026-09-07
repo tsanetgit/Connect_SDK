@@ -8,9 +8,14 @@ Standalone Java client for the TSANet Connect API. The library wraps generated O
 <dependency>
     <groupId>com.tsanet</groupId>
     <artifactId>connect-library</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
+    <version><LATEST_RELEASE_VERSION></version>
 </dependency>
 ```
+
+Take the version from the latest release: <https://github.com/tsanetgit/Connect_SDK/releases/latest>.
+The artifact is published to GitHub Packages, which needs a GitHub token with `read:packages`
+even for a public package; the one-time setup is in
+[`skills/connect-sdk-deploy/references/consume-artifact.md`](../skills/connect-sdk-deploy/references/consume-artifact.md).
 
 ## Quick start
 
@@ -21,7 +26,7 @@ import com.tsanet.api.TsaNetApiSession;
 
 TsaNetApiSession session = TsaNetApi.initialize(
     TsaNetApiConfiguration.of(
-        "http://localhost:8080",
+        "<CONNECT_API_BASE_URL>",            // https; TSANet provides one per environment
         System.getProperty("user.home") + "/.tsanet-client-demo/data.db",
         "api-user",
         "secret"
@@ -36,7 +41,7 @@ var requests = session.collaborationRequests().listRequests();
 
 | Setting | Type | Description |
 |---------|------|-------------|
-| `apiBaseUrl` | `String` | Connect API base URL (required) |
+| `apiBaseUrl` | `String` | Connect API base URL (required). The API is HTTPS-only in every real environment. The library does not refuse a plain-http URL, so local mocks work; the console and both demos do refuse one at startup unless their `allow-insecure-http` setting is on. |
 | `sqlitePath` | `String` | Path to the SQLite database file (required) |
 | `username` | `String` | Optional default username for `loginWithConfiguredCredentials()` |
 | `password` | `String` | Optional default password for `loginWithConfiguredCredentials()` |
@@ -51,7 +56,7 @@ import com.tsanet.api.TsaNetApiConnectionSettings;
 import com.tsanet.api.TsaNetApiSessionFactory;
 
 TsaNetApiSessionFactory factory = TsaNetApi.sessionFactory(
-    TsaNetApiConnectionSettings.of("http://localhost:8080", "/path/to/data.db")
+    TsaNetApiConnectionSettings.of("<CONNECT_API_BASE_URL>", "/path/to/data.db")
 );
 
 TsaNetApiSession acme = factory.openSession("acme", "acme-user", "secret");
@@ -99,6 +104,7 @@ session.users();
 session.webhooks();
 session.partners();
 session.attachments();
+session.attachmentsV2();
 ```
 
 Unless noted, remote operations require a prior successful `authenticate()` or `login()`. Unauthenticated calls throw `IllegalStateException: Not logged in`.
@@ -107,16 +113,28 @@ Unless noted, remote operations require a prior successful `authenticate()` or `
 
 | Method | Description |
 |--------|-------------|
-| `authenticate()` | Uses configured auth: Azure AD client-credentials for production accounts, or Connect1 password when configured. Refreshes OAuth tokens proactively before expiry. |
-| `login(username, password)` | Connect1 username/password login. Only available when the session is configured for `connect1-password` auth. |
+| `authenticate()` | Uses configured auth: Azure AD client-credentials for production accounts, or Connect1 password when configured. Either way the token is renewed before expiry and after a 401. |
+| `login(username, password)` | Connect1 username/password login. Only available when the session is configured for `connect1-password` auth. A password typed here is never retained, so such a session is not renewed silently; when it expires the next call fails with a classified 401 and the caller logs in again. |
 | `loginWithConfiguredCredentials()` | Alias for `authenticate()`. |
 | `isAuthorized()` | `true` when a valid bearer token is present in the session. |
 | `currentUsername()` | Username from the last successful login, if any. |
 | `currentAccountId()` | Application user id for OAuth sessions. |
+| `currentUserContext()` | The company and user behind the session, fetched from `/v1/me` at login. Present after any successful login, kept across token renewals, empty after `logout()`. |
 | `authMode()` | `CLIENT_CREDENTIALS` or `CONNECT1_PASSWORD`. |
-| `tokenExpiresAt()` | OAuth token expiry (OAuth sessions only). |
+| `tokenExpiresAt()` | Token expiry when the API stated one: always for OAuth, and for password logins whose response carries `expiresIn`. Empty when no lifetime was stated; expiry then surfaces as a 401. |
 | `currentBearerToken()` | Current JWT, if any. |
-| `logout()` | Clears in-memory session state (token and username). Does not delete SQLite data. |
+| `logout()` | Clears in-memory session state (token, username, user context). Does not delete SQLite data. |
+
+Every login ends the same way: the library calls `/v1/me` through the session and keeps the
+answer as `currentUserContext()`. If that call fails, the login has failed and the session
+stays logged out, so nothing downstream runs half-authenticated. A login with configured
+credentials retries that one call on connectivity failures (three attempts, under a second in
+total) before giving up; an interactive `login()` does not.
+
+Token renewal is transparent for configured credentials in both modes: on expiry, and once
+after a 401 mid-call, the library obtains a new token and re-sends the request. Concurrent
+callers share one renewal. A successful `/v1/me` proves the credentials, not the API role:
+business endpoints can still answer 403 for an account that is not API-enabled.
 
 #### OAuth client-credentials (Azure AD M2M)
 
@@ -165,6 +183,27 @@ tsanet:
 ```
 
 Legacy top-level `username` / `password` on an account entry still map to `connect1-password`.
+
+### Errors: `ConnectApiException`
+
+Every failure the API answers, and every transport failure, reaches the caller as
+`com.tsanet.api.ConnectApiException` (unchecked). The library sends
+`Accept: application/json, application/problem+json` on every call, so the API answers with
+RFC 7807 problem details and the documented status codes instead of its legacy
+`500 {"message"}` mode; a legacy body is still classified by its content if one arrives.
+
+| Member | Meaning |
+|--------|---------|
+| `kind()` | `PROBLEM` (an RFC 7807 body), `LEGACY` (the `{"message"}` body), `CONNECTIVITY` (the API could not be reached), `OTHER` (a non-2xx with no recognizable body). |
+| `status()` | The status the API asserted: a problem body's own `status` when it carries one, otherwise the wire status; `0` for `CONNECTIVITY`. |
+| `type()`, `title()`, `detail()`, `instance()` | The problem-details fields, or null where the answer had none. For `CONNECTIVITY`, `detail()` is the failure's class name only. |
+| `isProblem(typeSuffix)` | `true` when `type()` ends with the given suffix, e.g. `isProblem("case-update-error")`. |
+| `getMessage()` | `HTTP <status> <title> (<type suffix>): <detail>`, built from the fields above. |
+
+The message is value-free by construction: never the request URL, a header, or a token. A
+wrong password reads `HTTP 401 Authentication Failed`; an invalid lifecycle transition reads
+`HTTP 422 Unprocessable Entity (case-update-error): OPEN cases cannot be closed.`. Handle by
+`kind()` and `isProblem(...)`, not by parsing the message.
 
 ### Collaboration requests — `session.collaborationRequests()`
 
@@ -251,6 +290,39 @@ Case responses include approval and other comment-like activity on a collaborati
 | `listStoredForwardResults()` | Returns the history of attachment forward operations. |
 | `listStoredForwardResultsForRequest(caseToken)` | Returns forward results for one request. |
 
+### Direct delivery (V2) — `session.attachmentsV2()`
+
+The sender's side of the V2 attachment contract: the file goes straight into the partner's
+store and nothing passes through the Connect API. Built against the draft contract in
+`tsanetgit/Connect-API-Code#147`; the platform endpoint is not live yet, and the request and
+result types here will be replaced by generated ones when the contract lands in the spec.
+The member-facing walkthrough, including the three calls without the SDK, is
+[`docs/attachments-v2-client.md`](../docs/attachments-v2-client.md).
+
+| Method | Description |
+|--------|-------------|
+| `send(caseToken, file, contentType, description, withSha256, listener)` | Grant, upload, complete. Abandons the grant and throws `AttachmentV2Exception` on any upload failure; on a complete-time `attachment/grant-expired` it re-grants once and uploads again. |
+| `grant(caseToken, request)` | Ask the platform for permission and upload instructions for one file. |
+| `upload(grant, file, listener)` | Execute the grant's upload block verbatim (single, multipart, resumable or relay), streaming from disk one part at a time. |
+| `complete(caseToken, grantId, request)` | Report the upload finished; the platform seals it, verifies arrival and records the outcome. |
+| `abandon(caseToken, grantId)` | Abandon a grant; any open upload session is aborted and nothing becomes visible. |
+
+```java
+AttachmentCompleteResult outcome = session.attachmentsV2().send(
+    caseToken,
+    Path.of("diag.tar.gz"),
+    "application/gzip",
+    "Diagnostics from the failing node",   // optional, goes into the case note
+    true,                                  // compute and send a SHA-256
+    progress -> log.info("{} {}/{} parts, {} of {} bytes", progress.mode(),
+        progress.partsDone(), progress.partsTotal(), progress.bytesSent(), progress.bytesTotal()));
+```
+
+`outcome.status()` is the platform's word, never the client's: `DELIVERED` (verified),
+`DELIVERED_UNVERIFIED` (sender-reported, the case note says so), `FAILED` or `EXPIRED`
+(nothing was announced to the partner). A client that sent every byte still reports whatever
+this says.
+
 ---
 
 ## Typical workflows
@@ -325,6 +397,10 @@ The console application (`TSANet-integration-app`) exposes CLI commands that cal
 | CLI command | Library call |
 |-------------|--------------|
 | `login` | `auth().login()` |
+| `api-login` | `auth().login()`, prints the JWT only (for scripting) |
+| `login-configured` | `auth().loginWithConfiguredCredentials()` |
+| `session` | `auth()` state: `isAuthorized()`, `currentUsername()`, `authMode()`, `currentAccountId()`, `tokenExpiresAt()` |
+| `token` | `auth().currentBearerToken()` |
 | `requests` | `collaborationRequests().listRequests()` |
 | `stored-requests` | `collaborationRequests().listStoredRequests()` |
 | `create-request` | `createRequest(formTemplate, ...)` with `--field fieldId=value` |
@@ -341,6 +417,7 @@ The console application (`TSANet-integration-app`) exposes CLI commands that cal
 | `responses` | `caseResponses().listResponsesForAllRequests()` |
 | `sync` | `collaborationRequests().syncAllDetails()` |
 | `me` | `users().getCurrentUser()` |
+| `stored-me` | `users().listStoredUsers()` (the cached `/v1/me` answers) |
 | `webhooks` / `webhooks list` | `webhooks().listSubscriptions()` |
 | `webhooks create` / `create-webhook` | `webhooks().createSubscription()` |
 | `webhooks delete --id ID` | `webhooks().deleteSubscription()` |
@@ -352,6 +429,7 @@ The console application (`TSANet-integration-app`) exposes CLI commands that cal
 | `attachments list/add/config/https-analyze/https-set` | `attachments()` facade methods |
 | `add-attachment` | `attachments().forwardAttachments()` |
 | `stored-attachments` | `attachments().listStoredForwardResults()` |
+| `deliver-attachment` | `attachmentsV2().send()` (one file on the direct path, V2) |
 
 ### Attachments
 
@@ -368,6 +446,12 @@ Forward files to a partner:
 attachments add --id 123 --description "Diagnostic logs" --file /tmp/logs.txt
 add-attachment --token abc-case-token-xyz --description "Screenshot" --file ./screen.png
 stored-attachments --id 123
+```
+
+Deliver one file on the direct path (V2, draft contract; see the facade section above):
+
+```text
+deliver-attachment --id 123 --file ./diag.tar.gz --description "Diagnostics from the failing node" --sha256
 ```
 
 Analyze and set HTTPS transport configuration:
