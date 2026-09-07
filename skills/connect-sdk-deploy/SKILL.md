@@ -101,11 +101,14 @@ versions. Do not build from the historical `oauth` branch: it merged to `main` i
 
 These bite regardless of path, and none of them are visible in the OpenAPI schema:
 
-- **Bad credentials return HTTP 500, not 401.** The Connect API's legacy error mode
-  answers a wrong username or password with
-  `500 "Error processing request"`. Sending `Accept: application/problem+json` opts
-  into structured RFC 7807 errors. Do not let a member burn an afternoon debugging
-  their network for what is a typo in a password.
+- **Two error modes, and the SDK is on the right one.** By default the Connect API's
+  legacy error mode answers a wrong username or password with
+  `500 "Error processing request"`; sending `Accept: application/json, application/problem+json`
+  opts into RFC 7807 errors with the documented status codes. The SDK sends that header
+  on every call and maps the answer into `ConnectApiException` (kind, status, type, title,
+  detail), so through the SDK a bad login reads `HTTP 401 Authentication Failed`. A
+  member calling the API directly without the header still sees the 500. Do not let a
+  member burn an afternoon debugging their network for what is a typo in a password.
 - **Test-mode asymmetry.** You *write* the `testSubmission` flag when creating a case
   but *read* it back as `testCase`. The library's create API takes an explicit
   per-call `testSubmission` flag with no silent default; older always-test method
