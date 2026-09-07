@@ -188,6 +188,23 @@ class S3AttachmentStorageTest {
     }
 
     @Test
+    void ambiguousCompleteProbeFailureRidesAsSuppressedOnTheCompleteFailure() {
+        // The marker read itself fails: the store fails closed on the complete failure and
+        // the probe's own failure is not lost.
+        s3.failCompleteWith = () -> SdkClientException.create("response timed out (simulated)");
+        s3.completeCommitsDespiteFailure = false;
+        s3.failAbortWith = () -> NoSuchUploadException.builder().statusCode(404).build();
+        s3.failHeadWith = () -> S3Exception.builder().statusCode(500).message("head failed (simulated)").build();
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> storage.store(attachment("probe.bin"), new ByteArrayInputStream(bytes(PART_SIZE + 5))));
+        assertTrue(e.getMessage().contains("complete"), e.getMessage());
+        assertEquals("response timed out (simulated)", e.getCause().getMessage());
+        assertTrue(java.util.Arrays.stream(e.getCause().getSuppressed())
+                        .anyMatch(t -> t.getMessage() != null && t.getMessage().contains("attempt marker read")),
+                "the probe failure must ride as suppressed on the complete failure");
+    }
+
+    @Test
     void ambiguousCompleteWithNoVisibleObjectStillThrows() {
         s3.failCompleteWith = () -> SdkClientException.create("response timed out (simulated)");
         s3.completeCommitsDespiteFailure = false;

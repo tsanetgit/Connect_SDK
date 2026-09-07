@@ -133,6 +133,23 @@ class GcsAttachmentStorageTest extends AttachmentStorageContractTest {
     }
 
     @Test
+    void ambiguousFinishProbeFailureRidesAsSuppressedOnTheFinishFailure() {
+        // The marker read itself fails: the store fails closed on the finish failure and
+        // the probe's own failure is not lost.
+        InMemoryGcsBucket gcs = new InMemoryGcsBucket();
+        gcs.failFinish = new StorageException(503, "finish RPC failed (simulated)");
+        gcs.finishCommitsBeforeFailing = false;
+        gcs.failAttemptMarker = new StorageException(500, "marker read failed (simulated)");
+        GcsAttachmentStorage storage = new GcsAttachmentStorage(gcs, "b", null);
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> storage.store(attachment("probe.bin"), new java.io.ByteArrayInputStream(bytes(BUFFER_SIZE + 8))));
+        assertTrue(e.getMessage().contains("finish"), e.getMessage());
+        assertEquals("finish RPC failed (simulated)", e.getCause().getMessage());
+        assertEquals(1, e.getCause().getSuppressed().length);
+        assertEquals("marker read failed (simulated)", e.getCause().getSuppressed()[0].getMessage());
+    }
+
+    @Test
     void ambiguousFinishWithNothingCommittedThrows() {
         InMemoryGcsBucket gcs = new InMemoryGcsBucket();
         gcs.failFinish = new StorageException(503, "finish RPC failed, nothing committed");
