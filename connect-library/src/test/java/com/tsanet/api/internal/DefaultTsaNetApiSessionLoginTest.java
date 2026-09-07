@@ -160,6 +160,24 @@ class DefaultTsaNetApiSessionLoginTest {
     }
 
     @Test
+    void aTokenRenewalDuringTheSessionKeepsTheContext() {
+        // Issue 20's acceptance: the context is available to subsequent commands, and a renewal
+        // (401 retry or expiry) happens during those commands, for the same principal.
+        when(tokenManager.authenticate()).thenAnswer(inv -> {
+            sessionStore.savePassword("user@test.com", "token-5", java.time.Instant.now().plusSeconds(1800));
+            return "token-5";
+        });
+        when(userGateway.getCurrentUser()).thenReturn(CONTEXT);
+        session.authenticate();
+
+        sessionStore.savePassword("user@test.com", "token-5-renewed", java.time.Instant.now().plusSeconds(1800));
+
+        assertThat(sessionStore.getBearerToken()).contains("token-5-renewed");
+        assertThat(session.currentUserContext()).contains(CONTEXT);
+        verify(userGateway).getCurrentUser();
+    }
+
+    @Test
     void logoutForgetsTheContext() {
         when(tokenManager.authenticate()).thenAnswer(inv -> {
             sessionStore.savePassword("user@test.com", "token-4");

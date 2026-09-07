@@ -21,7 +21,9 @@ package com.tsanet.api;
  * </ul>
  *
  * <p>The message is value-free by construction: status, kind, the API's own title and detail,
- * never the URL, a header or a token.
+ * never the request URL, a header or a token. The request URL and its path are scrubbed from
+ * any echoed body before an excerpt is taken; a body that spells out an identifier on its own
+ * is not recognized as such.
  *
  * <p>Note for anyone raising the generated client's retry count: its retry loop catches
  * Spring's {@code HttpServerErrorException}, which this handler no longer throws, so that loop
@@ -61,7 +63,11 @@ public class ConnectApiException extends RuntimeException {
         return kind;
     }
 
-    /** HTTP status of the answer, or 0 for {@link Kind#CONNECTIVITY}. */
+    /**
+     * The status the API asserted: for {@link Kind#PROBLEM} the body's own {@code status} when it
+     * carries one (which can differ from the wire status, see tsanetgit/Connect-API-Code#122),
+     * otherwise the wire status; 0 for {@link Kind#CONNECTIVITY}. Not a transport-level fact.
+     */
     public int status() {
         return status;
     }

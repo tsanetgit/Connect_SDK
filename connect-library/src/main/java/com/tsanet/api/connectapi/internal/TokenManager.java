@@ -109,15 +109,27 @@ public final class TokenManager {
 
     private String authenticateClientCredentials(ClientCredentialsAuthConfig config) {
         OAuthAccessToken token = oauthTokenGateway.fetchClientCredentialsToken(config);
-        Instant expiresAt = clock.instant().plusSeconds(token.expiresInSeconds());
-        sessionStore.saveOAuth(accountId, token.accessToken(), expiresAt);
+        sessionStore.saveOAuth(accountId, token.accessToken(), expiryFrom(token.expiresInSeconds()));
         return token.accessToken();
     }
 
     private String authenticatePassword(PasswordAuthConfig config) {
         PasswordLogin login = passwordAuthGateway.login(config.username(), config.password());
-        Instant expiresAt = login.expiresInSeconds() == null ? null : clock.instant().plusSeconds(login.expiresInSeconds());
-        sessionStore.savePassword(config.username(), login.accessToken(), expiresAt);
+        Long lifetime = login.expiresInSeconds() == null ? null : login.expiresInSeconds().longValue();
+        sessionStore.savePassword(config.username(), login.accessToken(), expiryFrom(lifetime));
         return login.accessToken();
+    }
+
+    /**
+     * When the stated lifetime is at or below {@link #EXPIRY_SKEW} the token would count as
+     * expired the moment it arrived, and every request would open with a login (or, for an
+     * interactively typed password, fail as "log in again" right after a successful login).
+     * Such a lifetime is treated as unstated: no expiry is tracked and the 401 path handles it.
+     */
+    private Instant expiryFrom(Long lifetimeSeconds) {
+        if (lifetimeSeconds == null || lifetimeSeconds <= EXPIRY_SKEW.getSeconds()) {
+            return null;
+        }
+        return clock.instant().plusSeconds(lifetimeSeconds);
     }
 }

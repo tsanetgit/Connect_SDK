@@ -182,12 +182,82 @@ class TokenManagerTest {
     void anInteractiveLoginTracksExpiryToo() {
         ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
         ConnectApiAuthGateway authGateway = mock(ConnectApiAuthGateway.class);
-        when(authGateway.login("typed@test.com", "pw")).thenReturn(new PasswordLogin("typed-token", 60));
+        when(authGateway.login("typed@test.com", "pw")).thenReturn(new PasswordLogin("typed-token", 900));
         TokenManager tokenManager = new TokenManager(sessionStore, authGateway, mock(OAuthTokenGateway.class),
             "default", new PasswordAuthConfig("user@test.com", "secret"), CLOCK);
 
         assertThat(tokenManager.loginWithPassword("typed@test.com", "pw")).isEqualTo("typed-token");
         assertThat(sessionStore.getUsername()).contains("typed@test.com");
-        assertThat(sessionStore.getExpiresAt()).contains(NOW.plusSeconds(60));
+        assertThat(sessionStore.getExpiresAt()).contains(NOW.plusSeconds(900));
+    }
+
+    @Test
+    void aLifetimeAtOrBelowTheSkewIsNotTrackedSoTheTokenIsNotBornExpired() {
+        ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
+        ConnectApiAuthGateway authGateway = mock(ConnectApiAuthGateway.class);
+        when(authGateway.login("typed@test.com", "pw"))
+            .thenReturn(new PasswordLogin("short-lived", (int) TokenManager.EXPIRY_SKEW.getSeconds()));
+        TokenManager tokenManager = new TokenManager(sessionStore, authGateway, mock(OAuthTokenGateway.class),
+            "default", new PasswordAuthConfig("user@test.com", "secret"), CLOCK);
+
+        tokenManager.loginWithPassword("typed@test.com", "pw");
+
+        assertThat(sessionStore.getExpiresAt()).isEmpty();
+        assertThat(sessionStore.isExpired(NOW)).isFalse();
+        // The first call after a successful typed login must not fail as "log in again".
+        assertThat(tokenManager.ensureValidAccessToken()).isEqualTo("short-lived");
+        verify(authGateway, times(1)).login(any(), any());
+    }
+
+    @Test
+    void aLifetimeJustAboveTheSkewIsTrackedAndValidOnArrival() {
+        ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
+        ConnectApiAuthGateway authGateway = mock(ConnectApiAuthGateway.class);
+        int lifetime = (int) TokenManager.EXPIRY_SKEW.getSeconds() + 1;
+        when(authGateway.login("user@test.com", "secret")).thenReturn(new PasswordLogin("t1", lifetime));
+        TokenManager tokenManager = new TokenManager(sessionStore, authGateway, mock(OAuthTokenGateway.class),
+            "default", new PasswordAuthConfig("user@test.com", "secret"), CLOCK);
+
+        tokenManager.authenticate();
+
+        assertThat(sessionStore.getExpiresAt()).contains(NOW.plusSeconds(lifetime));
+        assertThat(sessionStore.isExpired(NOW)).isFalse();
+        assertThat(tokenManager.ensureValidAccessToken()).isEqualTo("t1");
+        verify(authGateway, times(1)).login(any(), any());
+    }
+
+    @Test
+    void aShortLivedClientCredentialsTokenIsNotBornExpiredEither() {
+        ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
+        OAuthTokenGateway oauthTokenGateway = mock(OAuthTokenGateway.class);
+        ClientCredentialsAuthConfig config = new ClientCredentialsAuthConfig(
+            "tenant", null, "client-id", "client-secret", "api://audience", null);
+        when(oauthTokenGateway.fetchClientCredentialsToken(config))
+            .thenReturn(new OAuthAccessToken("brief", TokenManager.EXPIRY_SKEW.getSeconds()));
+        TokenManager tokenManager = new TokenManager(sessionStore, mock(ConnectApiAuthGateway.class),
+            oauthTokenGateway, "production", config, CLOCK);
+
+        tokenManager.authenticate();
+
+        assertThat(sessionStore.getExpiresAt()).isEmpty();
+        assertThat(tokenManager.ensureValidAccessToken()).isEqualTo("brief");
+        verify(oauthTokenGateway, times(1)).fetchClientCredentialsToken(any());
+    }
+
+    @Test
+    void aRenewalKeepsTheUserContextOfTheSamePrincipal() {
+        ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
+        sessionStore.savePassword("user@test.com", "stale", NOW.minusSeconds(1));
+        com.tsanet.api.connectapi.dto.UserContextDto context =
+            new com.tsanet.api.connectapi.dto.UserContextDto(7L, "Acme", 42L, "user@test.com", "user@test.com", "U", "Ser");
+        sessionStore.saveUserContext(context);
+        ConnectApiAuthGateway authGateway = mock(ConnectApiAuthGateway.class);
+        when(authGateway.login("user@test.com", "secret")).thenReturn(new PasswordLogin("fresh", 3600));
+        TokenManager tokenManager = new TokenManager(sessionStore, authGateway, mock(OAuthTokenGateway.class),
+            "default", new PasswordAuthConfig("user@test.com", "secret"), CLOCK);
+
+        assertThat(tokenManager.ensureValidAccessToken()).isEqualTo("fresh");
+
+        assertThat(sessionStore.getUserContext()).contains(context);
     }
 }

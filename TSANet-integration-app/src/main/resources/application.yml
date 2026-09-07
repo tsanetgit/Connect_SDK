@@ -12,7 +12,8 @@ tsanet:
   api:
     # The Connect API is HTTPS-only in every real environment; this default is the BETA
     # host, the same default the demo-ui uses. A plain-http base URL is rejected at startup
-    # unless allow-insecure-http is true, which exists for a local mock and nothing else.
+    # unless allow-insecure-http is true. That switch exists for a local mock; it admits any
+    # non-https host, so it stays false everywhere else.
     base-url: "https://connect2.tsanet.net"
     allow-insecure-http: false
   storage:
