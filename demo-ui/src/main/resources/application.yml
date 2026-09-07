@@ -8,6 +8,13 @@ spring:
       # this is a deliberate contract change, not an upgrade side effect.
       fail-on-null-for-primitives: false
 
+  servlet:
+    multipart:
+      # The direct-delivery (V2) demo hands a file to the SDK to stream into the
+      # partner's store; the default 1 MB cap would stop it before the first grant.
+      max-file-size: 20GB
+      max-request-size: 20GB
+
 server:
   port: 8090
 

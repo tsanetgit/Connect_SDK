@@ -562,6 +562,63 @@ document.getElementById('attach-form').addEventListener('submit', async (event) 
     }
 });
 
+// ---------- attachments: direct delivery (V2) ----------
+
+function formatBytes(n) {
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KiB`;
+    if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MiB`;
+    return `${(n / 1024 / 1024 / 1024).toFixed(2)} GiB`;
+}
+
+function renderUploadState(status, s) {
+    if (s.phase === 'starting') {
+        status.textContent = `Requesting a grant for ${s.fileName}...`;
+        return;
+    }
+    if (s.phase === 'uploading') {
+        status.textContent = `${s.mode}: ${s.partsDone}/${s.partsTotal} parts, `
+            + `${formatBytes(s.bytesSent)} of ${formatBytes(s.bytesTotal)}`;
+        return;
+    }
+    if (s.phase === 'failed') {
+        status.textContent = `Failed: ${s.error}`;
+        return;
+    }
+    const o = s.outcome || {};
+    const verified = o.verification ? ` (${o.verification.method || 'no method'}`
+        + `${o.verification.sizeMatched === true ? ', size matched' : ''}`
+        + `${o.verification.checksumMatched === true ? ', checksum matched' : ''})` : '';
+    const note = o.noteId ? `, note ${o.noteId}` : '';
+    const message = o.message ? ` — ${o.message}` : '';
+    status.textContent = `Platform outcome: ${o.status}${verified}${note}${message}`;
+}
+
+document.getElementById('attach-v2-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const form = event.target;
+    const status = document.getElementById('attach-v2-status');
+    const data = new FormData();
+    data.append('file', form.file.files[0]);
+    if (form.description.value) data.append('description', form.description.value);
+    data.append('sha256', form.sha256.checked ? 'true' : 'false');
+    status.textContent = 'Uploading to the demo...';
+    try {
+        const {uploadId} = await fetchJson(
+            `/api/requests/${encodeURIComponent(state.currentCaseToken)}/attachments/v2`,
+            {method: 'POST', body: data});
+        form.reset();
+        const poll = async () => {
+            const s = await fetchJson(`/api/uploads/${encodeURIComponent(uploadId)}`);
+            renderUploadState(status, s);
+            if (s.phase !== 'done' && s.phase !== 'failed') setTimeout(poll, 500);
+        };
+        await poll();
+    } catch (err) {
+        status.textContent = `Failed: ${err.message}`;
+    }
+});
+
 // ---------- new collaboration ----------
 
 document.getElementById('partner-search-form').addEventListener('submit', async (event) => {

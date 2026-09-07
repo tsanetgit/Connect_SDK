@@ -80,7 +80,7 @@ session.auth().login("<MEMBER_USERNAME>", "<MEMBER_PASSWORD>");
 ```
 
 Facades hang off the session: `auth()`, `collaborationRequests()`, `caseNotes()`,
-`caseResponses()`, `users()`, `webhooks()`, `partners()`, `attachments()`. Remote calls
+`caseResponses()`, `users()`, `webhooks()`, `partners()`, `attachments()`, `attachmentsV2()` (the direct-delivery attachment client; see `docs/attachments-v2-client.md`). Remote calls
 before a successful login throw `IllegalStateException: Not logged in`.
 
 Every remote read and successful write upserts into the SQLite cache;
