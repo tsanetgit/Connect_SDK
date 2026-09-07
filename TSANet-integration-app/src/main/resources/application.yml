@@ -10,7 +10,11 @@ spring:
 
 tsanet:
   api:
-    base-url: "http://localhost:8080"
+    # The Connect API is HTTPS-only in every real environment; this default is the BETA
+    # host, the same default the demo-ui uses. A plain-http base URL is rejected at startup
+    # unless allow-insecure-http is true, which exists for a local mock and nothing else.
+    base-url: "https://connect2.tsanet.net"
+    allow-insecure-http: false
   storage:
     sqlite-path: "${user.home}/.tsanet-client-demo"
   # No accounts are configured here. This is a public repository, so credentials
