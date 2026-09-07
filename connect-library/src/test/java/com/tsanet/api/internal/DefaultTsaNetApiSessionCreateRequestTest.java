@@ -67,6 +67,7 @@ class DefaultTsaNetApiSessionCreateRequestTest {
             mock(ConnectApiWebhooksGateway.class),
             mock(ConnectApiPartnersGateway.class),
             mock(ConnectApiAttachmentsGateway.class),
+            mock(com.tsanet.api.connectapi.internal.ConnectApiAttachmentsV2Gateway.class),
             mock(CollaborationRequestStorageService.class),
             mock(CollaborationRequestFormStorageService.class),
             mock(CaseNoteStorageService.class),

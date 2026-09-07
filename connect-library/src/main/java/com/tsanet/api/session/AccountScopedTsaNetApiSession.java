@@ -7,6 +7,7 @@ import com.tsanet.api.TsaNetApiSessionFactory;
 import com.tsanet.api.auth.AuthMode;
 import com.tsanet.api.auth.PasswordAuthConfig;
 import com.tsanet.api.facade.AttachmentsFacade;
+import com.tsanet.api.facade.AttachmentsV2Facade;
 import com.tsanet.api.facade.AuthFacade;
 import com.tsanet.api.facade.CaseNotesFacade;
 import com.tsanet.api.facade.CaseResponsesFacade;
@@ -82,6 +83,11 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
     @Override
     public AttachmentsFacade attachments() {
         return requireDelegate().attachments();
+    }
+
+    @Override
+    public AttachmentsV2Facade attachmentsV2() {
+        return requireDelegate().attachmentsV2();
     }
 
     private synchronized void activateAccount(ApplicationUserAccount account) {
