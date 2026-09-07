@@ -68,10 +68,9 @@ import java.util.Optional;
 
 final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, CollaborationRequestsFacade,
     CaseNotesFacade, CaseResponsesFacade, UserFacade, WebhooksFacade, PartnersFacade, AttachmentsFacade {
-    /** Unattended logins retry {@code /v1/me} on connectivity failures: three attempts, 250 ms then 500 ms apart. */
-    static final int UNATTENDED_CURRENT_USER_ATTEMPTS = 3;
+    /** Unattended logins retry {@code /v1/me} on connectivity failures: one pause per retry, so three attempts. */
     static final long[] UNATTENDED_CURRENT_USER_BACKOFF_MS = {250, 500};
-
+    static final int UNATTENDED_CURRENT_USER_ATTEMPTS = UNATTENDED_CURRENT_USER_BACKOFF_MS.length + 1;
 
     private final TsaNetApiConfiguration configuration;
     private final ConnectApiSessionStore sessionStore;

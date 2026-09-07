@@ -124,6 +124,10 @@ public class ConnectApiSessionStore {
         return snapshot.isExpired(now);
     }
 
+    /**
+     * Logout. A renewal already past its network call when this runs will store its result
+     * afterwards and repopulate the session; that window predates the snapshot and is left as is.
+     */
     public void clear() {
         snapshot = Snapshot.EMPTY;
     }

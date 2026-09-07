@@ -61,7 +61,7 @@ class OAuth401RetryInterceptorTest {
         new OAuth401RetryInterceptor(tokenManager).intercept(request, new byte[0], execution);
 
         assertThat(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("Bearer already-fresh");
-        verify(tokenManager, never()).refreshAccessToken();
+        verify(tokenManager, times(1)).renewUnlessAlreadyRenewed("stale");
     }
 
     @Test

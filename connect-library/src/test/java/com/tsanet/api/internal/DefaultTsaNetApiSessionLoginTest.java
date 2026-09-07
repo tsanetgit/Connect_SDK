@@ -254,6 +254,6 @@ class DefaultTsaNetApiSessionLoginTest {
         session.logout();
 
         assertThat(session.currentUserContext()).isEmpty();
-        verify(tokenManager, never()).refreshAccessToken();
+        verify(tokenManager, never()).renewUnlessAlreadyRenewed(org.mockito.ArgumentMatchers.any());
     }
 }

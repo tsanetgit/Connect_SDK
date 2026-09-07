@@ -79,28 +79,17 @@ public final class TokenManager {
     }
 
     /**
-     * Renews the bearer: a fresh client-credentials token, or a transparent re-login with the
-     * configured password. The platform has no refresh endpoint, so re-login is the strategy,
+     * The 401 path's renewal: a fresh client-credentials token, or a transparent re-login with
+     * the configured password. The platform has no refresh endpoint, so re-login is the strategy,
      * and it is offered only when the session belongs to the configured user; a session opened
      * by an interactively typed password is never renewed silently, because that password was
-     * never retained. Always renews, even when another caller just did; see
-     * {@link #renewUnlessAlreadyRenewed(String)} for the 401 path.
-     */
-    public String refreshAccessToken() {
-        renewal.lock();
-        try {
-            return renew();
-        } finally {
-            renewal.unlock();
-        }
-    }
-
-    /**
-     * The 401 path's renewal. {@code observedToken} is the bearer the rejected request carried.
-     * If, by the time this caller holds the renewal lock, the store already holds a different
-     * unexpired bearer, another caller's renewal has answered this 401 too and that bearer is
-     * returned with no network call. If the store still holds the observed bearer it is bad
-     * server-side whatever its expiry says, and one renewal runs.
+     * never retained.
+     *
+     * <p>{@code observedToken} is the bearer the rejected request carried. If, by the time this
+     * caller holds the renewal lock, the store already holds a different unexpired bearer,
+     * another caller's renewal has answered this 401 too and that bearer is returned with no
+     * network call. If the store still holds the observed bearer it is bad server-side whatever
+     * its expiry says, and one renewal runs.
      */
     public String renewUnlessAlreadyRenewed(String observedToken) {
         renewal.lock();

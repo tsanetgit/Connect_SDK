@@ -113,7 +113,7 @@ class TokenManagerTest {
         );
 
         assertThat(tokenManager.supportsRefresh()).isFalse();
-        assertThatThrownBy(tokenManager::refreshAccessToken)
+        assertThatThrownBy(() -> tokenManager.renewUnlessAlreadyRenewed(null))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("log in again");
     }
