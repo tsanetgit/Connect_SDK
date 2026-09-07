@@ -12,9 +12,10 @@ import java.util.List;
  * stays logic-free so the live contract run genuinely covers it. Package-private on
  * purpose: this is not a second SPI.
  *
- * <p>Names are already-joined {@code [prefix/]caseNumber/fileName} strings. Blob names
- * are opaque to the service, so nothing is encoded on either side of this seam.
- * Implementations throw their SDK runtime exceptions ({@code BlobStorageException})
+ * <p>Names reach this seam already encoded by the adapter, as joined
+ * {@code [prefix/]encode(caseNumber)/encode(fileName)} strings. The service is not
+ * name-opaque (it normalizes traversal shapes; see the adapter javadoc), which is why the
+ * adapter encodes and nothing on this side encodes again. Implementations throw their SDK runtime exceptions ({@code BlobStorageException})
  * through; the adapter owns wrapping and classification.
  */
 interface AzureBlobContainer {

@@ -162,6 +162,26 @@ class RegisteringStorageFactoryTest {
     }
 
     @Test
+    void azureBlobWithHttpsContainerSasUrlBuildsBlobAdapter() throws Exception {
+        // A well-formed container SAS URL with a fake signature; the client builds offline.
+        AttachmentStorage storage = factory.create(config("azure_blob", Map.of(
+                "sasUrl", "https://acct.blob.core.windows.net/attachments?sv=2024-01-01&sp=rw&sig=Zm9v",
+                "prefix", "tenants/acme")));
+        assertInstanceOf(AzureBlobAttachmentStorage.class, storage);
+    }
+
+    @Test
+    void azureBlobHttpSasUrlIsRejectedWithoutEchoingTheToken() {
+        // The builder accepts http:// and would send the SAS token in cleartext; the
+        // factory's message promises https, so the factory must be what enforces it.
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure_blob", Map.of(
+                        "sasUrl", "http://acct.blob.core.windows.net/attachments?sv=2024-01-01&sig=MARKER"))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+        assertTrue(e.getMessage().contains("https"), e.getMessage());
+    }
+
+    @Test
     void azureBlobWithoutTargetIsAConfigError() {
         AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
                 () -> factory.create(config("azure_blob", Map.of("prefix", "x"))));

@@ -52,13 +52,18 @@ import java.util.Map;
  *       <td>either {@code sasUrl} alone, or {@code connectionString}+{@code shareName}</td>
  *       <td>{@code directoryPrefix}</td></tr>
  *   <tr><td>{@code azure_blob}</td>
- *       <td>either {@code sasUrl} (a container SAS URL) alone, or
+ *       <td>either {@code sasUrl} (an https container SAS URL) alone, or
  *           {@code connectionString}+{@code containerName}</td>
  *       <td>{@code prefix}</td></tr>
  *   <tr><td>{@code gcs}</td><td>{@code bucket}</td>
  *       <td>{@code prefix}, {@code projectId}; {@code credentialsJson} (a service-account key),
  *           else Application Default Credentials</td></tr>
  * </table>
+ *
+ * <p>{@code azure_blob} needs read and write on the container: a SAS with {@code rw} (or
+ * {@code rcw}), or Storage Blob Data Contributor. The go-live probe validates write only
+ * (it stages one uncommitted block), so a write-only SAS passes go-live and fails on the
+ * first {@code exists}; see {@link AzureBlobAttachmentStorage}.
  */
 public final class RegisteringStorageFactory implements StorageFactory {
 
@@ -134,6 +139,11 @@ public final class RegisteringStorageFactory implements StorageFactory {
         if (!blank(sasUrl)) {
             String malformed = "azure_blob sasUrl is not a well-formed container SAS URL; it must be "
                     + "an https URL that includes the container name";
+            // The SAS token is the credential and rides in the query string; the builder
+            // accepts http:// and would send it in cleartext on every request.
+            if (!sasUrl.regionMatches(true, 0, "https://", 0, 8)) {
+                throw new AttachmentStorageException(malformed);
+            }
             try {
                 container = builder.endpoint(sasUrl).buildClient();
             } catch (RuntimeException e) {

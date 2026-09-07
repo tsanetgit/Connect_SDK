@@ -146,6 +146,23 @@ class AzureBlobAttachmentStorageLiveTest extends AttachmentStorageContractTest {
         AttachmentStorage storage = AzureBlobAttachmentStorage.forContainer(client, runPrefix);
         AttachmentStorageException e = assertThrows(AttachmentStorageException.class, storage::verifyAccess);
         assertTrue(e.getMessage().contains("wrong credential"), e.getMessage());
+        // The service's AuthenticationFailed detail must not echo the signature: wrap() and
+        // classify() carry the SDK message into the chain.
+        int end = tampered.indexOf('&', sig);
+        String sigValue = tampered.substring(sig, end < 0 ? tampered.length() : end);
+        String chain = fullChain(e);
+        assertFalse(chain.contains(sigValue), "signature echoed in the exception chain");
+        assertFalse(chain.contains(java.net.URLDecoder.decode(sigValue, java.nio.charset.StandardCharsets.UTF_8)),
+                "decoded signature echoed in the exception chain");
+    }
+
+    /** Every message in the cause chain, so a leak two causes deep is still caught. */
+    private static String fullChain(Throwable t) {
+        StringBuilder chain = new StringBuilder();
+        for (Throwable c = t; c != null; c = c.getCause()) {
+            chain.append(c.getClass().getName()).append(": ").append(c.getMessage()).append('\n');
+        }
+        return chain.toString();
     }
 
     @Test

@@ -116,6 +116,32 @@ class AzureBlobAttachmentStorageTest extends AttachmentStorageContractTest {
     }
 
     @Test
+    void putBlobFailureSurfacesThroughTheContractAndLeavesNothingVisible() throws Exception {
+        InMemoryAzureBlobContainer blobs = new InMemoryAzureBlobContainer();
+        blobs.failPutBlobWith = () -> new IllegalStateException("put blob rejected (simulated)");
+        AzureBlobAttachmentStorage storage = new AzureBlobAttachmentStorage(blobs, "c", null);
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> storage.store(attachment("small.bin"), new ByteArrayInputStream(bytes(16))));
+        assertTrue(e.getMessage().contains("put blob"), e.getMessage());
+        assertFalse(storage.exists("01234567", "small.bin"));
+    }
+
+    @Test
+    void ambiguousCommitProbeFailureRidesAsSuppressedOnTheCommitFailure() {
+        InMemoryAzureBlobContainer blobs = new InMemoryAzureBlobContainer();
+        blobs.failCommitWith = () -> new IllegalStateException("commit timed out (simulated)");
+        blobs.failCommittedBlockIdsWith = () -> new IllegalStateException("block list unreachable (simulated)");
+        AzureBlobAttachmentStorage storage = new AzureBlobAttachmentStorage(blobs, "c", null);
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> storage.store(attachment("probe.bin"), new ByteArrayInputStream(bytes(BLOCK_SIZE + 8))));
+        // Fails closed on the commit failure; the probe's own failure is not lost.
+        assertTrue(e.getMessage().contains("commit"), e.getMessage());
+        assertEquals("commit timed out (simulated)", e.getCause().getMessage());
+        assertEquals(1, e.getCause().getSuppressed().length);
+        assertEquals("block list unreachable (simulated)", e.getCause().getSuppressed()[0].getMessage());
+    }
+
+    @Test
     void stageFailureAbandonsWithoutACommit() throws Exception {
         InMemoryAzureBlobContainer blobs = new InMemoryAzureBlobContainer();
         blobs.failStageBlockWith = () -> new IllegalStateException("stage rejected (simulated)");
