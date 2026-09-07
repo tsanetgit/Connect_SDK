@@ -1,6 +1,7 @@
 package com.tsanet.application.config;
 
 import com.tsanet.api.ApplicationUserAccountRegistry;
+import com.tsanet.api.ConnectApiBaseUrl;
 import com.tsanet.api.TsaNetApi;
 import com.tsanet.api.TsaNetApiConnectionSettings;
 import com.tsanet.api.TsaNetApiSession;
@@ -15,6 +16,12 @@ import org.springframework.context.annotation.Configuration;
 public class TsaNetApiConfigurationBean {
     @Bean
     TsaNetApiSessionFactory tsaNetApiSessionFactory(TsaNetApplicationProperties properties) {
+        // A bearer over plain http is a credential on the wire; refuse at startup, same rule as the console.
+        ConnectApiBaseUrl.requireHttps(
+            properties.api() == null ? null : properties.api().baseUrl(),
+            properties.api() != null && properties.api().insecureHttpAllowed(),
+            "tsanet.api.allow-insecure-http"
+        );
         return TsaNetApi.sessionFactory(TsaNetApiConnectionSettings.of(
             properties.api().baseUrl(),
             properties.storage() != null ? properties.storage().sqlitePath() : "data.db"

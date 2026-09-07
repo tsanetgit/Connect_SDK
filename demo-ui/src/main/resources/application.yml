@@ -24,6 +24,10 @@ tsanet:
     # marker all live under this directory.
     data-dir: ${TSANET_DEMO_DATA_DIR:${user.home}/.tsanet-demo-ui}
     default-environment: beta
+    # Every environment's api-base-url must be https; a plain-http one is rejected at startup
+    # unless allow-insecure-http is true. That switch exists for a local mock; it admits any
+    # non-https host, so it stays false elsewhere.
+    allow-insecure-http: false
     # Production is connect2.tsanet.org — deliberately NOT listed here.
     # entra-tenant-id / entra-audience enable the OAuth client-credentials
     # login mode for an environment. Tenant is shared; audiences differ per

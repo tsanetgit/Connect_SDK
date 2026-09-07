@@ -14,7 +14,10 @@ server:
 tsanet:
   api:
     # HTTPS-only in every real environment; BETA is the shipped default (see the console app).
+    # A plain-http base URL is rejected at startup unless allow-insecure-http is true. That
+    # switch exists for a local mock; it admits any non-https host, so it stays false elsewhere.
     base-url: "https://connect2.tsanet.net"
+    allow-insecure-http: false
   storage:
     sqlite-path: "${user.home}/.tsanet-client-demo"
   # No accounts are configured here. This is a public repository, so credentials

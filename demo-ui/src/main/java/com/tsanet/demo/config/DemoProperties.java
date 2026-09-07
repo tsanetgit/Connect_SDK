@@ -7,8 +7,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record DemoProperties(
     Map<String, EnvironmentDef> environments,
     String defaultEnvironment,
-    String dataDir
+    String dataDir,
+    Boolean allowInsecureHttp
 ) {
+
+    /** The operator's opt-out of the https requirement, for a local mock; null means false. */
+    public boolean insecureHttpAllowed() {
+        return Boolean.TRUE.equals(allowInsecureHttp);
+    }
 
     /**
      * One Connect environment. The Entra tenant and audience are fixed per

@@ -1,6 +1,8 @@
 package com.tsanet.demo.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tsanet.api.TsaNetApiSession;
 import java.nio.file.Files;
@@ -36,9 +38,31 @@ class EnvironmentServiceTest {
                 "dev", new DemoProperties.EnvironmentDef("Dev", "http://localhost:9", null, null)
             ),
             "beta",
-            dataDir.toString()
+            dataDir.toString(),
+            true  // the tests point at a local http mock that is never contacted
         );
         service = new EnvironmentService(properties);
+    }
+
+    @Test
+    void aPlainHttpEnvironmentIsRefusedAtStartupUnlessTheOperatorOptedIn() {
+        DemoProperties http = new DemoProperties(
+            Map.of("beta", new DemoProperties.EnvironmentDef("Beta", "http://connect.example", null, null)),
+            "beta",
+            dataDir.toString(),
+            null
+        );
+
+        assertThatThrownBy(() -> new EnvironmentService(http))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("https")
+            .hasMessageContaining("tsanet.demo.allow-insecure-http=true");
+        assertThatCode(() -> new EnvironmentService(new DemoProperties(
+            Map.of("beta", new DemoProperties.EnvironmentDef("Beta", "https://connect.example", null, null)),
+            "beta",
+            dataDir.toString(),
+            null
+        ))).doesNotThrowAnyException();
     }
 
     @Test

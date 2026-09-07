@@ -1,6 +1,8 @@
 tsanet:
   api:
     base-url: "http://localhost:8080"
+    # The tests run against a local mock; the console's rule would otherwise refuse this URL.
+    allow-insecure-http: true
   storage:
     sqlite-path: "${java.io.tmpdir}/tsanet-test"
   accounts:
