@@ -4,6 +4,7 @@ import com.tsanet.api.attachments.v2.AttachmentCompleteRequest;
 import com.tsanet.api.attachments.v2.AttachmentCompleteResult;
 import com.tsanet.api.attachments.v2.AttachmentGrant;
 import com.tsanet.api.attachments.v2.AttachmentGrantRequest;
+import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.attachments.v2.AttachmentV2Exception;
 import com.tsanet.api.generated.invoker.ApiClient;
 import java.util.List;
@@ -93,6 +94,10 @@ public final class ConnectApiAttachmentsV2Api implements AttachmentsV2Api {
             return apiClient.invokeAPI(path, method, pathParams, new LinkedMultiValueMap<>(),
                 body, headers, new LinkedMultiValueMap<>(), new LinkedMultiValueMap<>(), accept, contentType,
                 AUTH_NAMES, returnType);
+        } catch (ConnectApiException e) {
+            // The runtime's client already classified the answer; keep its words and its type.
+            String type = e.kind() == ConnectApiException.Kind.CONNECTIVITY ? AttachmentV2Exception.CONNECTIVITY : e.type();
+            throw new AttachmentV2Exception(operation + " failed: " + e.getMessage(), e.status(), type, e);
         } catch (HttpStatusCodeException e) {
             throw translate(operation, e);
         } catch (ResourceAccessException e) {

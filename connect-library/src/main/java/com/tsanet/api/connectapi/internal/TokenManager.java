@@ -53,22 +53,50 @@ public final class TokenManager {
         };
     }
 
+    /** The bearer for the next request, renewed first when the session knows it has expired. */
     public String ensureValidAccessToken() {
-        if (authConfig.mode() == AuthMode.CLIENT_CREDENTIALS && sessionStore.isExpired(clock.instant())) {
+        if (sessionStore.isExpired(clock.instant())) {
             return refreshAccessToken();
         }
         return sessionStore.getBearerToken().orElseThrow(() -> new IllegalStateException("Not authenticated"));
     }
 
+    /**
+     * Renews the bearer: a fresh client-credentials token, or a transparent re-login with the
+     * configured password. The platform has no refresh endpoint, so re-login is the strategy,
+     * and it is offered only when the session belongs to the configured user; a session opened
+     * by an interactively typed password is never renewed silently, because that password was
+     * never retained.
+     */
     public String refreshAccessToken() {
-        if (authConfig.mode() != AuthMode.CLIENT_CREDENTIALS) {
-            throw new IllegalStateException("Token refresh is only supported for client-credentials auth");
-        }
-        return authenticateClientCredentials((ClientCredentialsAuthConfig) authConfig);
+        return switch (authConfig.mode()) {
+            case CLIENT_CREDENTIALS -> authenticateClientCredentials((ClientCredentialsAuthConfig) authConfig);
+            case CONNECT1_PASSWORD -> {
+                if (!canReloginWithConfiguredPassword()) {
+                    throw new IllegalStateException(
+                        "Session expired and cannot be renewed with the configured credentials; log in again");
+                }
+                yield authenticatePassword((PasswordAuthConfig) authConfig);
+            }
+        };
     }
 
     public boolean supportsRefresh() {
-        return authConfig.mode() == AuthMode.CLIENT_CREDENTIALS;
+        return authConfig.mode() == AuthMode.CLIENT_CREDENTIALS || canReloginWithConfiguredPassword();
+    }
+
+    /** An interactive login with the given credentials, with the same expiry tracking as a configured one. */
+    public String loginWithPassword(String username, String password) {
+        return authenticatePassword(new PasswordAuthConfig(username, password));
+    }
+
+    private boolean canReloginWithConfiguredPassword() {
+        if (!(authConfig instanceof PasswordAuthConfig configured)
+            || configured.username() == null || configured.username().isBlank()
+            || configured.password() == null || configured.password().isBlank()) {
+            return false;
+        }
+        return sessionStore.getUsername().map(configured.username()::equals).orElse(false);
     }
 
     public AuthMode authMode() {
@@ -87,8 +115,9 @@ public final class TokenManager {
     }
 
     private String authenticatePassword(PasswordAuthConfig config) {
-        String token = passwordAuthGateway.login(config.username(), config.password());
-        sessionStore.savePassword(config.username(), token);
-        return token;
+        PasswordLogin login = passwordAuthGateway.login(config.username(), config.password());
+        Instant expiresAt = login.expiresInSeconds() == null ? null : clock.instant().plusSeconds(login.expiresInSeconds());
+        sessionStore.savePassword(config.username(), login.accessToken(), expiresAt);
+        return login.accessToken();
     }
 }

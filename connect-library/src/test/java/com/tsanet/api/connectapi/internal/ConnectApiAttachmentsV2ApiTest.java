@@ -13,6 +13,7 @@ import com.tsanet.api.attachments.v2.AttachmentCompleteRequest;
 import com.tsanet.api.attachments.v2.AttachmentCompleteResult;
 import com.tsanet.api.attachments.v2.AttachmentGrant;
 import com.tsanet.api.attachments.v2.AttachmentGrantRequest;
+import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.attachments.v2.AttachmentV2Exception;
 import com.tsanet.api.generated.invoker.ApiClient;
 import java.util.List;
@@ -188,6 +189,31 @@ class ConnectApiAttachmentsV2ApiTest {
             .isInstanceOf(AttachmentV2Exception.class)
             .hasMessageContaining("upload block")
             .satisfies(e -> assertThat(((AttachmentV2Exception) e).status()).isEqualTo(201));
+    }
+
+    @Test
+    void theRuntimesClassifiedAnswerKeepsItsTypeThroughTheAttachmentException() {
+        // Through the library's own RestTemplate, as production runs: the response error handler
+        // yields ConnectApiException first, and the V2 client must carry its type and words.
+        RestTemplate runtimeTemplate = ConnectApiRestTemplates.create();
+        MockRestServiceServer runtimeServer = MockRestServiceServer.bindTo(runtimeTemplate).build();
+        ApiClient runtimeClient = new ApiClient(runtimeTemplate);
+        runtimeClient.setBasePath(BASE);
+        runtimeClient.setBearerToken(() -> "bearer-123");
+        runtimeServer.expect(requestTo(BASE + "/v2/collaboration-requests/" + TOKEN + "/attachments/grants/" + GRANT_ID + "/complete"))
+            .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body("{\"type\":\"attachment/grant-expired\",\"title\":\"Grant expired\",\"status\":409,\"detail\":\"expired\"}"));
+
+        assertThatThrownBy(() -> new ConnectApiAttachmentsV2Api(runtimeClient)
+            .complete(TOKEN, GRANT_ID, new AttachmentCompleteRequest(3, null, List.of())))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.status()).isEqualTo(409);
+                assertThat(ex.isProblem(AttachmentV2Exception.GRANT_EXPIRED)).isTrue();
+                assertThat(ex.getMessage()).contains("Grant expired").contains("expired");
+                assertThat(ex.getCause()).isInstanceOf(ConnectApiException.class);
+            });
     }
 
     @Test

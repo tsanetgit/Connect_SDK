@@ -1,5 +1,6 @@
 package com.tsanet.api.connectapi.internal;
 
+import com.tsanet.api.connectapi.dto.UserContextDto;
 import com.tsanet.api.auth.AuthMode;
 import java.time.Instant;
 import java.util.Optional;
@@ -10,12 +11,28 @@ public class ConnectApiSessionStore {
     private volatile String accountId;
     private volatile AuthMode authMode;
     private volatile Instant expiresAt;
+    private volatile UserContextDto userContext;
 
     public void savePassword(String username, String bearerToken) {
+        savePassword(username, bearerToken, null);
+    }
+
+    /** {@code expiresAt} null means the API stated no lifetime; expiry then surfaces only as a 401. */
+    public void savePassword(String username, String bearerToken, Instant expiresAt) {
         this.username = username;
         this.bearerToken = bearerToken;
         this.authMode = AuthMode.CONNECT1_PASSWORD;
-        this.expiresAt = null;
+        this.expiresAt = expiresAt;
+        this.userContext = null;
+    }
+
+    /** The company and user behind the session, fetched from {@code /v1/me} right after login. */
+    public void saveUserContext(UserContextDto userContext) {
+        this.userContext = userContext;
+    }
+
+    public Optional<UserContextDto> getUserContext() {
+        return Optional.ofNullable(userContext);
     }
 
     public void saveOAuth(String accountId, String bearerToken, Instant expiresAt) {
@@ -24,6 +41,7 @@ public class ConnectApiSessionStore {
         this.bearerToken = bearerToken;
         this.authMode = AuthMode.CLIENT_CREDENTIALS;
         this.expiresAt = expiresAt;
+        this.userContext = null;
     }
 
     public Optional<String> getBearerToken() {
@@ -63,5 +81,6 @@ public class ConnectApiSessionStore {
         this.accountId = null;
         this.authMode = null;
         this.expiresAt = null;
+        this.userContext = null;
     }
 }
