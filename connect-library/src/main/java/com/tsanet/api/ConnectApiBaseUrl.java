@@ -17,12 +17,13 @@ public final class ConnectApiBaseUrl {
     /**
      * @param baseUrl           the configured base URL
      * @param allowInsecureHttp the operator's opt-in to plain http
-     * @param optOutSetting     the application's name for that opt-in, so the message names the fix
+     * @param baseUrlSetting    the application's name for the base URL setting, so a missing one names the fix
+     * @param optOutSetting     the application's name for the opt-in, so a rejected one names the fix
      * @throws IllegalStateException when the URL is missing, or is not https and the opt-in is off
      */
-    public static void requireHttps(String baseUrl, boolean allowInsecureHttp, String optOutSetting) {
+    public static void requireHttps(String baseUrl, boolean allowInsecureHttp, String baseUrlSetting, String optOutSetting) {
         if (baseUrl == null || baseUrl.isBlank()) {
-            throw new IllegalStateException("Connect API base URL is required");
+            throw new IllegalStateException(baseUrlSetting + " is required");
         }
         if (baseUrl.regionMatches(true, 0, "https://", 0, 8)) {
             return;

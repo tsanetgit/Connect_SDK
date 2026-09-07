@@ -48,7 +48,7 @@ public class EnvironmentService {
         if (properties.environments() != null) {
             for (DemoProperties.EnvironmentDef def : properties.environments().values()) {
                 ConnectApiBaseUrl.requireHttps(def.apiBaseUrl(), properties.insecureHttpAllowed(),
-                    "tsanet.demo.allow-insecure-http");
+                    "tsanet.demo.environments.<env>.api-base-url", "tsanet.demo.allow-insecure-http");
             }
         }
         this.properties = properties;

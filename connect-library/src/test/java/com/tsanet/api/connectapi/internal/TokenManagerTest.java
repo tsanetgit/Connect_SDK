@@ -328,6 +328,25 @@ class TokenManagerTest {
     }
 
     @Test
+    void aFourOhOneOnAnEmptyStoreLogsInAgainAsThePreviousPathDid() {
+        // Logged out, or never logged in: the 401 path renews. Pinned so the behavior is a decision,
+        // not an accident; clear() documents the straggling-401-after-logout consequence.
+        ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
+        OAuthTokenGateway oauthTokenGateway = mock(OAuthTokenGateway.class);
+        ClientCredentialsAuthConfig config = new ClientCredentialsAuthConfig(
+            "tenant", null, "client-id", "client-secret", "api://audience", null);
+        when(oauthTokenGateway.fetchClientCredentialsToken(config)).thenReturn(new OAuthAccessToken("fresh", 3600));
+        TokenManager tokenManager = new TokenManager(sessionStore, mock(ConnectApiAuthGateway.class),
+            oauthTokenGateway, "production", config, CLOCK);
+
+        assertThat(tokenManager.supportsRefresh()).isTrue();
+        assertThat(tokenManager.renewUnlessAlreadyRenewed(null)).isEqualTo("fresh");
+
+        assertThat(sessionStore.getBearerToken()).contains("fresh");
+        verify(oauthTokenGateway, times(1)).fetchClientCredentialsToken(any());
+    }
+
+    @Test
     void aFourOhOneRenewsWhenTheOtherCallersTokenHasAlreadyExpiredToo() {
         ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
         sessionStore.savePassword("user@test.com", "other-but-expired", NOW.minusSeconds(1));

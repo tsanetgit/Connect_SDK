@@ -9,8 +9,10 @@ import org.springframework.http.client.ClientHttpResponse;
 
 /**
  * Re-sends a request once with a renewed bearer after a 401, when the token manager can renew.
- * Concurrent 401s share one renewal: each passes the bearer it sent, and the manager renews
- * only if the store still holds that bearer.
+ * Concurrent 401s share one renewal: each passes the bearer it sent, and the manager reuses a
+ * different unexpired bearer already in the store instead of renewing. It renews when the store
+ * still holds the bearer that was rejected, when the store is empty, or when the bearer it holds
+ * has itself expired.
  */
 public final class OAuth401RetryInterceptor implements ClientHttpRequestInterceptor {
     private final TokenManager tokenManager;

@@ -89,7 +89,17 @@ public final class TokenManager {
      * caller holds the renewal lock, the store already holds a different unexpired bearer,
      * another caller's renewal has answered this 401 too and that bearer is returned with no
      * network call. If the store still holds the observed bearer it is bad server-side whatever
-     * its expiry says, and one renewal runs.
+     * its expiry says, and one renewal runs. An empty store (logged out, or never logged in)
+     * also renews: a 401 on a session with no bearer is answered with a fresh login, which is
+     * what the previous 401 path did too.
+     *
+     * <p>Two bounded edges of keying on the token rather than the principal. A 401 raised under
+     * one principal can be answered with another's bearer; {@link #supportsRefresh()} bounds
+     * that to a shared session where a login as the configured user overlaps a request issued
+     * under a different typed user, where the previous code re-logged in and reached the same
+     * bearer. And an identity provider that reissues the same token until it truly expires
+     * defeats the reuse check, since every caller finds its own token still stored; the
+     * shared-renewal property then degrades to one fetch per caller, never to a failure.
      */
     public String renewUnlessAlreadyRenewed(String observedToken) {
         renewal.lock();

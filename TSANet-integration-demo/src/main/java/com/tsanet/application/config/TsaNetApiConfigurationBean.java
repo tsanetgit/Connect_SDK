@@ -20,6 +20,7 @@ public class TsaNetApiConfigurationBean {
         ConnectApiBaseUrl.requireHttps(
             properties.api() == null ? null : properties.api().baseUrl(),
             properties.api() != null && properties.api().insecureHttpAllowed(),
+            "tsanet.api.base-url",
             "tsanet.api.allow-insecure-http"
         );
         return TsaNetApi.sessionFactory(TsaNetApiConnectionSettings.of(

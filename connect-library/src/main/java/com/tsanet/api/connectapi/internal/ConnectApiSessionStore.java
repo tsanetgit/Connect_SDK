@@ -125,10 +125,14 @@ public class ConnectApiSessionStore {
     }
 
     /**
-     * Logout. A renewal already past its network call when this runs will store its result
-     * afterwards and repopulate the session; that window predates the snapshot and is left as is.
+     * Logout. Synchronized like the saves, so a save's read-modify-write cannot straddle it and
+     * write back the pre-logout session. What it does not prevent: a renewal already past its
+     * network call stores its token afterwards, and a straggling 401 on a client-credentials
+     * session finds an empty store and logs in again (the 401 path renews on an empty store,
+     * see {@link TokenManager#renewUnlessAlreadyRenewed}). Both predate this class's snapshot
+     * and are left as they were.
      */
-    public void clear() {
+    public synchronized void clear() {
         snapshot = Snapshot.EMPTY;
     }
 }

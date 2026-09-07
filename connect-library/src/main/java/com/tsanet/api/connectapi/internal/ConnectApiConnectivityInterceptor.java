@@ -17,9 +17,11 @@ import org.springframework.http.client.ClientHttpResponse;
  * <p>The response body is read here too. The library's request factory buffers responses, so
  * this read fills the buffer the extractor and the error handler later read from; without it a
  * body that fails mid-read would fail after the chain has returned, in the extractor, and
- * surface with the URL in the same way.
+ * surface with the URL in the same way. On an unbuffered template this read would consume the
+ * body instead, which is why the class is package-private: only
+ * {@link ConnectApiRestTemplates#create()}, which installs the buffering factory, can add it.
  */
-public final class ConnectApiConnectivityInterceptor implements ClientHttpRequestInterceptor {
+final class ConnectApiConnectivityInterceptor implements ClientHttpRequestInterceptor {
 
     @Override
     public ClientHttpResponse intercept(HttpRequest request, byte[] body, ClientHttpRequestExecution execution)

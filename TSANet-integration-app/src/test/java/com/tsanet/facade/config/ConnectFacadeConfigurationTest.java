@@ -35,6 +35,6 @@ class ConnectFacadeConfigurationTest {
     void aMissingBaseUrlIsItsOwnError() {
         assertThatThrownBy(() -> ConnectFacadeConfiguration.requireHttps(new ConnectFacadeProperties.Api(" ", true)))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("required");
+            .hasMessageContaining("tsanet.api.base-url is required");
     }
 }

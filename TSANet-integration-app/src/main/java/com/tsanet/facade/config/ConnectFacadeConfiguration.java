@@ -32,6 +32,7 @@ public class ConnectFacadeConfiguration {
         ConnectApiBaseUrl.requireHttps(
             api == null ? null : api.baseUrl(),
             api != null && api.insecureHttpAllowed(),
+            "tsanet.api.base-url",
             "tsanet.api.allow-insecure-http"
         );
     }
