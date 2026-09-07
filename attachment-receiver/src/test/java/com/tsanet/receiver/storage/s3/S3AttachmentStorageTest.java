@@ -154,6 +154,57 @@ class S3AttachmentStorageTest {
     }
 
     @Test
+    void ambiguousCompleteOverAPreExistingSameSizeObjectThrows() throws Exception {
+        // The false-positive shape a visibility or size probe cannot see: an older object of
+        // the same name and length is already there, the session merely expired
+        // (abort -> NoSuchUpload), and this complete never committed.
+        int size = PART_SIZE + 5;
+        byte[] older = bytes(size);
+        storage.store(attachment("same-size.bin"), new ByteArrayInputStream(older));
+        byte[] newer = bytes(size);
+        newer[0] = (byte) 0xFF;
+        s3.failCompleteWith = () -> SdkClientException.create("response timed out (simulated)");
+        s3.completeCommitsDespiteFailure = false;
+        s3.failAbortWith = () -> NoSuchUploadException.builder().statusCode(404).build();
+        assertThrows(AttachmentStorageException.class,
+                () -> storage.store(attachment("same-size.bin"), new ByteArrayInputStream(newer)),
+                "an older same-size object must not be mistaken for this attempt's commit");
+        assertArrayEquals(older, s3.objects.get("01234567/same-size.bin"), "the older object is untouched");
+    }
+
+    @Test
+    void ambiguousCompleteOverAnUnmarkedSingleRequestObjectThrows() throws Exception {
+        // PutObject objects carry no marker on purpose: a later attempt's ambiguous complete
+        // over one must fail closed, never adopt it as its own commit.
+        byte[] older = bytes(64);
+        storage.store(attachment("unmarked.bin"), new ByteArrayInputStream(older));
+        assertFalse(s3.objectMetadata.containsKey("01234567/unmarked.bin"), "single-request objects stay unmarked");
+        s3.failCompleteWith = () -> SdkClientException.create("response timed out (simulated)");
+        s3.completeCommitsDespiteFailure = false;
+        s3.failAbortWith = () -> NoSuchUploadException.builder().statusCode(404).build();
+        assertThrows(AttachmentStorageException.class,
+                () -> storage.store(attachment("unmarked.bin"), new ByteArrayInputStream(bytes(PART_SIZE + 5))));
+        assertArrayEquals(older, s3.objects.get("01234567/unmarked.bin"), "the older object is untouched");
+    }
+
+    @Test
+    void ambiguousCompleteProbeFailureRidesAsSuppressedOnTheCompleteFailure() {
+        // The marker read itself fails: the store fails closed on the complete failure and
+        // the probe's own failure is not lost.
+        s3.failCompleteWith = () -> SdkClientException.create("response timed out (simulated)");
+        s3.completeCommitsDespiteFailure = false;
+        s3.failAbortWith = () -> NoSuchUploadException.builder().statusCode(404).build();
+        s3.failHeadWith = () -> S3Exception.builder().statusCode(500).message("head failed (simulated)").build();
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> storage.store(attachment("probe.bin"), new ByteArrayInputStream(bytes(PART_SIZE + 5))));
+        assertTrue(e.getMessage().contains("complete"), e.getMessage());
+        assertEquals("response timed out (simulated)", e.getCause().getMessage());
+        assertTrue(java.util.Arrays.stream(e.getCause().getSuppressed())
+                        .anyMatch(t -> t.getMessage() != null && t.getMessage().contains("attempt marker read")),
+                "the probe failure must ride as suppressed on the complete failure");
+    }
+
+    @Test
     void ambiguousCompleteWithNoVisibleObjectStillThrows() {
         s3.failCompleteWith = () -> SdkClientException.create("response timed out (simulated)");
         s3.completeCommitsDespiteFailure = false;

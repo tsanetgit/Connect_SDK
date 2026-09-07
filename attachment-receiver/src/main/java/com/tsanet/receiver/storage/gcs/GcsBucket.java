@@ -29,12 +29,20 @@ interface GcsBucket {
      * Large-file path: start a resumable upload. The object does not become visible until
      * {@link Upload#finish()}; an {@link Upload#abandon() abandoned} upload never produces a
      * visible object and the session expires server-side, which is how the SPI's
-     * no-partial-visibility rule holds without an abort call.
+     * no-partial-visibility rule holds without an abort call. {@code attemptMarker} is
+     * stored as custom metadata on the finalized object, so the adapter can later tell
+     * this attempt's object from any other.
      */
-    Upload startResumable(String key, String contentType);
+    Upload startResumable(String key, String contentType, String attemptMarker);
 
     /** The object's byte size, or {@code -1} when it does not exist; throws on access error. */
     long sizeOrAbsent(String key);
+
+    /**
+     * The visible object's attempt marker, or {@code null} when the object is absent or
+     * carries none (a {@link #create single-request} object); throws on access error.
+     */
+    String attemptMarkerOrAbsent(String key);
 
     byte[] download(String key);
 
