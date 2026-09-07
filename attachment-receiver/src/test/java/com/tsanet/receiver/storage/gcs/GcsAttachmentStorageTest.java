@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 import static com.tsanet.receiver.storage.gcs.GcsAttachmentStorage.BUFFER_SIZE;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -95,6 +96,40 @@ class GcsAttachmentStorageTest extends AttachmentStorageContractTest {
         var stored = storage.store(attachment("ambiguous.bin"), new java.io.ByteArrayInputStream(content));
         assertEquals(content.length, stored.bytesWritten(),
                 "a finish that committed server-side is the success it was");
+    }
+
+    @Test
+    void ambiguousFinishOverAPreExistingSameSizeObjectThrows() throws Exception {
+        // The false-positive shape the size probe could not see: an older object of the
+        // same name and length is already there, and this finish never committed.
+        InMemoryGcsBucket gcs = new InMemoryGcsBucket();
+        GcsAttachmentStorage storage = new GcsAttachmentStorage(gcs, "b", null);
+        byte[] older = bytes(BUFFER_SIZE + 8);
+        storage.store(attachment("same-size.bin"), new java.io.ByteArrayInputStream(older));
+        byte[] newer = bytes(BUFFER_SIZE + 8);
+        newer[0] = (byte) 0xFF;
+        gcs.failFinish = new StorageException(503, "finish RPC failed, nothing committed");
+        gcs.finishCommitsBeforeFailing = false;
+        assertThrows(AttachmentStorageException.class,
+                () -> storage.store(attachment("same-size.bin"), new java.io.ByteArrayInputStream(newer)),
+                "an older same-size object must not be mistaken for this attempt's finish");
+        assertArrayEquals(older, gcs.contentOf("01234567/same-size.bin"), "the older object is untouched");
+    }
+
+    @Test
+    void ambiguousFinishOverAnUnmarkedSingleRequestObjectThrows() throws Exception {
+        // create() objects carry no marker on purpose: a later attempt's ambiguous finish
+        // over one must fail closed, never adopt it as its own commit.
+        InMemoryGcsBucket gcs = new InMemoryGcsBucket();
+        GcsAttachmentStorage storage = new GcsAttachmentStorage(gcs, "b", null);
+        byte[] older = bytes(64);
+        storage.store(attachment("unmarked.bin"), new java.io.ByteArrayInputStream(older));
+        assertNull(gcs.attemptMarkerOrAbsent("01234567/unmarked.bin"), "single-request objects stay unmarked");
+        gcs.failFinish = new StorageException(503, "finish RPC failed, nothing committed");
+        gcs.finishCommitsBeforeFailing = false;
+        assertThrows(AttachmentStorageException.class,
+                () -> storage.store(attachment("unmarked.bin"), new java.io.ByteArrayInputStream(bytes(BUFFER_SIZE + 8))));
+        assertArrayEquals(older, gcs.contentOf("01234567/unmarked.bin"), "the older object is untouched");
     }
 
     @Test

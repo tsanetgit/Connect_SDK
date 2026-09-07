@@ -17,12 +17,14 @@ import java.util.Map;
 final class InMemoryGcsBucket implements GcsBucket {
 
     private final Map<String, byte[]> objects = new HashMap<>();
+    private final Map<String, String> attemptMarkers = new HashMap<>();
 
     /** When set, the named operation throws this instead of succeeding. */
     StorageException failCreate;
     StorageException failStartResumable;
     StorageException failFinish;
     StorageException failSizeOrAbsent;
+    StorageException failAttemptMarker;
     StorageException failDownload;
 
     /** Ambiguous-finish: commit the object, then throw {@link #failFinish}. */
@@ -37,10 +39,11 @@ final class InMemoryGcsBucket implements GcsBucket {
             throw failCreate;
         }
         objects.put(key, bytes.clone());
+        attemptMarkers.remove(key); // an unmarked single-request object
     }
 
     @Override
-    public Upload startResumable(String key, String contentType) {
+    public Upload startResumable(String key, String contentType, String attemptMarker) {
         if (failStartResumable != null) {
             throw failStartResumable;
         }
@@ -56,12 +59,17 @@ final class InMemoryGcsBucket implements GcsBucket {
             public void finish() {
                 if (failFinish != null) {
                     if (finishCommitsBeforeFailing) {
-                        objects.put(key, staged.toByteArray());
+                        commit();
                     }
                     throw failFinish;
                 }
-                // Visible only now: the resumable object appears on finalize.
+                commit();
+            }
+
+            /** Visible only now: the resumable object appears on finalize, marker included. */
+            private void commit() {
                 objects.put(key, staged.toByteArray());
+                attemptMarkers.put(key, attemptMarker);
             }
 
             @Override
@@ -79,6 +87,14 @@ final class InMemoryGcsBucket implements GcsBucket {
         }
         byte[] bytes = objects.get(key);
         return bytes == null ? -1 : bytes.length;
+    }
+
+    @Override
+    public String attemptMarkerOrAbsent(String key) {
+        if (failAttemptMarker != null) {
+            throw failAttemptMarker;
+        }
+        return attemptMarkers.get(key);
     }
 
     @Override

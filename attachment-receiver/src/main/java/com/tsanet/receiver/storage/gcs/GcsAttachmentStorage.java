@@ -36,11 +36,15 @@ import java.util.UUID;
  *       {@code abandon()}ed, not finished — finishing a partial upload would finalize a
  *       truncated object. There is deliberately no cleanup round-trip that could itself
  *       fail, unlike S3's {@code AbortMultipartUpload}.</li>
- *   <li><b>Ambiguous finish.</b> A {@code finish} that fails client-side may have committed
- *       server-side. When the object is then visible at exactly the byte count written, the
- *       store is treated as committed and reported as success, mirroring the S3 adapter's
- *       ambiguous-complete policy. (Like both twins, this cannot distinguish a concurrent
- *       same-name writer's object.)</li>
+ *   <li><b>Ambiguous finish, resolved by identity.</b> A {@code finish} that fails
+ *       client-side may have committed server-side. Each resumable attempt is stamped with
+ *       a UUID as custom metadata ({@value #ATTEMPT_METADATA_KEY}) on the {@code BlobInfo}
+ *       the session opens with, which GCS stores on the finalized object. The visible
+ *       object carrying this attempt's UUID means this finish landed; a previous object of
+ *       the same name (same size or not), a concurrent writer's, or nothing at all fails
+ *       closed and throws (tsanetgit/Connect_SDK#69). Single-request objects written by
+ *       {@code create} are deliberately unmarked: a later attempt's ambiguous finish over
+ *       one then fails closed, which is right.</li>
  * </ul>
  *
  * <p>Required IAM on the bucket/prefix: {@code storage.objects.create},
@@ -54,6 +58,9 @@ public final class GcsAttachmentStorage implements AttachmentStorage {
 
     /** Stream read granularity; a 256 KiB multiple, so it is also a valid resumable chunk size. */
     static final int BUFFER_SIZE = 5 * 1024 * 1024;
+
+    /** Custom-metadata key carrying the per-attempt UUID on resumable objects. */
+    static final String ATTEMPT_METADATA_KEY = "tsanet-upload-attempt";
 
     private final GcsBucket bucket;
     private final String bucketName;
@@ -94,9 +101,10 @@ public final class GcsAttachmentStorage implements AttachmentStorage {
     private StoredAttachment resumable(IncomingAttachment attachment, InputStream content,
                                        String key, byte[] firstBuffer)
             throws AttachmentStorageException {
+        String attempt = UUID.randomUUID().toString();
         GcsBucket.Upload upload;
         try {
-            upload = bucket.startResumable(key, attachment.contentType());
+            upload = bucket.startResumable(key, attachment.contentType(), attempt);
         } catch (RuntimeException e) {
             throw wrap("resumable start", key, e);
         }
@@ -132,21 +140,22 @@ public final class GcsAttachmentStorage implements AttachmentStorage {
         try {
             upload.finish();
         } catch (RuntimeException finishFailure) {
-            return resolveAmbiguousFinish(key, total, finishFailure);
+            return resolveAmbiguousFinish(key, attempt, total, finishFailure);
         }
         return new StoredAttachment(key, total);
     }
 
     /**
-     * A failed finish is ambiguous: GCS may have committed server-side. The object visible
-     * at exactly the byte count written means exactly that — report the commit as the
-     * success it was. Every other shape throws.
+     * A failed finish is ambiguous: GCS may have committed server-side. The visible object
+     * carrying this attempt's UUID means exactly that — report the commit as the success
+     * it was. Another marker or none (a previous same-name object, a concurrent writer's,
+     * nothing committed) fails closed. Every other shape throws.
      */
-    private StoredAttachment resolveAmbiguousFinish(String key, long total,
+    private StoredAttachment resolveAmbiguousFinish(String key, String attempt, long total,
                                                     RuntimeException finishFailure)
             throws AttachmentStorageException {
         try {
-            if (bucket.sizeOrAbsent(key) == total) {
+            if (attempt.equals(bucket.attemptMarkerOrAbsent(key))) {
                 return new StoredAttachment(key, total);
             }
         } catch (RuntimeException probeFailure) {

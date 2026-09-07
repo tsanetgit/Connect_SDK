@@ -31,6 +31,7 @@ import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.Supplier;
@@ -43,7 +44,10 @@ import java.util.function.Supplier;
 final class StubS3Client implements S3Client {
 
     final Map<String, byte[]> objects = new HashMap<>();
+    /** User metadata per committed key; keys lowercased the way S3 returns them. */
+    final Map<String, Map<String, String>> objectMetadata = new HashMap<>();
     final Map<String, TreeMap<Integer, byte[]>> pendingUploads = new HashMap<>();
+    private final Map<String, Map<String, String>> pendingMetadata = new HashMap<>();
     final List<String> calls = new ArrayList<>();
 
     Supplier<RuntimeException> failPutWith;
@@ -63,6 +67,7 @@ final class StubS3Client implements S3Client {
             throw failPutWith.get();
         }
         objects.put(request.key(), toBytes(body));
+        objectMetadata.remove(request.key()); // an unmarked single-request object
         return PutObjectResponse.builder().build();
     }
 
@@ -71,6 +76,9 @@ final class StubS3Client implements S3Client {
         String uploadId = "upload-" + (++uploadCounter) + ":" + request.key();
         calls.add("createMultipart:" + request.key());
         pendingUploads.put(uploadId, new TreeMap<>());
+        Map<String, String> lowercased = new HashMap<>();
+        request.metadata().forEach((k, v) -> lowercased.put(k.toLowerCase(Locale.ROOT), v));
+        pendingMetadata.put(uploadId, lowercased);
         return CreateMultipartUploadResponse.builder().uploadId(uploadId).build();
     }
 
@@ -102,6 +110,8 @@ final class StubS3Client implements S3Client {
         ByteArrayOutputStream whole = new ByteArrayOutputStream();
         parts.values().forEach(p -> whole.writeBytes(p));
         objects.put(key, whole.toByteArray());
+        // Metadata given at initiation lands on the completed object, as on S3.
+        objectMetadata.put(key, pendingMetadata.remove(uploadId));
     }
 
     @Override
@@ -123,7 +133,10 @@ final class StubS3Client implements S3Client {
         if (!objects.containsKey(request.key())) {
             throw NoSuchKeyException.builder().statusCode(404).build();
         }
-        return HeadObjectResponse.builder().contentLength((long) objects.get(request.key()).length).build();
+        return HeadObjectResponse.builder()
+                .contentLength((long) objects.get(request.key()).length)
+                .metadata(objectMetadata.getOrDefault(request.key(), Map.of()))
+                .build();
     }
 
     @Override

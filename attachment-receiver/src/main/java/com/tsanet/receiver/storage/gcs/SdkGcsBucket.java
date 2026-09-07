@@ -9,6 +9,7 @@ import com.google.cloud.storage.StorageException;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 /**
  * The logic-free SDK implementation of {@link GcsBucket}: every method is one or two SDK
@@ -28,12 +29,14 @@ final class SdkGcsBucket implements GcsBucket {
 
     @Override
     public void create(String key, String contentType, byte[] bytes) {
-        storage.create(blobInfo(key, contentType), bytes);
+        storage.create(blobInfo(key, contentType, null), bytes);
     }
 
     @Override
-    public Upload startResumable(String key, String contentType) {
-        WriteChannel channel = storage.writer(blobInfo(key, contentType));
+    public Upload startResumable(String key, String contentType, String attemptMarker) {
+        // The BlobInfo opens the resumable session, and its metadata lands on the object
+        // when the session finalizes.
+        WriteChannel channel = storage.writer(blobInfo(key, contentType, attemptMarker));
         channel.setChunkSize(GcsAttachmentStorage.BUFFER_SIZE);
         return new Upload() {
             @Override
@@ -70,6 +73,15 @@ final class SdkGcsBucket implements GcsBucket {
     }
 
     @Override
+    public String attemptMarkerOrAbsent(String key) {
+        Blob blob = storage.get(BlobId.of(bucket, key));
+        if (blob == null || blob.getMetadata() == null) {
+            return null;
+        }
+        return blob.getMetadata().get(GcsAttachmentStorage.ATTEMPT_METADATA_KEY);
+    }
+
+    @Override
     public byte[] download(String key) {
         return storage.readAllBytes(BlobId.of(bucket, key));
     }
@@ -79,10 +91,13 @@ final class SdkGcsBucket implements GcsBucket {
         storage.delete(BlobId.of(bucket, key));
     }
 
-    private BlobInfo blobInfo(String key, String contentType) {
+    private BlobInfo blobInfo(String key, String contentType, String attemptMarker) {
         BlobInfo.Builder builder = BlobInfo.newBuilder(BlobId.of(bucket, key));
         if (contentType != null) {
             builder.setContentType(contentType);
+        }
+        if (attemptMarker != null) {
+            builder.setMetadata(Map.of(GcsAttachmentStorage.ATTEMPT_METADATA_KEY, attemptMarker));
         }
         return builder.build();
     }

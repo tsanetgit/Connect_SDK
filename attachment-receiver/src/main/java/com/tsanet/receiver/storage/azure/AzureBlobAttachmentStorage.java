@@ -53,10 +53,9 @@ import java.util.UUID;
  *       truncated object — and there is deliberately no cleanup round-trip that could
  *       itself fail (the GCS adapter's shape, unlike S3's abort call).</li>
  *   <li><b>Ambiguous commit, resolved exactly.</b> A {@code Put Block List} that fails
- *       client-side may have committed server-side. The S3 and GCS adapters resolve that
- *       by size, which a same-size overwrite or a concurrent writer can fool
- *       (tsanetgit/Connect_SDK#69). Here the block ids carry a UUID minted for this store
- *       call, so the resolution is identity, not size: the blob's committed block list
+ *       client-side may have committed server-side. As in the S3 and GCS adapters since
+ *       tsanetgit/Connect_SDK#69, the resolution is identity, not size. Here the block ids
+ *       carry a UUID minted for this store call: the blob's committed block list
  *       ({@code Get Block List}) equal to the ids this call staged means this commit
  *       landed, and nothing else can produce that list. Any other shape throws.</li>
  * </ul>

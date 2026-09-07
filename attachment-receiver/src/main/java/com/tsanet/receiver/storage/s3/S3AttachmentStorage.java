@@ -17,6 +17,7 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -36,10 +37,16 @@ import java.util.UUID;
  * SDK only ever sees replayable byte bodies, never the caller's stream, so SDK-level
  * retries are safe and the stream is never closed by this class.
  *
- * <p>One deliberate policy for the ambiguous-complete edge (a
- * {@code CompleteMultipartUpload} that fails client-side after succeeding server-side):
- * when the failed complete's abort answers {@code NoSuchUpload} and the object is
- * visible, the store is treated as committed and reported as success.
+ * <p>The ambiguous-complete edge (a {@code CompleteMultipartUpload} that fails
+ * client-side after succeeding server-side) is resolved by identity: each multipart
+ * attempt is stamped with a UUID as user metadata ({@value #ATTEMPT_METADATA_KEY}) on
+ * {@code CreateMultipartUpload}, which S3 stores on the completed object. When the failed
+ * complete's abort answers {@code NoSuchUpload} and a HEAD of the key returns this
+ * attempt's UUID, the store is reported as the success it was. A previous object of the
+ * same name (same size or not), a concurrent writer's, or an expired session with nothing
+ * committed fails closed and throws (tsanetgit/Connect_SDK#69). Single-request objects
+ * written by {@code PutObject} are deliberately unmarked: a later attempt's ambiguous
+ * complete over one then fails closed, which is right.
  *
  * <p>Required IAM on the bucket/prefix: {@code s3:PutObject}, {@code s3:GetObject},
  * {@code s3:DeleteObject} (the verify sentinel), {@code s3:ListBucket} (without it a
@@ -55,6 +62,9 @@ public final class S3AttachmentStorage implements AttachmentStorage {
 
     /** S3's minimum non-last part size: 5 MiB exactly, not 5 MB. */
     static final int PART_SIZE = 5 * 1024 * 1024;
+
+    /** User-metadata key carrying the per-attempt UUID; lowercase, as S3 returns keys. */
+    static final String ATTEMPT_METADATA_KEY = "tsanet-upload-attempt";
 
     private final S3Client s3;
     private final String bucket;
@@ -100,10 +110,11 @@ public final class S3AttachmentStorage implements AttachmentStorage {
     private StoredAttachment multipart(IncomingAttachment attachment, InputStream content,
                                        String key, byte[] firstBuffer)
             throws AttachmentStorageException {
+        String attempt = UUID.randomUUID().toString();
         String uploadId;
         try {
             uploadId = s3.createMultipartUpload(b -> {
-                b.bucket(bucket).key(key);
+                b.bucket(bucket).key(key).metadata(Map.of(ATTEMPT_METADATA_KEY, attempt));
                 if (attachment.contentType() != null) {
                     b.contentType(attachment.contentType());
                 }
@@ -151,7 +162,7 @@ public final class S3AttachmentStorage implements AttachmentStorage {
             s3.completeMultipartUpload(b -> b.bucket(bucket).key(key).uploadId(uploadId)
                     .multipartUpload(mu -> mu.parts(parts)));
         } catch (Exception completeFailure) {
-            return resolveAmbiguousComplete(key, uploadId, total, completeFailure);
+            return resolveAmbiguousComplete(key, uploadId, attempt, total, completeFailure);
         }
         return new StoredAttachment(key, total);
     }
@@ -167,17 +178,19 @@ public final class S3AttachmentStorage implements AttachmentStorage {
 
     /**
      * A failed complete is ambiguous: S3 may have committed server-side. Abort answering
-     * {@code NoSuchUpload} while the object is visible means exactly that — report the
-     * commit as the success it was. Every other shape aborts and throws.
+     * {@code NoSuchUpload} while the visible object carries this attempt's UUID means
+     * exactly that — report the commit as the success it was. A visible object with
+     * another marker or none (a previous same-name object, a concurrent writer's, a
+     * session that merely expired) fails closed. Every other shape aborts and throws.
      */
-    private StoredAttachment resolveAmbiguousComplete(String key, String uploadId, long total,
-                                                      Exception completeFailure)
+    private StoredAttachment resolveAmbiguousComplete(String key, String uploadId, String attempt,
+                                                      long total, Exception completeFailure)
             throws AttachmentStorageException {
         try {
             s3.abortMultipartUpload(b -> b.bucket(bucket).key(key).uploadId(uploadId));
         } catch (NoSuchUploadException uploadGone) {
             try {
-                if (existsKey(key)) {
+                if (attempt.equals(attemptMarkerOrAbsent(key))) {
                     return new StoredAttachment(key, total);
                 }
             } catch (Exception headFailure) {
@@ -188,6 +201,25 @@ public final class S3AttachmentStorage implements AttachmentStorage {
             completeFailure.addSuppressed(abortFailure);
         }
         throw wrap("complete", key, completeFailure);
+    }
+
+    /**
+     * The visible object's attempt marker, or {@code null} when the key is absent or the
+     * object is unmarked. Same 404 discrimination as {@link #existsKey}: an absent key is a
+     * definite "not this attempt", not a probe error.
+     */
+    private String attemptMarkerOrAbsent(String key) throws AttachmentStorageException {
+        try {
+            return s3.headObject(b -> b.bucket(bucket).key(key)).metadata().get(ATTEMPT_METADATA_KEY);
+        } catch (S3Exception e) {
+            if (e.statusCode() == 404) {
+                return null;
+            }
+            throw wrap("attempt marker read", key, e);
+        } catch (SdkException e) {
+            throw new AttachmentStorageException(
+                    "attempt marker read failed for " + key + ": cannot reach S3: " + e.getMessage(), e);
+        }
     }
 
     @Override
