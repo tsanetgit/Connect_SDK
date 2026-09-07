@@ -61,9 +61,9 @@ import java.util.Map;
  * </table>
  *
  * <p>{@code azure_blob} needs read and write on the container: a SAS with {@code rw} (or
- * {@code rcw}), or Storage Blob Data Contributor. The go-live probe validates write only
- * (it stages one uncommitted block), so a write-only SAS passes go-live and fails on the
- * first {@code exists}; see {@link AzureBlobAttachmentStorage}.
+ * {@code rcw}), or Storage Blob Data Contributor. The go-live probe validates both: it
+ * stages one uncommitted block (write) and reads that name's properties (read), committing
+ * nothing; see {@link AzureBlobAttachmentStorage}.
  */
 public final class RegisteringStorageFactory implements StorageFactory {
 
@@ -110,12 +110,17 @@ public final class RegisteringStorageFactory implements StorageFactory {
         // logged config error. Both branches therefore throw a value-free message and,
         // unlike the gcs branch, deliberately attach NO cause: here the cause is the leak.
         if (!blank(sasUrl)) {
+            String malformed = "azure sasUrl is not a well-formed share SAS URL; it must be an https URL "
+                    + "that includes the share name";
+            // The SAS token is the credential and rides in the query string; the builder
+            // accepts http:// and would send it in cleartext on every request.
+            if (!sasUrl.regionMatches(true, 0, "https://", 0, 8)) {
+                throw new AttachmentStorageException(malformed);
+            }
             try {
                 share = builder.endpoint(sasUrl).buildClient();
             } catch (RuntimeException e) {
-                throw new AttachmentStorageException(
-                        "azure sasUrl is not a well-formed share SAS URL; it must be an https URL "
-                                + "that includes the share name");
+                throw new AttachmentStorageException(malformed);
             }
         } else {
             String connectionString = require(props, "connectionString", "azure");

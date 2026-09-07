@@ -11,7 +11,7 @@ import java.util.List;
 
 /**
  * Runs a tenant's go-live checks: build the configured storage and prove it with the
- * SPI's write-read-delete probe; dry-run the CRM credentials when delivery is
+ * SPI's storage access probe; dry-run the CRM credentials when delivery is
  * configured. Run on configuration save and on demand; a passing report is the
  * precondition for registering the tenant's receive config with the platform.
  *
@@ -41,7 +41,7 @@ public final class GoLiveVerifier {
             AttachmentStorage storage = storageFactory.create(config);
             storage.verifyAccess();
             return new CheckResult(Check.STORAGE, Status.PASS,
-                    "backend '" + config.storageBackend() + "' passed the write-read-delete probe");
+                    "backend '" + config.storageBackend() + "' passed the storage access probe");
         } catch (Exception e) {
             return new CheckResult(Check.STORAGE, Status.FAIL, failureMessage(e));
         }

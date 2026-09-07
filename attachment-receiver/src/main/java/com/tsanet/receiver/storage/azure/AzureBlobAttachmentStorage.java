@@ -68,13 +68,15 @@ import java.util.UUID;
  * (tsanetgit/Connect-API-Code#140, question 2).
  *
  * <p><b>Go-live probe.</b> {@link #verifyAccess} stages one uncommitted block on a
- * {@code .verify-<uuid>} name: it needs only write permission and leaves no committed blob,
- * replacing the other adapters' write-read-delete sentinel (this is the issue's design).
- * The consequence, stated rather than hidden: <b>the probe validates write only, while
- * operation needs read as well</b> — {@link #exists} and the ambiguous-commit probe are
- * {@code Get Blob Properties}. A SAS carrying only {@code cw} passes go-live and fails
- * {@code exists} at runtime. Required rights are therefore SAS {@code rw} (or {@code rcw})
- * on the container, or the Storage Blob Data Contributor role for an Entra identity.
+ * {@code .verify-<uuid>} name (write), then reads that name's properties (read); the answer,
+ * absent, is ignored, since the probe tests permission, not state. Nothing is committed and nothing needs deleting, so it replaces
+ * the other adapters' write-read-delete sentinel while validating the same two rights the
+ * adapter needs at runtime: write for {@link #store}, read for {@link #exists} and the
+ * ambiguous-commit resolution. Required rights are therefore SAS {@code rw} (or
+ * {@code rcw}) on the container, or the Storage Blob Data Contributor role for an Entra
+ * identity. A SAS carrying only {@code cw} fails go-live at the read stage
+ * (tsanetgit/Connect_SDK#73; before it, such a SAS passed go-live and failed on the first
+ * {@code exists}).
  *
  * <p>Failure classification reads the service error code before the HTTP status, because
  * Azure Storage answers {@code AuthenticationFailed} with 403, not 401.
@@ -197,38 +199,46 @@ public final class AzureBlobAttachmentStorage implements AttachmentStorage {
         byte[] probe = "attachment-receiver go-live probe".getBytes(StandardCharsets.UTF_8);
         try {
             // One uncommitted block: proves write permission, commits nothing, and the
-            // service reclaims it in seven days. No read, no delete, nothing to clean up.
+            // service reclaims it in seven days. Nothing to delete.
             container.stageBlock(probeName, blockId(UUID.randomUUID().toString(), 0), probe, probe.length);
         } catch (RuntimeException e) {
-            throw new AttachmentStorageException(classify(e), e);
+            throw new AttachmentStorageException(classify("write", e), e);
+        }
+        try {
+            // Get Blob Properties on the same name proves read permission. The answer is
+            // "absent" (only uncommitted blocks exist) and is deliberately ignored: the
+            // probe tests permission, not state.
+            container.sizeOrAbsent(probeName);
+        } catch (RuntimeException e) {
+            throw new AttachmentStorageException(classify("read", e), e);
         }
     }
 
     /** Wrong-credential, no-permission, and wrong-target must read differently. */
-    private String classify(RuntimeException e) {
+    private String classify(String stage, RuntimeException e) {
         if (e instanceof BlobStorageException bse) {
             BlobErrorCode code = bse.getErrorCode();
             int status = bse.getStatusCode();
             if (BlobErrorCode.AUTHENTICATION_FAILED.equals(code)
                     || BlobErrorCode.INVALID_AUTHENTICATION_INFO.equals(code)
                     || BlobErrorCode.NO_AUTHENTICATION_INFORMATION.equals(code)) {
-                return "wrong credential: the container rejected the identity (verify write, " + code + ")";
+                return "wrong credential: the container rejected the identity (verify " + stage + ", " + code + ")";
             }
             if (BlobErrorCode.AUTHORIZATION_FAILURE.equals(code)
                     || BlobErrorCode.AUTHORIZATION_PERMISSION_MISMATCH.equals(code)
                     || BlobErrorCode.INSUFFICIENT_ACCOUNT_PERMISSIONS.equals(code)
                     || status == 403) {
-                return "no permission: write denied on container '" + containerName + "'"
+                return "no permission: " + stage + " denied on container '" + containerName + "'"
                         + (code == null ? "" : " (" + code + ")");
             }
             if (BlobErrorCode.CONTAINER_NOT_FOUND.equals(code) || status == 404) {
                 return "wrong target: container '" + containerName
-                        + "' (or its account) does not exist (verify write)";
+                        + "' (or its account) does not exist (verify " + stage + ")";
             }
-            return "verify write failed on container '" + containerName + "': " + code
+            return "verify " + stage + " failed on container '" + containerName + "': " + code
                     + " (HTTP " + status + ")";
         }
-        return "connectivity: cannot reach the container (verify write): " + e.getMessage();
+        return "connectivity: cannot reach the container (verify " + stage + "): " + e.getMessage();
     }
 
     private int fill(InputStream content, byte[] buffer, String name)
