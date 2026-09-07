@@ -137,3 +137,8 @@ Then interactively: `api-login <MEMBER_USERNAME> <MEMBER_PASSWORD>`, `requests`,
 command table is in `connect-library/README.md`. The app's webhook bridge listens on
 port 8090 by default (`tsanet.webhook.port`), so do not run it alongside demo-ui
 without changing one of the ports.
+
+`tsanet.api.base-url` ships as the BETA https host. A plain-http value is refused at
+startup; `tsanet.api.allow-insecure-http=true` admits one for a local mock only. The
+scripted demo (`TSANet-integration-demo`) has the same two keys, and demo-ui the same rule
+under `tsanet.demo.allow-insecure-http`.

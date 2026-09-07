@@ -67,6 +67,12 @@ the host's configuration and redeploy immediately.
 **Container exits or crashes on an amd64 host but ran fine locally on a Mac**
 The image was built for arm64. Rebuild with `--platform linux/amd64`.
 
+**Startup fails: "base URL must use https"**
+The app was pointed at a plain-http URL. Every real Connect environment is https, so fix
+the URL. For a local mock, and only then, set the opt-out the message names:
+`tsanet.api.allow-insecure-http=true` for the console or scripted demo,
+`tsanet.demo.allow-insecure-http=true` for demo-ui. It admits any non-https host.
+
 **Port 8090 already in use**
 demo-ui and the console app's webhook bridge both default to 8090. Run one at a
 time, or move the bridge (`tsanet.webhook.port`).

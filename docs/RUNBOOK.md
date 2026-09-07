@@ -50,6 +50,10 @@ export JAVA_HOME=<JAVA_21_HOME>
 
 Server listens on **http://localhost:8090**. Leave this terminal running; Ctrl+C stops it.
 
+Both configured environments (BETA, DEV) are https and the app refuses to start if any
+`api-base-url` is plain http. `tsanet.demo.allow-insecure-http=true` admits one for a local
+mock only; leave it unset everywhere else.
+
 ## 3. Enter credentials (first time, or after clearing)
 
 1. Open http://localhost:8090 → **Settings** tab — one card per environment (BETA / DEV)

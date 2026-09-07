@@ -83,6 +83,13 @@ Facades hang off the session: `auth()`, `collaborationRequests()`, `caseNotes()`
 `caseResponses()`, `users()`, `webhooks()`, `partners()`, `attachments()`, `attachmentsV2()` (the direct-delivery attachment client; see `docs/attachments-v2-client.md`). Remote calls
 before a successful login throw `IllegalStateException: Not logged in`.
 
+Every login ends with a `/v1/me` call; the answer is kept as `auth().currentUserContext()`
+(company and user), and a failure there fails the login. Failures the API answers, and
+transport failures, arrive as the unchecked `ConnectApiException`: `kind()` is `PROBLEM`,
+`LEGACY`, `CONNECTIVITY` or `OTHER`, with the API's own `status()`, `title()`, `detail()`
+and `isProblem("case-update-error")`-style checks. Its message never carries the URL, a
+header or a token. Handle by kind and type, not by parsing the message.
+
 Every remote read and successful write upserts into the SQLite cache;
 `listStored*` methods read the cache without touching the network. `logout()` clears
 the in-memory token only, never the cache.
@@ -94,9 +101,14 @@ Two modes, selected by configuration:
 - **`connect1-password`**: username and password, the mode shown above. Typical for
   evaluation and non-production accounts.
 - **`client-credentials`**: OAuth 2.0 machine-to-machine via Microsoft Entra, the mode
-  for production application accounts. The library refreshes tokens proactively before
-  expiry. TSANet provisions the tenant, client ID, and audience values with the
-  application account.
+  for production application accounts. TSANet provisions the tenant, client ID, and
+  audience values with the application account.
+
+In both modes, when the credentials are configured, the library renews the token before
+expiry and once after a 401 mid-call, re-sending the request; concurrent callers share one
+renewal. A password typed into `login(username, password)` is never retained, so that
+session is not renewed silently: on expiry the next call fails with a classified 401 and the
+caller logs in again.
 
 Client-credentials, programmatic:
 

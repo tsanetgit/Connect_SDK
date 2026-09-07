@@ -118,6 +118,12 @@ These bite regardless of path, and none of them are visible in the OpenAPI schem
   collaboration requests whose engineer email is off the member company's registered
   domain. This is a business rule, not a schema rule, and the error is not
   self-explanatory.
+- **Plain http is refused at startup.** The console, the scripted demo, and the demo-ui
+  all ship an https base URL and refuse a plain-http one when they start, with the fix in
+  the message. The opt-out is `tsanet.api.allow-insecure-http=true` (console, scripted
+  demo) or `tsanet.demo.allow-insecure-http=true` (demo-ui, applies to every configured
+  environment). It exists for a local mock and admits any non-https host, so it stays off
+  everywhere else. The library itself does not enforce this; the apps do.
 - **A successful `/me` proves authentication, not authorization.** Business endpoints
   require the API role on the account; `/v1/me` does not. A green "who am I" check
   can coexist with 403s on every case operation. Verify with a real case list, not

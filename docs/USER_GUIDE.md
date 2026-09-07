@@ -123,6 +123,12 @@ Opens from the Dashboard or after creating a case.
 - **Attachments** — *Load Config* shows the case's attachment configuration;
   when the partner supports it, the upload form forwards files to the case.
   *(Unverified against live BETA.)*
+- **Direct delivery (V2)** — *Deliver directly (V2)* sends one file straight into
+  the partner's store, with live progress (mode, parts, bytes), and shows the
+  platform's recorded outcome: DELIVERED, DELIVERED_UNVERIFIED, FAILED or EXPIRED.
+  Built against the draft grant/complete contract in `tsanetgit/Connect-API-Code#147`;
+  the platform endpoint is not live yet, so on BETA today the grant step fails
+  because the endpoint does not exist there.
 
 Engineer emails in action forms must be on your member company's registered
 domain — the API rejects others (business rule, not a demo bug).
@@ -148,6 +154,7 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 | Actions fail with "<title> — <detail>" | Upstream validation: wrong case state, off-domain engineer email. The API's problem-details title and detail are shown; a legacy `{"message"}` body is classified and shown the same way |
 | Case list loads but partner search errors | Partner search requires a valid session — re-check the badge first |
 | Build fails: `cannot find symbol … WebhooksApi` | Sibling `Connect-API-Code` checkout is on the wrong branch — needs `beta` |
+| Startup fails: "base URL must use https" | An environment's `api-base-url` is plain http. Fix the URL; `tsanet.demo.allow-insecure-http=true` is for a local mock only |
 
 ## 9. What the demo intentionally does not do
 
