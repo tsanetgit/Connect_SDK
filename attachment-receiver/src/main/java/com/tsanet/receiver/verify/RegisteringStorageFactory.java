@@ -3,10 +3,13 @@ package com.tsanet.receiver.verify;
 import com.tsanet.receiver.config.TenantConfig;
 import com.tsanet.receiver.storage.AttachmentStorage;
 import com.tsanet.receiver.storage.AttachmentStorageException;
+import com.tsanet.receiver.storage.azure.AzureBlobAttachmentStorage;
 import com.tsanet.receiver.storage.azure.AzureFilesAttachmentStorage;
 import com.tsanet.receiver.storage.gcs.GcsAttachmentStorage;
 import com.tsanet.receiver.storage.s3.S3AttachmentStorage;
 
+import com.azure.storage.blob.BlobContainerClient;
+import com.azure.storage.blob.BlobContainerClientBuilder;
 import com.azure.storage.file.share.ShareClient;
 import com.azure.storage.file.share.ShareClientBuilder;
 import com.google.auth.oauth2.GoogleCredentials;
@@ -48,10 +51,19 @@ import java.util.Map;
  *   <tr><td>{@code azure}</td>
  *       <td>either {@code sasUrl} alone, or {@code connectionString}+{@code shareName}</td>
  *       <td>{@code directoryPrefix}</td></tr>
+ *   <tr><td>{@code azure_blob}</td>
+ *       <td>either {@code sasUrl} (an https container SAS URL) alone, or
+ *           {@code connectionString}+{@code containerName}</td>
+ *       <td>{@code prefix}</td></tr>
  *   <tr><td>{@code gcs}</td><td>{@code bucket}</td>
  *       <td>{@code prefix}, {@code projectId}; {@code credentialsJson} (a service-account key),
  *           else Application Default Credentials</td></tr>
  * </table>
+ *
+ * <p>{@code azure_blob} needs read and write on the container: a SAS with {@code rw} (or
+ * {@code rcw}), or Storage Blob Data Contributor. The go-live probe validates write only
+ * (it stages one uncommitted block), so a write-only SAS passes go-live and fails on the
+ * first {@code exists}; see {@link AzureBlobAttachmentStorage}.
  */
 public final class RegisteringStorageFactory implements StorageFactory {
 
@@ -62,9 +74,11 @@ public final class RegisteringStorageFactory implements StorageFactory {
         return switch (backend) {
             case "s3" -> s3(props);
             case "azure" -> azure(props);
+            case "azure_blob" -> azureBlob(props);
             case "gcs" -> gcs(props);
             default -> throw new AttachmentStorageException(
-                    "unknown storage backend '" + backend + "'; known backends are s3, azure, gcs");
+                    "unknown storage backend '" + backend
+                            + "'; known backends are s3, azure, azure_blob, gcs");
         };
     }
 
@@ -114,6 +128,45 @@ public final class RegisteringStorageFactory implements StorageFactory {
             }
         }
         return AzureFilesAttachmentStorage.forShare(share, props.get("directoryPrefix"));
+    }
+
+    private AttachmentStorage azureBlob(Map<String, String> props) throws AttachmentStorageException {
+        String sasUrl = props.get("sasUrl");
+        BlobContainerClientBuilder builder = new BlobContainerClientBuilder();
+        BlobContainerClient container;
+        // Same leak shape as the azure branch: the builder echoes a malformed value into its
+        // cause chain, so both branches throw value-free with NO cause.
+        if (!blank(sasUrl)) {
+            String malformed = "azure_blob sasUrl is not a well-formed container SAS URL; it must be "
+                    + "an https URL that includes the container name";
+            // The SAS token is the credential and rides in the query string; the builder
+            // accepts http:// and would send it in cleartext on every request.
+            if (!sasUrl.regionMatches(true, 0, "https://", 0, 8)) {
+                throw new AttachmentStorageException(malformed);
+            }
+            try {
+                container = builder.endpoint(sasUrl).buildClient();
+            } catch (RuntimeException e) {
+                throw new AttachmentStorageException(malformed);
+            }
+            // An account-level URL with no container path does not fail in the builder; it
+            // silently targets the root container. Reject it here, by the parsed name.
+            String containerName = container.getBlobContainerName();
+            if (blank(containerName) || "$root".equals(containerName)) {
+                throw new AttachmentStorageException(malformed);
+            }
+        } else {
+            String connectionString = require(props, "connectionString", "azure_blob");
+            String containerName = require(props, "containerName", "azure_blob");
+            try {
+                container = builder.connectionString(connectionString)
+                        .containerName(containerName).buildClient();
+            } catch (RuntimeException e) {
+                throw new AttachmentStorageException(
+                        "azure_blob connectionString is not a well-formed storage connection string");
+            }
+        }
+        return AzureBlobAttachmentStorage.forContainer(container, props.get("prefix"));
     }
 
     private AttachmentStorage gcs(Map<String, String> props) throws AttachmentStorageException {

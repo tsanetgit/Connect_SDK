@@ -3,6 +3,7 @@ package com.tsanet.receiver.verify;
 import com.tsanet.receiver.config.TenantConfig;
 import com.tsanet.receiver.storage.AttachmentStorage;
 import com.tsanet.receiver.storage.AttachmentStorageException;
+import com.tsanet.receiver.storage.azure.AzureBlobAttachmentStorage;
 import com.tsanet.receiver.storage.azure.AzureFilesAttachmentStorage;
 import com.tsanet.receiver.storage.gcs.GcsAttachmentStorage;
 import com.tsanet.receiver.storage.s3.S3AttachmentStorage;
@@ -138,6 +139,103 @@ class RegisteringStorageFactoryTest {
             chain.append(c.getClass().getName()).append(": ").append(c.getMessage()).append('\n');
         }
         return chain.toString();
+    }
+
+    @Test
+    void unknownBackendMessageListsEveryRegisteredBackend() {
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("wasabi", Map.of())));
+        for (String backend : new String[] {"s3", "azure", "azure_blob", "gcs"}) {
+            assertTrue(e.getMessage().contains(backend), backend + " missing from: " + e.getMessage());
+        }
+    }
+
+    @Test
+    void azureBlobWithConnectionStringAndContainerBuildsBlobAdapter() throws Exception {
+        String connectionString = "DefaultEndpointsProtocol=https;AccountName=acct;"
+                + "AccountKey=Zm9vYmFyYmF6;EndpointSuffix=core.windows.net";
+        AttachmentStorage storage = factory.create(config("azure_blob", Map.of(
+                "connectionString", connectionString,
+                "containerName", "attachments",
+                "prefix", "tenants/acme")));
+        assertInstanceOf(AzureBlobAttachmentStorage.class, storage);
+    }
+
+    @Test
+    void azureBlobWithHttpsContainerSasUrlBuildsBlobAdapter() throws Exception {
+        // A well-formed container SAS URL with a fake signature; the client builds offline.
+        AttachmentStorage storage = factory.create(config("azure_blob", Map.of(
+                "sasUrl", "https://acct.blob.core.windows.net/attachments?sv=2024-01-01&sp=rw&sig=Zm9v",
+                "prefix", "tenants/acme")));
+        assertInstanceOf(AzureBlobAttachmentStorage.class, storage);
+    }
+
+    @Test
+    void azureBlobHttpSasUrlIsRejectedWithoutEchoingTheToken() {
+        // The builder accepts http:// and would send the SAS token in cleartext; the
+        // factory's message promises https, so the factory must be what enforces it.
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure_blob", Map.of(
+                        "sasUrl", "http://acct.blob.core.windows.net/attachments?sv=2024-01-01&sig=MARKER"))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+        assertTrue(e.getMessage().contains("https"), e.getMessage());
+    }
+
+    @Test
+    void azureBlobWithoutTargetIsAConfigError() {
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure_blob", Map.of("prefix", "x"))));
+        assertTrue(e.getMessage().contains("connectionString"), e.getMessage());
+    }
+
+    @Test
+    void azureBlobWithConnectionStringButNoContainerIsAConfigError() {
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure_blob", Map.of(
+                        "connectionString", "DefaultEndpointsProtocol=https;AccountName=acct;"
+                                + "AccountKey=Zm9vYmFyYmF6;EndpointSuffix=core.windows.net"))));
+        assertTrue(e.getMessage().contains("containerName"), e.getMessage());
+    }
+
+    // The azure_blob branch gets the same wrong-but-well-formed probes as the azure branch:
+    // every value carries a MARKER standing in for a secret, and the property is that the
+    // marker reaches no exception anywhere in the chain.
+
+    @Test
+    void azureBlobMalformedSasUrlNeverEchoesItsValue() {
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure_blob", Map.of("sasUrl", "not a url at all sig=MARKER"))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+        assertTrue(e.getMessage().contains("sasUrl"), e.getMessage());
+    }
+
+    @Test
+    void azureBlobConnectionStringPastedIntoSasUrlNeverEchoesTheAccountKey() {
+        String pasted = "DefaultEndpointsProtocol=https;AccountName=acct;"
+                + "AccountKey=MARKER;EndpointSuffix=core.windows.net";
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure_blob", Map.of("sasUrl", pasted))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+    }
+
+    @Test
+    void azureBlobSasUrlWithoutContainerNameIsAConfigError() {
+        // An account-level SAS URL: well-formed, but there is no container to write into.
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure_blob", Map.of(
+                        "sasUrl", "https://acct.blob.core.windows.net/?sv=2024-01-01&sig=MARKER"))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+        assertTrue(e.getMessage().contains("container name"), e.getMessage());
+    }
+
+    @Test
+    void azureBlobMalformedConnectionStringNeverEchoesItsValue() {
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure_blob", Map.of(
+                        "connectionString", "this is not a connection string AccountKey=MARKER",
+                        "containerName", "attachments"))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+        assertTrue(e.getMessage().contains("connectionString"), e.getMessage());
     }
 
     @Test
