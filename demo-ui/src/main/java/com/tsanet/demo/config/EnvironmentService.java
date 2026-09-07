@@ -1,5 +1,6 @@
 package com.tsanet.demo.config;
 
+import com.tsanet.api.ConnectApiBaseUrl;
 import com.tsanet.api.TsaNetApi;
 import com.tsanet.api.TsaNetApiConfiguration;
 import com.tsanet.api.TsaNetApiSession;
@@ -42,6 +43,14 @@ public class EnvironmentService {
     private volatile String activeEnvironment;
 
     public EnvironmentService(DemoProperties properties) {
+        // Environments are configuration, not user input, so every base URL is checked once,
+        // here at startup: a bearer over plain http is a credential on the wire.
+        if (properties.environments() != null) {
+            for (DemoProperties.EnvironmentDef def : properties.environments().values()) {
+                ConnectApiBaseUrl.requireHttps(def.apiBaseUrl(), properties.insecureHttpAllowed(),
+                    "tsanet.demo.environments.<env>.api-base-url", "tsanet.demo.allow-insecure-http");
+            }
+        }
         this.properties = properties;
         this.activeEnvFile = dataDir().resolve("active-environment");
         this.activeEnvironment = loadPersistedEnvironment();

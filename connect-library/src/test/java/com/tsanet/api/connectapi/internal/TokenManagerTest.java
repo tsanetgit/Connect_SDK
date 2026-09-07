@@ -113,7 +113,7 @@ class TokenManagerTest {
         );
 
         assertThat(tokenManager.supportsRefresh()).isFalse();
-        assertThatThrownBy(tokenManager::refreshAccessToken)
+        assertThatThrownBy(() -> tokenManager.renewUnlessAlreadyRenewed(null))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("log in again");
     }
@@ -259,5 +259,104 @@ class TokenManagerTest {
         assertThat(tokenManager.ensureValidAccessToken()).isEqualTo("fresh");
 
         assertThat(sessionStore.getUserContext()).contains(context);
+    }
+
+    @Test
+    void concurrentCallersWhoAllFindTheTokenExpiredShareOneRenewal() throws Exception {
+        int callers = 8;
+        ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
+        sessionStore.savePassword("user@test.com", "stale", NOW.minusSeconds(1));
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger logins = new java.util.concurrent.atomic.AtomicInteger();
+        ConnectApiAuthGateway authGateway = mock(ConnectApiAuthGateway.class);
+        when(authGateway.login("user@test.com", "secret")).thenAnswer(inv -> {
+            logins.incrementAndGet();
+            release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            return new PasswordLogin("fresh", 3600);
+        });
+        TokenManager tokenManager = new TokenManager(sessionStore, authGateway, mock(OAuthTokenGateway.class),
+            "default", new PasswordAuthConfig("user@test.com", "secret"), CLOCK);
+
+        java.util.concurrent.CyclicBarrier allStarted = new java.util.concurrent.CyclicBarrier(callers + 1);
+        java.util.List<java.util.concurrent.Future<String>> results = new java.util.ArrayList<>();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(callers);
+        try {
+            for (int i = 0; i < callers; i++) {
+                results.add(pool.submit(() -> {
+                    allStarted.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                    return tokenManager.ensureValidAccessToken();
+                }));
+            }
+            allStarted.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            release.countDown();
+            for (java.util.concurrent.Future<String> result : results) {
+                assertThat(result.get(5, java.util.concurrent.TimeUnit.SECONDS)).isEqualTo("fresh");
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+
+        assertThat(logins.get()).isEqualTo(1);
+        verify(authGateway, times(1)).login(any(), any());
+    }
+
+    @Test
+    void aFourOhOneRenewalIsSkippedWhenAnotherCallerAlreadyRenewed() {
+        ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
+        sessionStore.savePassword("user@test.com", "fresh", NOW.plusSeconds(3600));
+        ConnectApiAuthGateway authGateway = mock(ConnectApiAuthGateway.class);
+        TokenManager tokenManager = new TokenManager(sessionStore, authGateway, mock(OAuthTokenGateway.class),
+            "default", new PasswordAuthConfig("user@test.com", "secret"), CLOCK);
+
+        assertThat(tokenManager.renewUnlessAlreadyRenewed("stale")).isEqualTo("fresh");
+
+        verify(authGateway, never()).login(any(), any());
+    }
+
+    @Test
+    void aFourOhOneOnTheCurrentTokenRenewsWhateverItsExpirySays() {
+        ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
+        sessionStore.savePassword("user@test.com", "rejected", NOW.plusSeconds(3600));
+        ConnectApiAuthGateway authGateway = mock(ConnectApiAuthGateway.class);
+        when(authGateway.login("user@test.com", "secret")).thenReturn(new PasswordLogin("fresh", 3600));
+        TokenManager tokenManager = new TokenManager(sessionStore, authGateway, mock(OAuthTokenGateway.class),
+            "default", new PasswordAuthConfig("user@test.com", "secret"), CLOCK);
+
+        assertThat(tokenManager.renewUnlessAlreadyRenewed("rejected")).isEqualTo("fresh");
+
+        verify(authGateway, times(1)).login(any(), any());
+    }
+
+    @Test
+    void aFourOhOneOnAnEmptyStoreLogsInAgainAsThePreviousPathDid() {
+        // Logged out, or never logged in: the 401 path renews. Pinned so the behavior is a decision,
+        // not an accident; clear() documents the straggling-401-after-logout consequence.
+        ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
+        OAuthTokenGateway oauthTokenGateway = mock(OAuthTokenGateway.class);
+        ClientCredentialsAuthConfig config = new ClientCredentialsAuthConfig(
+            "tenant", null, "client-id", "client-secret", "api://audience", null);
+        when(oauthTokenGateway.fetchClientCredentialsToken(config)).thenReturn(new OAuthAccessToken("fresh", 3600));
+        TokenManager tokenManager = new TokenManager(sessionStore, mock(ConnectApiAuthGateway.class),
+            oauthTokenGateway, "production", config, CLOCK);
+
+        assertThat(tokenManager.supportsRefresh()).isTrue();
+        assertThat(tokenManager.renewUnlessAlreadyRenewed(null)).isEqualTo("fresh");
+
+        assertThat(sessionStore.getBearerToken()).contains("fresh");
+        verify(oauthTokenGateway, times(1)).fetchClientCredentialsToken(any());
+    }
+
+    @Test
+    void aFourOhOneRenewsWhenTheOtherCallersTokenHasAlreadyExpiredToo() {
+        ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
+        sessionStore.savePassword("user@test.com", "other-but-expired", NOW.minusSeconds(1));
+        ConnectApiAuthGateway authGateway = mock(ConnectApiAuthGateway.class);
+        when(authGateway.login("user@test.com", "secret")).thenReturn(new PasswordLogin("fresh", 3600));
+        TokenManager tokenManager = new TokenManager(sessionStore, authGateway, mock(OAuthTokenGateway.class),
+            "default", new PasswordAuthConfig("user@test.com", "secret"), CLOCK);
+
+        assertThat(tokenManager.renewUnlessAlreadyRenewed("stale")).isEqualTo("fresh");
+
+        verify(authGateway, times(1)).login(any(), any());
     }
 }

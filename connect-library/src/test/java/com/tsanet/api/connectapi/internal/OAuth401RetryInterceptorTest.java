@@ -30,7 +30,7 @@ class OAuth401RetryInterceptorTest {
     void aFourOhOneIsRetriedOnceWithTheRenewedBearerWhenRenewalIsPossible() throws IOException {
         TokenManager tokenManager = mock(TokenManager.class);
         when(tokenManager.supportsRefresh()).thenReturn(true);
-        when(tokenManager.refreshAccessToken()).thenReturn("fresh");
+        when(tokenManager.renewUnlessAlreadyRenewed("stale")).thenReturn("fresh");
         ClientHttpRequestExecution execution = mock(ClientHttpRequestExecution.class);
         when(execution.execute(any(), any()))
             .thenReturn(new MockClientHttpResponse(new byte[0], HttpStatus.UNAUTHORIZED))
@@ -43,7 +43,25 @@ class OAuth401RetryInterceptorTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("Bearer fresh");
         verify(execution, times(2)).execute(any(), any());
-        verify(tokenManager).refreshAccessToken();
+        verify(tokenManager).renewUnlessAlreadyRenewed("stale");
+    }
+
+    @Test
+    void theBearerItSentIsPassedWithoutThePrefixSoARenewalAlreadyMadeIsReused() throws IOException {
+        TokenManager tokenManager = mock(TokenManager.class);
+        when(tokenManager.supportsRefresh()).thenReturn(true);
+        when(tokenManager.renewUnlessAlreadyRenewed("stale")).thenReturn("already-fresh");
+        ClientHttpRequestExecution execution = mock(ClientHttpRequestExecution.class);
+        when(execution.execute(any(), any()))
+            .thenReturn(new MockClientHttpResponse(new byte[0], HttpStatus.UNAUTHORIZED))
+            .thenReturn(new MockClientHttpResponse(new byte[0], HttpStatus.OK));
+        MockClientHttpRequest request = new MockClientHttpRequest(HttpMethod.GET, URI.create("https://connect.example/v1/me"));
+        request.getHeaders().set(HttpHeaders.AUTHORIZATION, "bearer stale");
+
+        new OAuth401RetryInterceptor(tokenManager).intercept(request, new byte[0], execution);
+
+        assertThat(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("Bearer already-fresh");
+        verify(tokenManager, times(1)).renewUnlessAlreadyRenewed("stale");
     }
 
     @Test
@@ -58,7 +76,7 @@ class OAuth401RetryInterceptorTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         verify(execution, times(1)).execute(any(), any());
-        verify(tokenManager, never()).refreshAccessToken();
+        verify(tokenManager, never()).renewUnlessAlreadyRenewed(any());
     }
 
     @Test
@@ -71,6 +89,6 @@ class OAuth401RetryInterceptorTest {
         ClientHttpResponse response = new OAuth401RetryInterceptor(tokenManager).intercept(request, new byte[0], execution);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        verify(tokenManager, never()).refreshAccessToken();
+        verify(tokenManager, never()).renewUnlessAlreadyRenewed(any());
     }
 }

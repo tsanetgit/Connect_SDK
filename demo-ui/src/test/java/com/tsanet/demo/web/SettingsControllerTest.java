@@ -36,7 +36,8 @@ class SettingsControllerTest {
         environments = new EnvironmentService(new DemoProperties(
             Map.of("beta", new DemoProperties.EnvironmentDef("Beta", "http://localhost:9", null, null)),
             "beta",
-            dataDir.toString()
+            dataDir.toString(),
+            true  // the tests point at a local http mock that is never contacted
         ));
         mvc = MockMvcBuilders.standaloneSetup(new SettingsController(environments))
             .setControllerAdvice(new ApiErrorHandler())

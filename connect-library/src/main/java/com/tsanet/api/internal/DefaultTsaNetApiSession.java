@@ -1,5 +1,6 @@
 package com.tsanet.api.internal;
 
+import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.TsaNetApiConfiguration;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.dto.AttachmentConfigDto;
@@ -67,6 +68,9 @@ import java.util.Optional;
 
 final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, CollaborationRequestsFacade,
     CaseNotesFacade, CaseResponsesFacade, UserFacade, WebhooksFacade, PartnersFacade, AttachmentsFacade {
+    /** Unattended logins retry {@code /v1/me} on connectivity failures: one pause per retry, so three attempts. */
+    static final long[] UNATTENDED_CURRENT_USER_BACKOFF_MS = {250, 500};
+    static final int UNATTENDED_CURRENT_USER_ATTEMPTS = UNATTENDED_CURRENT_USER_BACKOFF_MS.length + 1;
 
     private final TsaNetApiConfiguration configuration;
     private final ConnectApiSessionStore sessionStore;
@@ -198,7 +202,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     @Override
     public String authenticate() {
         String token = tokenManager.authenticate();
-        completeLogin();
+        completeLogin(true);
         return token;
     }
 
@@ -208,7 +212,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
             throw new IllegalStateException("Password login is not configured for this session. Use authenticate().");
         }
         String token = tokenManager.loginWithPassword(username, password);
-        completeLogin();
+        completeLogin(false);
         return token;
     }
 
@@ -217,14 +221,44 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
      * which proves the bearer against a protected call and yields the company and user the
      * session routes for. If that call fails the login has failed: the store is cleared so
      * nothing downstream can run half-authenticated, and the failure surfaces as it is.
+     *
+     * <p>An unattended login (configured credentials, typically a service starting up) retries
+     * that one call a bounded number of times when the failure is connectivity: a blip on one
+     * endpoint should not turn a working start into a hard failure. An interactive login, and
+     * any failure the API answered, fail at once.
      */
-    private void completeLogin() {
+    private void completeLogin(boolean unattended) {
+        int attempt = 0;
+        while (true) {
+            try {
+                UserContextDto context = userGateway.getCurrentUser();
+                sessionStore.saveUserContext(context);
+                return;
+            } catch (ConnectApiException e) {
+                attempt++;
+                boolean retry = unattended
+                    && e.kind() == ConnectApiException.Kind.CONNECTIVITY
+                    && attempt < UNATTENDED_CURRENT_USER_ATTEMPTS
+                    && pause(UNATTENDED_CURRENT_USER_BACKOFF_MS[attempt - 1]);
+                if (!retry) {
+                    sessionStore.clear();
+                    throw e;
+                }
+            } catch (RuntimeException e) {
+                sessionStore.clear();
+                throw e;
+            }
+        }
+    }
+
+    /** Sleeps for the backoff; false when interrupted, with the interrupt restored so the login fails at once. */
+    private static boolean pause(long millis) {
         try {
-            UserContextDto context = userGateway.getCurrentUser();
-            sessionStore.saveUserContext(context);
-        } catch (RuntimeException e) {
-            sessionStore.clear();
-            throw e;
+            Thread.sleep(millis);
+            return true;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return false;
         }
     }
 
