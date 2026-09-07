@@ -178,6 +178,71 @@ class DefaultTsaNetApiSessionLoginTest {
     }
 
     @Test
+    void anUnattendedLoginRetriesAConnectivityFailureOnCurrentUser() {
+        when(tokenManager.authenticate()).thenAnswer(inv -> {
+            sessionStore.savePassword("user@test.com", "token-6");
+            return "token-6";
+        });
+        when(userGateway.getCurrentUser())
+            .thenThrow(ConnectApiException.connectivity(new java.net.ConnectException("refused")))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read")))
+            .thenReturn(CONTEXT);
+
+        assertThat(session.authenticate()).isEqualTo("token-6");
+
+        assertThat(session.currentUserContext()).contains(CONTEXT);
+        assertThat(session.isAuthorized()).isTrue();
+        verify(userGateway, org.mockito.Mockito.times(3)).getCurrentUser();
+    }
+
+    @Test
+    void anUnattendedLoginGivesUpAfterThreeConnectivityFailuresAndClearsTheStore() {
+        when(tokenManager.authenticate()).thenAnswer(inv -> {
+            sessionStore.savePassword("user@test.com", "token-7");
+            return "token-7";
+        });
+        ConnectApiException down = ConnectApiException.connectivity(new java.net.ConnectException("refused"));
+        when(userGateway.getCurrentUser()).thenThrow(down);
+
+        assertThatThrownBy(session::authenticate).isSameAs(down);
+
+        assertThat(sessionStore.getBearerToken()).isEmpty();
+        assertThat(session.currentUserContext()).isEmpty();
+        verify(userGateway, org.mockito.Mockito.times(DefaultTsaNetApiSession.UNATTENDED_CURRENT_USER_ATTEMPTS)).getCurrentUser();
+    }
+
+    @Test
+    void anInteractiveLoginDoesNotRetryCurrentUser() {
+        when(tokenManager.loginWithPassword("user@test.com", "secret")).thenAnswer(inv -> {
+            sessionStore.savePassword("user@test.com", "token-8");
+            return "token-8";
+        });
+        ConnectApiException down = ConnectApiException.connectivity(new java.net.ConnectException("refused"));
+        when(userGateway.getCurrentUser()).thenThrow(down);
+
+        assertThatThrownBy(() -> session.login("user@test.com", "secret")).isSameAs(down);
+
+        assertThat(sessionStore.getBearerToken()).isEmpty();
+        verify(userGateway, org.mockito.Mockito.times(1)).getCurrentUser();
+    }
+
+    @Test
+    void aFailureTheApiAnsweredIsNotRetriedEvenUnattended() {
+        when(tokenManager.authenticate()).thenAnswer(inv -> {
+            sessionStore.savePassword("user@test.com", "token-9");
+            return "token-9";
+        });
+        ConnectApiException forbidden = new ConnectApiException(ConnectApiException.Kind.PROBLEM, 403, "about:blank",
+            "Forbidden", "no role", null, null);
+        when(userGateway.getCurrentUser()).thenThrow(forbidden);
+
+        assertThatThrownBy(session::authenticate).isSameAs(forbidden);
+
+        assertThat(sessionStore.getBearerToken()).isEmpty();
+        verify(userGateway, org.mockito.Mockito.times(1)).getCurrentUser();
+    }
+
+    @Test
     void logoutForgetsTheContext() {
         when(tokenManager.authenticate()).thenAnswer(inv -> {
             sessionStore.savePassword("user@test.com", "token-4");
