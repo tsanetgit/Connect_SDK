@@ -63,7 +63,7 @@ Credentials persist to `~/.tsanet-demo-ui/credentials.properties` (mode 600, nev
 Badge decoder:
 - **Green "Company — email"** — authenticated, everything live
 - **Amber "Not configured"** — no credentials saved yet
-- **Amber "Auth failed: Connect API returned 500 — Error processing request"** — the environment rejected the credentials (BETA's legacy error mode returns 500, not 401; a wrong password looks like this)
+- **Amber "Auth failed: Authentication Failed — …"** — the environment rejected the credentials (HTTP 401 problem details; a wrong password looks like this)
 
 ## 4. First-session verification sweep (once, with the first real credentials)
 

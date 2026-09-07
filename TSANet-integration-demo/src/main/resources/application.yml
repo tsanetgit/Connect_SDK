@@ -13,7 +13,8 @@ server:
 
 tsanet:
   api:
-    base-url: "http://localhost:8080"
+    # HTTPS-only in every real environment; BETA is the shipped default (see the console app).
+    base-url: "https://connect2.tsanet.net"
   storage:
     sqlite-path: "${user.home}/.tsanet-client-demo"
   # No accounts are configured here. This is a public repository, so credentials

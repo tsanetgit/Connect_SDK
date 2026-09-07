@@ -197,7 +197,9 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
 
     @Override
     public String authenticate() {
-        return tokenManager.authenticate();
+        String token = tokenManager.authenticate();
+        completeLogin();
+        return token;
     }
 
     @Override
@@ -205,9 +207,30 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         if (configuration.auth().mode() != AuthMode.CONNECT1_PASSWORD) {
             throw new IllegalStateException("Password login is not configured for this session. Use authenticate().");
         }
-        String token = authGateway.login(username, password);
-        sessionStore.savePassword(username, token);
+        String token = tokenManager.loginWithPassword(username, password);
+        completeLogin();
         return token;
+    }
+
+    /**
+     * Every login ends the same way: {@code /v1/me} is fetched through the session client,
+     * which proves the bearer against a protected call and yields the company and user the
+     * session routes for. If that call fails the login has failed: the store is cleared so
+     * nothing downstream can run half-authenticated, and the failure surfaces as it is.
+     */
+    private void completeLogin() {
+        try {
+            UserContextDto context = userGateway.getCurrentUser();
+            sessionStore.saveUserContext(context);
+        } catch (RuntimeException e) {
+            sessionStore.clear();
+            throw e;
+        }
+    }
+
+    @Override
+    public Optional<UserContextDto> currentUserContext() {
+        return sessionStore.getUserContext();
     }
 
     @Override

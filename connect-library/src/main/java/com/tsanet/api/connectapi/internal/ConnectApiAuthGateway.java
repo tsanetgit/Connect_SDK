@@ -11,12 +11,17 @@ public class ConnectApiAuthGateway {
         this.identityApi = identityApi;
     }
 
-    public String login(String username, String password) {
+    /**
+     * Unauthenticated by nature: this gateway must sit on the runtime's login client, the one
+     * without the bearer supplier and the 401 re-auth interceptor, or a re-login on an expired
+     * token would recurse into itself.
+     */
+    public PasswordLogin login(String username, String password) {
         LoginRequestDTO request = new LoginRequestDTO().username(username).password(password);
         TokenDTO response = identityApi.login(request);
         if (response == null || response.getAccessToken() == null || response.getAccessToken().isBlank()) {
             throw new IllegalStateException("Login succeeded but accessToken is missing");
         }
-        return response.getAccessToken();
+        return new PasswordLogin(response.getAccessToken(), response.getExpiresIn());
     }
 }

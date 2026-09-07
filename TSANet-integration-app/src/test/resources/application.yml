@@ -5,6 +5,8 @@ spring:
 tsanet:
   api:
     base-url: "http://localhost:8080"
+    # Test-only: the context test points at a local mock that speaks plain http.
+    allow-insecure-http: true
   storage:
     sqlite-path: "${java.io.tmpdir}/tsanet-test"
   accounts:

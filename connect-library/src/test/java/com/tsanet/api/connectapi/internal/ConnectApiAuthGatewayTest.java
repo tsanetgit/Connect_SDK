@@ -27,7 +27,9 @@ class ConnectApiAuthGatewayTest {
 
         ConnectApiAuthGateway gateway = new ConnectApiAuthGateway(identityApi);
 
-        assertThat(gateway.login("api@test.com", "secret")).isEqualTo("jwt-token-123");
+        PasswordLogin login = gateway.login("api@test.com", "secret");
+        assertThat(login.accessToken()).isEqualTo("jwt-token-123");
+        assertThat(login.expiresInSeconds()).isNull();
 
         ArgumentCaptor<LoginRequestDTO> captor = ArgumentCaptor.forClass(LoginRequestDTO.class);
         verify(identityApi).login(captor.capture());

@@ -6,6 +6,7 @@ import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.TsaNetApiSessionFactory;
 import com.tsanet.api.auth.AuthMode;
 import com.tsanet.api.auth.PasswordAuthConfig;
+import com.tsanet.api.connectapi.dto.UserContextDto;
 import com.tsanet.api.facade.AttachmentsFacade;
 import com.tsanet.api.facade.AttachmentsV2Facade;
 import com.tsanet.api.facade.AuthFacade;
@@ -181,6 +182,14 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
                 return Optional.empty();
             }
             return delegate.auth().currentBearerToken();
+        }
+
+        @Override
+        public Optional<UserContextDto> currentUserContext() {
+            if (delegate == null) {
+                return Optional.empty();
+            }
+            return delegate.auth().currentUserContext();
         }
 
         @Override

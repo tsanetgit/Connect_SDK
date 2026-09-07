@@ -36,10 +36,12 @@ The build wants JDK 21. On macOS with Homebrew, `openjdk@21` is keg-only: export
 
 ## Runtime, demo
 
-**Badge says: Auth failed: Connect API returned 500 — Error processing request**
-Almost always wrong credentials. The Connect API's legacy error mode answers bad
-logins with 500, not 401. Re-enter the username and password before suspecting the
-platform.
+**Badge says: Auth failed: Authentication Failed — …**
+Almost always wrong credentials: the API answered the login with a 401 problem-details
+body, and the badge shows its title and detail. Re-enter the username and password
+before suspecting the platform. (A raw client that does not send the
+`application/problem+json` Accept header sees the legacy `500 Error processing request`
+for the same mistake; the SDK always sends the header.)
 
 **Everything authenticates but the dashboard is empty or case actions 403**
 Authentication is not authorization. `/me` succeeds for any valid account, while
@@ -72,9 +74,12 @@ time, or move the bridge (`tsanet.webhook.port`).
 ## Interpreting API errors generally
 
 The API has two error personalities. By default (legacy mode) failures collapse into
-`500 Error processing request`. Sending `Accept: application/problem+json` opts into
-RFC 7807 structured errors with a usable `detail`. When debugging anything
-API-side, turn that on first; it converts guessing into reading.
+`500 Error processing request`. Sending `Accept: application/json, application/problem+json`
+opts into RFC 7807 structured errors with a usable `detail`. The SDK sends that header on
+every call and surfaces the answer as `ConnectApiException` (status, type, title, detail;
+a legacy `{"message"}` body is classified by content if one arrives; a transport failure
+names only its cause, never the URL). When debugging anything API-side with a raw client,
+turn the header on first; it converts guessing into reading.
 
 Test-mode note for anyone wiring their own client: you *write* `testSubmission` on
 create but *read* the flag back as `testCase`. Filtering on the write-side name

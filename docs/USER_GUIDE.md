@@ -28,7 +28,7 @@ The badge in the top-right corner is the connection truth:
 |---|---|
 | Green — "Company — email" | Authenticated; shows who BETA thinks you are |
 | Amber — "Not configured" | No credentials saved yet (Settings tab) |
-| Amber — "Auth failed: Connect API returned 500 — Error processing request" | BETA rejected the credentials. The API's legacy error mode returns 500 (not 401) for bad logins, so this is almost always a wrong username/password |
+| Amber — "Auth failed: Authentication Failed — …" | BETA rejected the credentials (HTTP 401). The SDK asks the API for RFC 7807 problem details and shows the API's own title and detail, so this is almost always a wrong username/password |
 
 ## 3. Settings — environments and credentials
 
@@ -110,9 +110,12 @@ Opens from the Dashboard or after creating a case.
         receiver must still approve/reject — close is invalid while pending)
   ```
 
-  Invalid transitions come back as the legacy 500 with a meaningful message,
-  e.g. `{"message":"INFORMATION cases cannot be closed."}` — that's the
-  business contract enforcing itself, shown verbatim.
+  Invalid transitions come back as a 4xx problem-details answer, shown as the
+  API's title and detail, e.g. `Unprocessable Entity — INFORMATION cases cannot
+  be closed.` — that's the business contract enforcing itself. (The API's legacy
+  500 with a `{"message"}` body appears only to clients that do not send the
+  `application/problem+json` Accept header; the SDK does, and classifies a legacy
+  body by its content if one ever arrives.)
 - **Notes Timeline** and **Response History** — the full conversation and
   every engineer response on the case. System-generated notes (e.g.
   "Case accepted.") arrive as HTML; the demo renders them formatted through a
@@ -141,8 +144,8 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 | Symptom | Cause / action |
 |---|---|
 | Everything says "BETA credentials not configured" | No credentials saved — Settings tab |
-| Badge: "Auth failed … 500 Error processing request" | Wrong BETA credentials (legacy error mode — 500 means login rejected) |
-| Actions fail with "Connect API returned 4xx/5xx — …" | Upstream validation: wrong case state, off-domain engineer email, or the legacy-500 quirk. The response body is shown verbatim |
+| Badge: "Auth failed: Authentication Failed — …" | Wrong BETA credentials (HTTP 401 problem details) |
+| Actions fail with "<title> — <detail>" | Upstream validation: wrong case state, off-domain engineer email. The API's problem-details title and detail are shown; a legacy `{"message"}` body is classified and shown the same way |
 | Case list loads but partner search errors | Partner search requires a valid session — re-check the badge first |
 | Build fails: `cannot find symbol … WebhooksApi` | Sibling `Connect-API-Code` checkout is on the wrong branch — needs `beta` |
 

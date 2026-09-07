@@ -1,9 +1,11 @@
 package com.tsanet.api.internal;
 
+import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.TsaNetApiConfiguration;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsV2Api;
+import com.tsanet.api.connectapi.internal.ConnectApiRestTemplates;
 import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsV2Gateway;
 import com.tsanet.api.connectapi.internal.ConnectApiAuthGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiCollaborationGateway;
@@ -51,8 +53,6 @@ import com.tsanet.api.connectapi.internal.OAuthTokenGateway;
 import com.tsanet.api.connectapi.internal.TokenManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import org.springframework.http.client.BufferingClientHttpRequestFactory;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.sqlite.SQLiteDataSource;
@@ -64,14 +64,17 @@ public final class TsaNetApiRuntime {
     public static TsaNetApiSession create(TsaNetApiConfiguration configuration) {
         ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
 
-        RestTemplate restTemplate = new RestTemplate(
-            new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory())
-        );
+        // Login rides an unauthenticated client of its own: no bearer supplier, no 401 retry.
+        // On the session client a re-login would recurse into itself through both.
+        ApiClient loginApiClient = new ApiClient(ConnectApiRestTemplates.create());
+        loginApiClient.setBasePath(configuration.apiBaseUrl());
+        ConnectApiAuthGateway authGateway = new ConnectApiAuthGateway(new IdentityApi(loginApiClient));
+
+        RestTemplate restTemplate = ConnectApiRestTemplates.create();
         ApiClient apiClient = new ApiClient(restTemplate);
         apiClient.setBasePath(configuration.apiBaseUrl());
 
         IdentityApi identityApi = new IdentityApi(apiClient);
-        ConnectApiAuthGateway authGateway = new ConnectApiAuthGateway(identityApi);
         OAuthTokenGateway oauthTokenGateway = new OAuthTokenGateway();
         TokenManager tokenManager = new TokenManager(
             sessionStore,
@@ -80,9 +83,8 @@ public final class TsaNetApiRuntime {
             configuration.accountId(),
             configuration.auth()
         );
-        if (configuration.auth().mode() == AuthMode.CLIENT_CREDENTIALS) {
-            restTemplate.getInterceptors().add(new OAuth401RetryInterceptor(tokenManager));
-        }
+        // Both modes: the interceptor asks the token manager whether a renewal is possible.
+        restTemplate.getInterceptors().add(new OAuth401RetryInterceptor(tokenManager));
         apiClient.setBearerToken(() -> bearerTokenForRequest(sessionStore, tokenManager, configuration));
 
         CollaborationRequestsApi collaborationRequestsApi = new CollaborationRequestsApi(apiClient);
@@ -201,7 +203,7 @@ public final class TsaNetApiRuntime {
         );
     }
 
-    private static String bearerTokenForRequest(
+    static String bearerTokenForRequest(
         ConnectApiSessionStore sessionStore,
         TokenManager tokenManager,
         TsaNetApiConfiguration configuration
@@ -209,10 +211,15 @@ public final class TsaNetApiRuntime {
         if (!sessionStore.getBearerToken().isPresent()) {
             return null;
         }
-        if (configuration.auth().mode() == AuthMode.CLIENT_CREDENTIALS) {
+        try {
             return tokenManager.ensureValidAccessToken();
+        } catch (IllegalStateException expired) {
+            // The supplier runs outside the interceptor chain, so this is the one place an
+            // expired session that cannot be renewed gets the same classified shape as every
+            // other failure; both the console and the demo already render that shape.
+            throw new ConnectApiException(ConnectApiException.Kind.OTHER, 401, null, "Session expired",
+                expired.getMessage(), null, expired);
         }
-        return sessionStore.getBearerToken().orElse(null);
     }
 
     private static JdbcTemplate createJdbcTemplate(String sqlitePath) {

@@ -13,7 +13,14 @@ public record ConnectFacadeProperties(
     Storage storage,
     List<ApplicationUserAccountConfig> accounts
 ) {
-    public record Api(String baseUrl) {
+    /**
+     * @param baseUrl           the Connect API base URL; https in every real environment
+     * @param allowInsecureHttp opt-out of the https requirement for a local mock; null means false
+     */
+    public record Api(String baseUrl, Boolean allowInsecureHttp) {
+        public boolean insecureHttpAllowed() {
+            return Boolean.TRUE.equals(allowInsecureHttp);
+        }
     }
 
     public record Auth(String username, String password) {
