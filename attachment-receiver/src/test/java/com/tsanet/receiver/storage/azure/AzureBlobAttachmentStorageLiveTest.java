@@ -34,9 +34,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <ul>
  *   <li>a blob that received staged blocks and was never committed is invisible to
  *       {@code exists} (it is enumerable only as an uncommitted blob);</li>
- *   <li>the go-live probe passes on a SAS carrying only {@code cw} and leaves no committed
- *       blob; a read-only SAS is classified as no permission; a tampered signature is
- *       classified as wrong credential (the error-code-before-status ordering, live);</li>
+ *   <li>the go-live probe passes on an {@code rw} SAS and leaves no committed blob; a
+ *       {@code cw}-only SAS fails at the read stage and a read-only SAS at the write stage,
+ *       both classified as no permission; a tampered signature is classified as wrong
+ *       credential (the error-code-before-status ordering, live);</li>
  *   <li>hostile file names round-trip under their literal encoded name: the first run of
  *       this test, before encoding, showed the service normalizing {@code ..}, a trailing
  *       dot, and a backslash, so "the listed name equals the encoded name" is the assertion
@@ -119,8 +120,8 @@ class AzureBlobAttachmentStorageLiveTest extends AttachmentStorageContractTest {
     }
 
     @Test
-    void cwOnlySasPassesTheProbeAndLeavesNoCommittedBlob() throws Exception {
-        AzureBlobAttachmentStorage.forContainer(sasClient("cw"), runPrefix).verifyAccess();
+    void rwSasPassesTheProbeAndLeavesNoCommittedBlob() throws Exception {
+        AzureBlobAttachmentStorage.forContainer(sasClient("rw"), runPrefix).verifyAccess();
         List<String> committed = names(runPrefix + "/" + AzureBlobAttachmentStorage.VERIFY_PREFIX, false);
         assertTrue(committed.isEmpty(), "the probe must commit nothing: " + committed);
         assertFalse(names(runPrefix + "/" + AzureBlobAttachmentStorage.VERIFY_PREFIX, true).isEmpty(),
@@ -128,10 +129,20 @@ class AzureBlobAttachmentStorageLiveTest extends AttachmentStorageContractTest {
     }
 
     @Test
-    void readOnlySasIsClassifiedAsNoPermission() {
+    void cwOnlySasIsClassifiedAsNoPermissionAtTheReadStage() {
+        // The case tsanetgit/Connect_SDK#73 flips: before it, this SAS passed go-live.
+        AttachmentStorage storage = AzureBlobAttachmentStorage.forContainer(sasClient("cw"), runPrefix);
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class, storage::verifyAccess);
+        assertTrue(e.getMessage().contains("no permission: read denied"), e.getMessage());
+        assertTrue(names(runPrefix + "/" + AzureBlobAttachmentStorage.VERIFY_PREFIX, false).isEmpty(),
+                "still nothing committed");
+    }
+
+    @Test
+    void readOnlySasIsClassifiedAsNoPermissionAtTheWriteStage() {
         AttachmentStorage storage = AzureBlobAttachmentStorage.forContainer(sasClient("r"), runPrefix);
         AttachmentStorageException e = assertThrows(AttachmentStorageException.class, storage::verifyAccess);
-        assertTrue(e.getMessage().contains("no permission"), e.getMessage());
+        assertTrue(e.getMessage().contains("no permission: write denied"), e.getMessage());
     }
 
     @Test

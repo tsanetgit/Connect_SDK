@@ -46,6 +46,7 @@ final class InMemoryAzureBlobContainer implements AzureBlobContainer {
     /** Observed for assertions. */
     int stagedBlocks;
     int commits;
+    String lastSizeOrAbsentName;
 
     @Override
     public void putBlob(String name, String contentType, byte[] bytes) {
@@ -125,6 +126,7 @@ final class InMemoryAzureBlobContainer implements AzureBlobContainer {
     @Override
     public long sizeOrAbsent(String name) {
         validate(name);
+        lastSizeOrAbsentName = name;
         if (failSizeOrAbsentWith != null) {
             throw failSizeOrAbsentWith.get();
         }

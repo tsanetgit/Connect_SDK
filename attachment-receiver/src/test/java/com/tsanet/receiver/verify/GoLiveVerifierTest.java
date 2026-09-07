@@ -31,6 +31,9 @@ class GoLiveVerifierTest {
     void passesStorageAndSkipsCrmWhenUnconfigured() {
         VerificationReport report = new GoLiveVerifier(WORKING, null).verify(STORAGE_ONLY);
         assertEquals(Status.PASS, result(report, Check.STORAGE).status());
+        // Adapter-neutral wording: not every adapter's probe is write-read-delete.
+        assertTrue(result(report, Check.STORAGE).message().contains("passed the storage access probe"),
+                result(report, Check.STORAGE).message());
         assertEquals(Status.SKIPPED, result(report, Check.CRM).status());
         assertTrue(report.passed(), "SKIPPED must not fail a tenant");
     }

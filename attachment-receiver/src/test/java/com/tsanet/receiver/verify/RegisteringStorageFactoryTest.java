@@ -81,6 +81,25 @@ class RegisteringStorageFactoryTest {
     }
 
     @Test
+    void azureWithHttpsShareSasUrlBuildsAzureAdapter() throws Exception {
+        AttachmentStorage storage = factory.create(config("azure", Map.of(
+                "sasUrl", "https://acct.file.core.windows.net/attachments?sv=2024-01-01&sp=rcwd&sig=Zm9v",
+                "directoryPrefix", "tenants/acme")));
+        assertInstanceOf(AzureFilesAttachmentStorage.class, storage);
+    }
+
+    @Test
+    void azureHttpSasUrlIsRejectedWithoutEchoingTheToken() {
+        // Same gap tsanetgit/Connect_SDK#72 closed on the azure_blob branch: the builder
+        // accepts http:// and would send the SAS token in cleartext.
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
+                () -> factory.create(config("azure", Map.of(
+                        "sasUrl", "http://acct.file.core.windows.net/attachments?sv=2024-01-01&sig=MARKER"))));
+        assertFalse(fullChain(e).contains("MARKER"), fullChain(e));
+        assertTrue(e.getMessage().contains("https"), e.getMessage());
+    }
+
+    @Test
     void azureWithoutTargetIsAConfigError() {
         AttachmentStorageException e = assertThrows(AttachmentStorageException.class,
                 () -> factory.create(config("azure", Map.of("directoryPrefix", "x"))));

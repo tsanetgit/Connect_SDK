@@ -242,6 +242,20 @@ class AzureBlobAttachmentStorageTest extends AttachmentStorageContractTest {
         assertEquals(1, blobs.uncommittedNames().size());
         assertTrue(blobs.uncommittedNames().get(0).startsWith("tenants/acme/" + AzureBlobAttachmentStorage.VERIFY_PREFIX),
                 blobs.uncommittedNames().get(0));
+        assertEquals(blobs.uncommittedNames().get(0), blobs.lastSizeOrAbsentName,
+                "the read stage must read the probe name, not some other name");
+    }
+
+    @Test
+    void verifyAccessClassifiesReadDeniedAsNoPermissionAtTheReadStage() {
+        // The cw-only SAS shape: the block stages, the read is refused.
+        InMemoryAzureBlobContainer blobs = new InMemoryAzureBlobContainer();
+        blobs.failSizeOrAbsentWith = () -> blobError(403, BlobErrorCode.AUTHORIZATION_PERMISSION_MISMATCH);
+        AzureBlobAttachmentStorage storage = new AzureBlobAttachmentStorage(blobs, "write-only", null);
+        AttachmentStorageException e = assertThrows(AttachmentStorageException.class, storage::verifyAccess);
+        assertTrue(e.getMessage().contains("no permission: read denied"), e.getMessage());
+        assertEquals(1, blobs.stagedBlocks, "the write stage ran and committed nothing");
+        assertEquals(0, blobs.committedCount());
     }
 
     @Test
