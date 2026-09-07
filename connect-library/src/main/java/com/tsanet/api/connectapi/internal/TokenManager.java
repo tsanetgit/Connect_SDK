@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.locks.ReentrantLock;
 
 public final class TokenManager {
     static final Duration EXPIRY_SKEW = Duration.ofSeconds(60);
@@ -19,6 +20,8 @@ public final class TokenManager {
     private final AccountAuthConfig authConfig;
     private final String accountId;
     private final Clock clock;
+    /** Renewals run one at a time; a caller who waited re-reads the store before renewing again. */
+    private final ReentrantLock renewal = new ReentrantLock();
 
     public TokenManager(
         ConnectApiSessionStore sessionStore,
@@ -53,12 +56,26 @@ public final class TokenManager {
         };
     }
 
-    /** The bearer for the next request, renewed first when the session knows it has expired. */
+    /**
+     * The bearer for the next request, renewed first when the session knows it has expired.
+     * Concurrent callers that all find the token expired share one renewal: the first renews,
+     * the rest wait and then read the token it stored.
+     */
     public String ensureValidAccessToken() {
-        if (sessionStore.isExpired(clock.instant())) {
-            return refreshAccessToken();
+        ConnectApiSessionStore.Snapshot seen = sessionStore.snapshot();
+        if (!seen.isExpired(clock.instant())) {
+            return bearerOf(seen);
         }
-        return sessionStore.getBearerToken().orElseThrow(() -> new IllegalStateException("Not authenticated"));
+        renewal.lock();
+        try {
+            ConnectApiSessionStore.Snapshot current = sessionStore.snapshot();
+            if (!current.isExpired(clock.instant())) {
+                return bearerOf(current);
+            }
+            return renew();
+        } finally {
+            renewal.unlock();
+        }
     }
 
     /**
@@ -66,9 +83,48 @@ public final class TokenManager {
      * configured password. The platform has no refresh endpoint, so re-login is the strategy,
      * and it is offered only when the session belongs to the configured user; a session opened
      * by an interactively typed password is never renewed silently, because that password was
-     * never retained.
+     * never retained. Always renews, even when another caller just did; see
+     * {@link #renewUnlessAlreadyRenewed(String)} for the 401 path.
      */
     public String refreshAccessToken() {
+        renewal.lock();
+        try {
+            return renew();
+        } finally {
+            renewal.unlock();
+        }
+    }
+
+    /**
+     * The 401 path's renewal. {@code observedToken} is the bearer the rejected request carried.
+     * If, by the time this caller holds the renewal lock, the store already holds a different
+     * unexpired bearer, another caller's renewal has answered this 401 too and that bearer is
+     * returned with no network call. If the store still holds the observed bearer it is bad
+     * server-side whatever its expiry says, and one renewal runs.
+     */
+    public String renewUnlessAlreadyRenewed(String observedToken) {
+        renewal.lock();
+        try {
+            ConnectApiSessionStore.Snapshot current = sessionStore.snapshot();
+            if (current.hasBearer()
+                && !current.bearerToken().equals(observedToken)
+                && !current.isExpired(clock.instant())) {
+                return current.bearerToken();
+            }
+            return renew();
+        } finally {
+            renewal.unlock();
+        }
+    }
+
+    private static String bearerOf(ConnectApiSessionStore.Snapshot snapshot) {
+        if (!snapshot.hasBearer()) {
+            throw new IllegalStateException("Not authenticated");
+        }
+        return snapshot.bearerToken();
+    }
+
+    private String renew() {
         return switch (authConfig.mode()) {
             case CLIENT_CREDENTIALS -> authenticateClientCredentials((ClientCredentialsAuthConfig) authConfig);
             case CONNECT1_PASSWORD -> {
