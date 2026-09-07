@@ -10,11 +10,14 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import software.amazon.awssdk.services.s3.S3Client;
 
 import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.UUID;
 
 import static com.tsanet.receiver.storage.s3.S3AttachmentStorage.PART_SIZE;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -48,6 +51,25 @@ class S3AttachmentStorageLiveTest extends AttachmentStorageContractTest {
         s3.listMultipartUploads(b -> b.bucket(bucket).prefix(runPrefix)).uploads()
                 .forEach(u -> s3.abortMultipartUpload(
                         b -> b.bucket(bucket).key(u.key()).uploadId(u.uploadId())));
+    }
+
+    @Test
+    void completedMultipartObjectCarriesThisAttemptsMarkerAndSingleRequestObjectsDoNot() throws Exception {
+        // The fact tsanetgit/Connect_SDK#69's identity resolution rests on: user metadata
+        // given at CreateMultipartUpload lands on the completed object, and comes back from
+        // HEAD under the lowercase key. Proven here against the service, not the stub.
+        AttachmentStorage storage = newStorage();
+        var multipart = storage.store(new IncomingAttachment("01234567", "marked.bin", null, -1),
+                new ByteArrayInputStream(new byte[PART_SIZE + 1024]));
+        String marker = s3.headObject(b -> b.bucket(bucket).key(multipart.storageKey()))
+                .metadata().get(S3AttachmentStorage.ATTEMPT_METADATA_KEY);
+        assertNotNull(marker, "metadata from CreateMultipartUpload must be on the completed object");
+        UUID.fromString(marker); // a well-formed attempt id, or this throws
+        var single = storage.store(new IncomingAttachment("01234567", "small.bin", null, -1),
+                new ByteArrayInputStream(new byte[16]));
+        assertNull(s3.headObject(b -> b.bucket(bucket).key(single.storageKey()))
+                .metadata().get(S3AttachmentStorage.ATTEMPT_METADATA_KEY),
+                "single-request objects stay unmarked");
     }
 
     @Test
