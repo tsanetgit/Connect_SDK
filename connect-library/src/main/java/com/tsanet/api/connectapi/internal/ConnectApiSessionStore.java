@@ -6,43 +6,73 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
+/**
+ * The session's authentication state, held as one immutable {@link Snapshot} behind a single
+ * reference. Every write replaces the whole snapshot and every read takes one, so a reader
+ * never sees a bearer from one login beside the username or expiry of another, and
+ * {@link #isExpired} and {@link #isAuthorized} judge a token against its own expiry.
+ */
 public class ConnectApiSessionStore {
-    private volatile String bearerToken;
-    private volatile String username;
-    private volatile String accountId;
-    private volatile AuthMode authMode;
-    private volatile Instant expiresAt;
-    private volatile UserContextDto userContext;
+
+    /** One coherent view of the session. Package-private so the token manager can read it whole. */
+    record Snapshot(
+        String bearerToken,
+        String username,
+        String accountId,
+        AuthMode authMode,
+        Instant expiresAt,
+        UserContextDto userContext
+    ) {
+        static final Snapshot EMPTY = new Snapshot(null, null, null, null, null, null);
+
+        boolean isExpired(Instant now) {
+            if (expiresAt == null) {
+                return false;
+            }
+            return !now.isBefore(expiresAt.minus(TokenManager.EXPIRY_SKEW));
+        }
+
+        boolean hasBearer() {
+            return bearerToken != null && !bearerToken.isBlank();
+        }
+    }
+
+    private volatile Snapshot snapshot = Snapshot.EMPTY;
 
     public void savePassword(String username, String bearerToken) {
         savePassword(username, bearerToken, null);
     }
 
     /** {@code expiresAt} null means the API stated no lifetime; expiry then surfaces only as a 401. */
-    public void savePassword(String username, String bearerToken, Instant expiresAt) {
-        forgetUserContextUnlessSamePrincipal(AuthMode.CONNECT1_PASSWORD, username);
-        this.username = username;
-        this.bearerToken = bearerToken;
-        this.authMode = AuthMode.CONNECT1_PASSWORD;
-        this.expiresAt = expiresAt;
+    public synchronized void savePassword(String username, String bearerToken, Instant expiresAt) {
+        Snapshot current = snapshot;
+        snapshot = new Snapshot(
+            bearerToken,
+            username,
+            current.accountId(),
+            AuthMode.CONNECT1_PASSWORD,
+            expiresAt,
+            userContextUnlessPrincipalChanged(current, AuthMode.CONNECT1_PASSWORD, username)
+        );
+    }
+
+    public synchronized void saveOAuth(String accountId, String bearerToken, Instant expiresAt) {
+        Snapshot current = snapshot;
+        snapshot = new Snapshot(
+            bearerToken,
+            accountId,
+            accountId,
+            AuthMode.CLIENT_CREDENTIALS,
+            expiresAt,
+            userContextUnlessPrincipalChanged(current, AuthMode.CLIENT_CREDENTIALS, accountId)
+        );
     }
 
     /** The company and user behind the session, fetched from {@code /v1/me} right after login. */
-    public void saveUserContext(UserContextDto userContext) {
-        this.userContext = userContext;
-    }
-
-    public Optional<UserContextDto> getUserContext() {
-        return Optional.ofNullable(userContext);
-    }
-
-    public void saveOAuth(String accountId, String bearerToken, Instant expiresAt) {
-        forgetUserContextUnlessSamePrincipal(AuthMode.CLIENT_CREDENTIALS, accountId);
-        this.accountId = accountId;
-        this.username = accountId;
-        this.bearerToken = bearerToken;
-        this.authMode = AuthMode.CLIENT_CREDENTIALS;
-        this.expiresAt = expiresAt;
+    public synchronized void saveUserContext(UserContextDto userContext) {
+        Snapshot current = snapshot;
+        snapshot = new Snapshot(current.bearerToken(), current.username(), current.accountId(),
+            current.authMode(), current.expiresAt(), userContext);
     }
 
     /**
@@ -50,49 +80,51 @@ public class ConnectApiSessionStore {
      * client-credentials token) leaves the {@code /v1/me} context in place: it describes the
      * principal, not the token. Only a different principal, or a change of mode, invalidates it.
      */
-    private void forgetUserContextUnlessSamePrincipal(AuthMode mode, String principal) {
-        if (this.authMode != mode || !Objects.equals(this.username, principal)) {
-            this.userContext = null;
+    private static UserContextDto userContextUnlessPrincipalChanged(Snapshot current, AuthMode mode, String principal) {
+        if (current.authMode() != mode || !Objects.equals(current.username(), principal)) {
+            return null;
         }
+        return current.userContext();
+    }
+
+    Snapshot snapshot() {
+        return snapshot;
+    }
+
+    public Optional<UserContextDto> getUserContext() {
+        return Optional.ofNullable(snapshot.userContext());
     }
 
     public Optional<String> getBearerToken() {
-        return Optional.ofNullable(bearerToken);
+        return Optional.ofNullable(snapshot.bearerToken());
     }
 
     public Optional<String> getUsername() {
-        return Optional.ofNullable(username);
+        return Optional.ofNullable(snapshot.username());
     }
 
     public Optional<String> getAccountId() {
-        return Optional.ofNullable(accountId);
+        return Optional.ofNullable(snapshot.accountId());
     }
 
     public Optional<AuthMode> getAuthMode() {
-        return Optional.ofNullable(authMode);
+        return Optional.ofNullable(snapshot.authMode());
     }
 
     public Optional<Instant> getExpiresAt() {
-        return Optional.ofNullable(expiresAt);
+        return Optional.ofNullable(snapshot.expiresAt());
     }
 
     public boolean isAuthorized() {
-        return bearerToken != null && !bearerToken.isBlank() && !isExpired(Instant.now());
+        Snapshot current = snapshot;
+        return current.hasBearer() && !current.isExpired(Instant.now());
     }
 
     public boolean isExpired(Instant now) {
-        if (expiresAt == null) {
-            return false;
-        }
-        return !now.isBefore(expiresAt.minus(TokenManager.EXPIRY_SKEW));
+        return snapshot.isExpired(now);
     }
 
     public void clear() {
-        this.username = null;
-        this.bearerToken = null;
-        this.accountId = null;
-        this.authMode = null;
-        this.expiresAt = null;
-        this.userContext = null;
+        snapshot = Snapshot.EMPTY;
     }
 }

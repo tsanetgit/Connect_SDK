@@ -68,6 +68,60 @@ class ConnectApiSessionStoreTest {
     }
 
     @Test
+    void aReaderSeesOneLoginWholeNeverATokenBesideAnotherLoginsExpiry() throws Exception {
+        // Two logins alternate as fast as a writer can go; every snapshot a reader takes must pair
+        // a token with its own expiry and username. Field-by-field writes let this tear.
+        ConnectApiSessionStore store = new ConnectApiSessionStore();
+        Instant expiresA = Instant.parse("2026-01-01T12:00:00Z");
+        Instant expiresB = Instant.parse("2026-06-01T12:00:00Z");
+        store.saveOAuth("a", "token-a", expiresA);
+        java.util.concurrent.atomic.AtomicBoolean stop = new java.util.concurrent.atomic.AtomicBoolean();
+        Thread writer = new Thread(() -> {
+            boolean a = false;
+            while (!stop.get()) {
+                if (a) {
+                    store.saveOAuth("a", "token-a", expiresA);
+                } else {
+                    store.savePassword("b", "token-b", expiresB);
+                }
+                a = !a;
+            }
+        });
+        writer.start();
+        try {
+            for (int i = 0; i < 200_000; i++) {
+                ConnectApiSessionStore.Snapshot seen = store.snapshot();
+                if ("token-a".equals(seen.bearerToken())) {
+                    assertThat(seen.expiresAt()).isEqualTo(expiresA);
+                    assertThat(seen.username()).isEqualTo("a");
+                    assertThat(seen.authMode()).isEqualTo(AuthMode.CLIENT_CREDENTIALS);
+                } else {
+                    assertThat(seen.bearerToken()).isEqualTo("token-b");
+                    assertThat(seen.expiresAt()).isEqualTo(expiresB);
+                    assertThat(seen.username()).isEqualTo("b");
+                    assertThat(seen.authMode()).isEqualTo(AuthMode.CONNECT1_PASSWORD);
+                }
+            }
+        } finally {
+            stop.set(true);
+            writer.join(5_000);
+        }
+    }
+
+    @Test
+    void aPasswordLoginKeepsTheAccountIdOfTheSessionItRenews() {
+        ConnectApiSessionStore store = new ConnectApiSessionStore();
+        store.saveOAuth("production", "o1", Instant.parse("2026-01-01T12:00:00Z"));
+
+        store.savePassword("user@test.com", "t1");
+
+        assertThat(store.getAccountId()).contains("production");
+        assertThat(store.getUsername()).contains("user@test.com");
+        assertThat(store.getAuthMode()).contains(AuthMode.CONNECT1_PASSWORD);
+        assertThat(store.getExpiresAt()).isEmpty();
+    }
+
+    @Test
     void itClearsAuthorizationOnLogout() {
         ConnectApiSessionStore store = new ConnectApiSessionStore();
         store.saveOAuth("production", "oauth-token", Instant.parse("2026-01-01T12:00:00Z"));
@@ -76,5 +130,10 @@ class ConnectApiSessionStoreTest {
 
         assertThat(store.isAuthorized()).isFalse();
         assertThat(store.getBearerToken()).isEmpty();
+        assertThat(store.getUsername()).isEmpty();
+        assertThat(store.getAccountId()).isEmpty();
+        assertThat(store.getAuthMode()).isEmpty();
+        assertThat(store.getExpiresAt()).isEmpty();
+        assertThat(store.getUserContext()).isEmpty();
     }
 }
