@@ -68,8 +68,8 @@ import java.util.UUID;
  * (tsanetgit/Connect-API-Code#140, question 2).
  *
  * <p><b>Go-live probe.</b> {@link #verifyAccess} stages one uncommitted block on a
- * {@code .verify-<uuid>} name (write), then reads that name's properties (read), expecting
- * {@code BlobNotFound}. Nothing is committed and nothing needs deleting, so it replaces
+ * {@code .verify-<uuid>} name (write), then reads that name's properties (read); the answer,
+ * absent, is ignored, since the probe tests permission, not state. Nothing is committed and nothing needs deleting, so it replaces
  * the other adapters' write-read-delete sentinel while validating the same two rights the
  * adapter needs at runtime: write for {@link #store}, read for {@link #exists} and the
  * ambiguous-commit resolution. Required rights are therefore SAS {@code rw} (or
