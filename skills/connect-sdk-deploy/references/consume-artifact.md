@@ -13,7 +13,10 @@ that carries it: the receive side's `AttachmentStorage` SPI, the S3, Azure Files
 Blob and GCS adapters, the tenant config model and the go-live verifier. A plain library
 jar with no main class; bring your own runtime. Its intended consumer is the gateway's
 attachments-only profile (`tsanetgit/Connect_Gateway`); a member deploying its own receiver
-is the other. It does not depend on `connect-library`.
+is the other. It does not depend on `connect-library`. Taking it means taking all four cloud
+SDKs at once: about 170 runtime artifacts, including AWS SDK, Azure, Google Cloud, Netty,
+gRPC and OpenTelemetry, because the storage factory links every adapter. A per-provider
+split is a follow-up, not something the first release offers.
 
 Always point people at the **latest release** for the current version number:
 <https://github.com/tsanetgit/Connect_SDK/releases/latest>. Do not hardcode a version
