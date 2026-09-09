@@ -112,7 +112,9 @@ These bite regardless of path, and none of them are visible in the OpenAPI schem
 - **Test-mode asymmetry.** You *write* the `testSubmission` flag when creating a case
   but *read* it back as `testCase`. The library's create API takes an explicit
   per-call `testSubmission` flag with no silent default; the older always-test
-  signatures, deprecated in 0.1.0, were removed in 2.0.0.
+  signatures, deprecated in 0.1.0, were removed in 2.0.0. A consumer that bumps to
+  2.0.0 without recompiling hits `NoSuchMethodError` at the create call, which is that
+  removal, not a platform fault.
 - **Engineer emails must be on the member's registered domain.** The platform rejects
   collaboration requests whose engineer email is off the member company's registered
   domain. This is a business rule, not a schema rule, and the error is not
