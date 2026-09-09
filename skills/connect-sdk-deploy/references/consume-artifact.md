@@ -64,12 +64,13 @@ not send credentials and you get an opaque 401. The parent pom
 (`tsanet-client-parent`) is published alongside the library and resolves from the same
 repository.
 
-Three versions are published: 0.1.0, 0.2.0, and 1.0.0. **1.0.0 requires Jackson 3**
-(`tools.jackson.core:jackson-databind`) and is built on the Spring Boot 4.1 line; a
-service still on Jackson 2 or Spring Boot 3 should take 0.2.0, which has the same
-facade surface on the older runtime. The library works outside Spring Boot; from 1.0.0
-`java.time` support comes from Jackson 3's databind itself, so no `jsr310` module is
-declared or needed.
+Four versions are published: 0.1.0, 0.2.0, 1.0.0 and 2.0.0. **1.0.0 and later require
+Jackson 3** (`tools.jackson.core:jackson-databind`) and are built on the Spring Boot 4.1
+line; a service still on Jackson 2 or Spring Boot 3 should take 0.2.0, which has the same
+facade surface on the older runtime. **2.0.0 changes what a failure looks like** (see
+Upgrading) and is the first version that also publishes `attachment-receiver`. The
+library works outside Spring Boot; from 1.0.0 `java.time` support comes from Jackson 3's
+databind itself, so no `jsr310` module is declared or needed.
 
 ## Opening a session
 
@@ -218,8 +219,29 @@ Watch the release notes on each release.
   mappers (the library's cache reader keeps the old behavior); the `JsonNullable`
   accessors on `CaseApprovalUpdateDTO` and `CollaborationRequestSubmitterUpdateDTO`
   are gone (plain accessors unchanged).
-- **2.0.0** removes the always-test create signatures (pre-0.1.0 behavior, deprecated
-  for removal since 0.1.0): `createRequest` takes the explicit per-call `testSubmission`
-  flag in both forms. Removing a `default` interface method breaks binary compatibility
-  as well as source: a consumer that bumps the version without recompiling gets
-  `NoSuchMethodError` at the call, not a compile error. Recompile against 2.0.0.
+- **2.0.0** is a major for four reasons; the runtime line (Spring Boot 4.1, Jackson 3,
+  JDK 21) is unchanged from 1.0.0.
+  - Every failure the API answers, and every transport failure, is thrown as
+    `com.tsanet.api.ConnectApiException` (unchecked, not a Spring `RestClientException`):
+    `kind()` is `PROBLEM`, `LEGACY`, `CONNECTIVITY` or `OTHER`, with the API's own
+    `status()`, `title()`, `detail()` and `isProblem(typeSuffix)`; the message never
+    carries the URL, a header or a token. A `catch` of `HttpClientErrorException`,
+    `RestClientResponseException` or `ResourceAccessException` around library calls
+    compiles unchanged and no longer matches: sweep for it and classify by `kind()` and
+    `status()` instead.
+  - `TsaNetApiSession` gained `attachmentsV2()` and `AuthFacade` gained
+    `currentUserContext()`. Callers are unaffected; an implementer or decorator of either
+    interface must add them.
+  - Every successful login ends with `/v1/me`; if that call fails, the login fails and the
+    session stays logged out. Configured credentials renew transparently in both modes,
+    before expiry and once after a 401. A password typed into `login(username, password)`
+    is never retained, so that session is not renewed; its next call after expiry fails
+    with a classified 401.
+  - The always-test create signatures (pre-0.1.0 behavior, deprecated for removal since
+    0.1.0) are removed: `createRequest` takes the explicit per-call `testSubmission` flag
+    in both forms. Removing a `default` interface method breaks binary compatibility as
+    well as source: a consumer that bumps the version without recompiling gets
+    `NoSuchMethodError` at the call, not a compile error. Recompile against 2.0.0.
+  - New, not breaking: the V2 direct-delivery attachment client (`attachmentsV2()`, built
+    against a draft contract with no live endpoint yet) and the published
+    `com.tsanet:attachment-receiver` at the same version (see Coordinates).
