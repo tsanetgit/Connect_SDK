@@ -89,6 +89,22 @@ class EmbeddedCredentialsProbe(unittest.TestCase):
     def test_a_placeholder_word_in_the_key_prefix_does_not_silence_the_value(self):
         self.assertFails("app.properties", "test.password=Xq7bTn2LpR9dWv4A\n")
 
+    def test_a_placeholder_word_inside_a_secret_does_not_silence_it(self):
+        # The guard is what separates a secret from a placeholder now that the
+        # length floor is gone, so it must match placeholder WORDS, not substrings.
+        self.assertFails("application.yml", "client-secret: Xq7test2LpR9dWv4A\n")
+        self.assertFails("application.yml", "client-secret: myXXXsecretvalue1\n")
+        self.assertFails("application.yml", "password: sampleXq7bTn2LpR9\n")
+
+    def test_placeholder_words_at_word_edges_still_stay_quiet(self):
+        self.assertPasses("application.yml", "password: your-secret-here\n")
+        self.assertPasses("application.yml", "client-secret: \"<client secret>\"\n")
+        self.assertPasses("application.yml", "api-key: changeme\n")
+
+    def test_passwd_and_pwd_spellings_fail(self):
+        self.assertFails("db.properties", "db.passwd=Xq7bTn2LpR9dWv4A\n")
+        self.assertFails("db.properties", "db.pwd=Xq7bTn2LpR9dWv4A\n")
+
     def test_yaml_list_item_fails(self):
         self.assertFails("accounts.yml", "accounts:\n  - username: a\n  - password: hunter2\n")
 

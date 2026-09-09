@@ -154,8 +154,11 @@ def names_a_variable(match):
     return bool(VARIABLE_NAME.match(match.group(2).strip()))
 
 
-# The credential-shaped keys, shared by both keyword forms below.
-CREDENTIAL_KEY = r"(password|client[_-]?secret|api[_-]?key|apikey)"
+# The credential-shaped keys, shared by both keyword forms below. `passwd` and
+# `pwd` are the two spellings that cost no precision; `secret`, `token`,
+# `access-key` and `credentials` on their own are a wider vocabulary that needs
+# a noise check on real trees first, and they are disclosed as a gap in #63's PR.
+CREDENTIAL_KEY = r"(password|passwd|pwd|client[_-]?secret|api[_-]?key|apikey)"
 
 # Quoted form, any scanned file. The value must be single-line: without
 # excluding newlines a prompt such as System.out.print("Password: ") matches
@@ -188,7 +191,14 @@ def check_no_embedded_secrets(root):
         (re.compile(r"-----BEGIN (RSA |EC )?PRIVATE KEY-----"), "private key"),
     ]
     config_patterns = [(UNQUOTED_CREDENTIAL, "credential-shaped config value")]
-    placeholders = re.compile(r"(?i)your|example|changeme|placeholder|xxx|\.\.\.|\$\{|<.+>|test|dummy|sample")
+    # Placeholder WORDS are anchored to word edges: `test-password` and
+    # `your-secret` are placeholders, `Xq7test2LpR9dWv4A` is a secret that
+    # happens to contain one. With the length floor gone this guard is what
+    # separates a secret from a placeholder, so it must not match inside one.
+    # The reference shapes (`...`, `${`, `<...>`) have no word edges to anchor.
+    placeholders = re.compile(
+        r"(?i)(?<![a-z0-9])(your|example|changeme|placeholder|xxx|test|dummy|sample)(?![a-z0-9])"
+        r"|\.\.\.|\$\{|<.+>")
     hits = []
     for rel, body in walk_sources(root):
         applicable = patterns + (config_patterns if rel.endswith(CONFIG_EXT) else [])
