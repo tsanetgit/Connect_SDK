@@ -8,6 +8,13 @@ access to the private spec repository.
 `com.tsanet:connect-library`, published to
 `https://maven.pkg.github.com/tsanetgit/Connect_SDK`.
 
+`com.tsanet:attachment-receiver`, same repository and same version from the first release
+that carries it: the receive side's `AttachmentStorage` SPI, the S3, Azure Files, Azure
+Blob and GCS adapters, the tenant config model and the go-live verifier. A plain library
+jar with no main class; bring your own runtime. Its intended consumer is the gateway's
+attachments-only profile (`tsanetgit/Connect_Gateway`); a member deploying its own receiver
+is the other. It does not depend on `connect-library`.
+
 Always point people at the **latest release** for the current version number:
 <https://github.com/tsanetgit/Connect_SDK/releases/latest>. Do not hardcode a version
 into docs you write for them; quote the coordinates pattern and let the release page

@@ -13,9 +13,11 @@
     <artifactId>attachment-receiver</artifactId>
     <name>attachment-receiver</name>
     <description>
-        Receive side of TSANet Connect case attachments: the AttachmentStorage SPI and its
-        storage adapters. The normalized HTTPS ingest endpoint is a separate, gated concern
-        (tsanetgit/Connect-API-Code#140) and nothing in this module may assume its wire shape.
+        Receive side of TSANet Connect case attachments: the AttachmentStorage SPI, its
+        storage adapters (S3, Azure Files, Azure Blob, GCS), the tenant config model and the
+        go-live verifier. A plain library with no main class. The HTTPS ingest endpoint that
+        feeds it is built in tsanetgit/Connect_Gateway (its attachments-only profile,
+        tsanetgit/Connect_Gateway#35), and nothing in this module may assume its wire shape.
     </description>
 
     <properties>
