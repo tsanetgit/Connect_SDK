@@ -33,6 +33,9 @@ POM_NS = {"m": "http://maven.apache.org/POM/4.0.0"}
 # login to sit, and omitting them was not a neutral gap: scripts/simple-test.sh
 # carried a real credential past every prior run of this audit.
 SOURCE_EXT = (".java", ".xml", ".properties", ".yaml", ".yml", ".json", ".sh")
+# Formats whose native convention is an UNQUOTED value: key=value, key: value,
+# export KEY=value. A quote-dependent matcher is blind to all three (#63).
+CONFIG_EXT = (".properties", ".yaml", ".yml", ".sh")
 SKIP_DIRS = {".git", "target", "node_modules", ".idea"}
 
 
@@ -128,7 +131,7 @@ def names_itself(match):
     stripped keeps those quiet without weakening the check, because any real
     secret differs from its own key name.
 
-    Only applies to the keyword pattern, which is the one with two groups.
+    Only applies to the keyword patterns, which are the ones with two groups.
     """
     if match.re.groups < 2:
         return False
@@ -136,26 +139,82 @@ def names_itself(match):
     return normalize(match.group(1)) == normalize(match.group(2))
 
 
+# A value that is a bare ALL_CAPS identifier with at least one underscore names
+# a variable (setup-java's `server-password: MAVEN_TOKEN`, an `export X=$Y`
+# chain), and carries no entropy of its own. The underscore is required on
+# purpose: an all-caps secret with no underscore (HUNTER2) is still reported,
+# and an all-caps secret WITH an underscore is silenced by design; that shape
+# is far more often a reference than a credential.
+VARIABLE_NAME = re.compile(r"^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$")
+
+
+def names_a_variable(match):
+    if match.re.groups < 2:
+        return False
+    return bool(VARIABLE_NAME.match(match.group(2).strip()))
+
+
+# The credential-shaped keys, shared by both keyword forms below. `passwd` and
+# `pwd` are the two spellings that cost no precision; `secret`, `token`,
+# `access-key` and `credentials` on their own are a wider vocabulary that needs
+# a noise check on real trees first, and they are disclosed as a gap in #63's PR.
+CREDENTIAL_KEY = r"(password|passwd|pwd|client[_-]?secret|api[_-]?key|apikey)"
+
+# Quoted form, any scanned file. The value must be single-line: without
+# excluding newlines a prompt such as System.out.print("Password: ") matches
+# across the following lines and reports a literal that does not exist. No
+# length floor: the old {7,} exempted exactly the short, guessable secrets
+# that matter most, and length is not what separates a secret from a
+# placeholder; the guards below are (#63).
+QUOTED_CREDENTIAL = re.compile(
+    r"(?i)" + CREDENTIAL_KEY + r"\s*[=:]\s*[\"']([^\"'{$<\n][^\"'\n]*)[\"']")
+
+# Unquoted form, CONFIG_EXT only: an optional YAML list dash, an optional
+# `export` or `local`, a key that may be dotted or prefixed
+# (crash.auth-password, TSANET_API_PASSWORD), the value running to end of line
+# or to a `#` / `!` comment. The first character
+# rejects a quote (the quoted form's job), `$` (a shell or Spring reference),
+# `{` (a template) and `<` (a placeholder), and `!` (a YAML tag such as
+# `!vault`). In sh and YAML `!` is not a comment marker, so a value containing
+# one is reported truncated rather than missed.
+UNQUOTED_CREDENTIAL = re.compile(
+    r"(?im)^[ \t]*(?:-[ \t]+)?(?:(?:export|local)[ \t]+)?(?:[\w.\-]*[._-])?" + CREDENTIAL_KEY
+    + r"[ \t]*[=:][ \t]*([^\s\"'#!${<][^#\n]*?)[ \t]*(?:[#!].*)?$")
+
+
 def check_no_embedded_secrets(root):
     cat = "credentials"
     patterns = [
-        # The value must be single-line: without excluding newlines a prompt
-        # such as System.out.print("Password: ") matches across the following
-        # lines and reports a literal that does not exist.
-        (re.compile(r"(?i)(password|client[_-]?secret|api[_-]?key|apikey)\s*[=:]\s*[\"']([^\"'{$<\n][^\"'\n]{7,})[\"']"),
-         "credential-shaped literal"),
+        (QUOTED_CREDENTIAL, "credential-shaped literal"),
         (re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}"), "Slack token"),
         (re.compile(r"ghp_[A-Za-z0-9]{20,}"), "GitHub PAT"),
         (re.compile(r"-----BEGIN (RSA |EC )?PRIVATE KEY-----"), "private key"),
     ]
-    placeholders = re.compile(r"(?i)your|example|changeme|placeholder|xxx|\.\.\.|\$\{|<.+>|test|dummy|sample")
+    config_patterns = [(UNQUOTED_CREDENTIAL, "credential-shaped config value")]
+    # Placeholder WORDS are anchored to word edges: `test-password` and
+    # `your-secret` are placeholders, `Xq7test2LpR9dWv4A` is a secret that
+    # happens to contain one. With the length floor gone this guard is what
+    # separates a secret from a placeholder, so it must not match inside one.
+    # The reference shapes (`...`, `${`, `<...>`) have no word edges to anchor.
+    placeholders = re.compile(
+        r"(?i)(?<![a-z0-9])(your|example|changeme|placeholder|xxx|test|dummy|sample)(?![a-z0-9])"
+        r"|\.\.\.|\$\{|<.+>")
     hits = []
     for rel, body in walk_sources(root):
-        for pat, label in patterns:
+        applicable = patterns + (config_patterns if rel.endswith(CONFIG_EXT) else [])
+        for pat, label in applicable:
             for m in pat.finditer(body):
-                if placeholders.search(m.group(0)):
+                # The placeholder test reads the VALUE for the keyword forms. The
+                # unquoted form's whole match also holds the key prefix and any
+                # trailing comment, and `test.password=realsecret` or
+                # `password: realsecret  # test env` must not be silenced by a
+                # word that is not part of the secret.
+                candidate = m.group(2) if m.re.groups >= 2 else m.group(0)
+                if placeholders.search(candidate):
                     continue
                 if names_itself(m):
+                    continue
+                if names_a_variable(m):
                     continue
                 hits.append(f"{rel}: {label}")
     if hits:
