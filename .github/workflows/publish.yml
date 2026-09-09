@@ -3,9 +3,10 @@ name: publish
 # A published GitHub Release is what cuts a version, deliberately rather than on
 # every push: consumers pin a version, so a library change reaches them only when
 # someone decides it should. Same pattern as Connect_Gateway's connector-core
-# publish. Publishes the root pom (connect-library's parent, which consumers must
-# be able to resolve) and connect-library ONLY; the app and demo modules are
-# never published.
+# publish. Publishes the root pom (the parent, which consumers must be able to
+# resolve), connect-library, and attachment-receiver (the storage SPI and adapters
+# the gateway's attachments-only profile will consume, tsanetgit/Connect_Gateway#35;
+# a plain library jar) ONLY; the app and demo modules are never published.
 on:
   release:
     types: [published]
@@ -92,14 +93,16 @@ jobs:
           mvn -B --no-transfer-progress versions:set \
             -DnewVersion="${{ steps.v.outputs.version }}" -DgenerateBackupPoms=false
 
-      # `deploy` runs the full lifecycle, so connect-library's tests gate the
-      # release: a broken client cannot be published. Reactor selection publishes
-      # the parent pom and the library only.
-      - name: Build, test and publish connect-library
+      # `deploy` runs the full lifecycle, so each published module's tests gate
+      # the release: a broken client cannot be published. Reactor selection
+      # publishes the parent pom, the library and the receiver only. The
+      # receiver's live adapter tests are gated on environment variables and skip
+      # here; its unit and contract tests run.
+      - name: Build, test and publish connect-library and attachment-receiver
         working-directory: Connect_SDK
         env:
           MAVEN_USERNAME: ${{ github.actor }}
           MAVEN_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # -Dmaven.deploy.skip=false arms the deploy that the root pom disarms by
         # default, so this workflow is the only path that publishes.
-        run: mvn -B --no-transfer-progress -pl .,connect-library deploy -Dmaven.deploy.skip=false
+        run: mvn -B --no-transfer-progress -pl .,connect-library,attachment-receiver deploy -Dmaven.deploy.skip=false

@@ -33,7 +33,7 @@ the release version, branch names, and module list against the live repository.
 | `TSANet-integration-app` | Console reference app exposing the library as CLI commands (`login`, `requests`, `notes add`, `webhooks create`, ...) | Spring Boot jar |
 | `TSANet-integration-demo` | Scripted demo scenarios over the library | Spring Boot jar |
 | `demo-ui` | The branded web demo: dashboard, partner search, dynamic process forms, full case lifecycle from the browser. This is "the SDK demo" most people mean. | Spring Boot jar, port 8090 |
-| `attachment-receiver` | The storage half of receiving pushed files: a streaming storage SPI with AWS S3, Azure Files (backend id `azure`), Azure Blob Storage (backend id `azure_blob`), and Google Cloud Storage adapters, an encrypted per-tenant config store, and a go-live verifier. The HTTPS endpoint that accepts the push is not built yet; no standalone docs yet. | Spring Boot jar |
+| `attachment-receiver` | The storage half of receiving pushed files: a streaming storage SPI with AWS S3, Azure Files (backend id `azure`), Azure Blob Storage (backend id `azure_blob`), and Google Cloud Storage adapters, an encrypted per-tenant config store, and a go-live verifier. The HTTPS endpoint that accepts the push is being built in tsanetgit/Connect_Gateway's attachments-only profile (tsanetgit/Connect_Gateway#35), not here; no standalone docs yet. | Library only (published alongside connect-library) |
 
 ## Access model (read this first, it shapes everything)
 
