@@ -36,6 +36,12 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The detector's own probes run first: a regression in what the audit
+      # can see must fail CI the same way a finding does, or a silent miss
+      # (the class #63 closed) ships as a green run.
+      - name: Probe the audit's detectors
+        run: python3 -m unittest -v scripts/test_security_audit.py
+
       - name: Run mechanical security audit
         shell: bash
         run: |
