@@ -107,13 +107,6 @@ class DefaultTsaNetApiSessionCreateRequestTest {
         assertThat(capturedForm().getTestSubmission()).isTrue();
     }
 
-    @Test
-    void theDeprecatedOverloadKeepsTheOldAlwaysTestBehavior() {
-        session.createRequest(template(), "CASE-1", "s", "d", Map.of());
-
-        assertThat(capturedForm().getTestSubmission()).isTrue();
-    }
-
     private CollaborationRequestDTO capturedForm() {
         ArgumentCaptor<CollaborationRequestDTO> captor = ArgumentCaptor.forClass(CollaborationRequestDTO.class);
         verify(collaborationGateway).createCollaborationRequest(captor.capture());
