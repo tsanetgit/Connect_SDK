@@ -218,6 +218,8 @@ Watch the release notes on each release.
   mappers (the library's cache reader keeps the old behavior); the `JsonNullable`
   accessors on `CaseApprovalUpdateDTO` and `CollaborationRequestSubmitterUpdateDTO`
   are gone (plain accessors unchanged).
-- Known deprecation: the always-test create signatures (pre-0.1.0 behavior) are still
-  present in 1.0.0 as `@Deprecated(forRemoval = true)` shims; migrate callers to the
-  explicit per-call `testSubmission` flag before they are removed.
+- **2.0.0** removes the always-test create signatures (pre-0.1.0 behavior, deprecated
+  for removal since 0.1.0): `createRequest` takes the explicit per-call `testSubmission`
+  flag in both forms. Removing a `default` interface method breaks binary compatibility
+  as well as source: a consumer that bumps the version without recompiling gets
+  `NoSuchMethodError` at the call, not a compile error. Recompile against 2.0.0.

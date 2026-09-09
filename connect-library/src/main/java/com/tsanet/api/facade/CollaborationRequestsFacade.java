@@ -54,41 +54,6 @@ public interface CollaborationRequestsFacade {
         boolean testSubmission
     );
 
-    /**
-     * Compatibility form from before the flag was per-call; keeps the pre-existing
-     * behavior of always creating a TEST submission.
-     *
-     * @deprecated pass {@code testSubmission} explicitly; scheduled for removal at
-     *     the next release boundary.
-     */
-    @Deprecated(forRemoval = true)
-    default CollaborationRequestStatusDto createRequest(
-        long receiverCompanyId,
-        String caseNumber,
-        String summary,
-        String description
-    ) {
-        return createRequest(receiverCompanyId, caseNumber, summary, description, true);
-    }
-
-    /**
-     * Compatibility form from before the flag was per-call; keeps the pre-existing
-     * behavior of always creating a TEST submission.
-     *
-     * @deprecated pass {@code testSubmission} explicitly; scheduled for removal at
-     *     the next release boundary.
-     */
-    @Deprecated(forRemoval = true)
-    default CollaborationRequestStatusDto createRequest(
-        CollaborationRequestFormTemplateDto formTemplate,
-        String caseNumber,
-        String summary,
-        String description,
-        Map<Long, String> customFieldValues
-    ) {
-        return createRequest(formTemplate, caseNumber, summary, description, customFieldValues, true);
-    }
-
     CollaborationRequestStatusDto fetchRequestByToken(String caseToken);
 
     void syncAllDetails();
