@@ -2,10 +2,11 @@ package com.tsanet.api.webhook;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.tsanet.api.connectapi.dto.WebhookPayloadDto;
 
 public final class WebhookPayloadParser {
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = JsonMapper.builder().build();
 
     private WebhookPayloadParser() {
     }
