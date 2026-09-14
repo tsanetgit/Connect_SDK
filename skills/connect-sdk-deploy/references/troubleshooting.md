@@ -26,8 +26,9 @@ the repository URL `https://maven.pkg.github.com/tsanetgit/Connect_SDK`.
 **Upgraded to connect-library 1.0.0 and the consumer no longer compiles or fails at
 startup on Jackson classes**
 1.0.0 depends on Jackson 3 (`tools.jackson.core`), not Jackson 2
-(`com.fasterxml.jackson.core`). The consumer must be on Jackson 3 / Spring Boot 4.1,
-or stay on 0.2.0. Annotations kept their `com.fasterxml.jackson.annotation` package,
+(`com.fasterxml.jackson.core`). The consumer must move to Jackson 3 / Spring Boot 4.1;
+older releases are not published or supported, so staying behind is not an option.
+Annotations kept their `com.fasterxml.jackson.annotation` package,
 so annotated DTOs are not the problem; mapper and exception types are.
 
 **JDK mismatch errors (release version, class file version)**

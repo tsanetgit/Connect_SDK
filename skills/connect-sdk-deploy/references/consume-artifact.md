@@ -64,11 +64,13 @@ not send credentials and you get an opaque 401. The parent pom
 (`tsanet-client-parent`) is published alongside the library and resolves from the same
 repository.
 
-Four versions are published: 0.1.0, 0.2.0, 1.0.0 and 2.0.0. **1.0.0 and later require
-Jackson 3** (`tools.jackson.core:jackson-databind`) and are built on the Spring Boot 4.1
-line; a service still on Jackson 2 or Spring Boot 3 should take 0.2.0, which has the same
-facade surface on the older runtime. **2.0.0 changes what a failure looks like** (see
-Upgrading) and is the first version that also publishes `attachment-receiver`. The
+Only the current release is published and supported — 2.0.0 today; earlier releases are
+obsolete, are not offered to members, and there are no external deployments to keep them
+for. Never point a member at an older version. The current release **requires Jackson 3**
+(`tools.jackson.core:jackson-databind`) and the Spring Boot 4.1 line; a service still on
+Jackson 2 or Spring Boot 3 has to move to that runtime before it can take the library.
+**2.0.0 changes what a failure looks like** (see Upgrading) and also publishes
+`attachment-receiver`. The
 library works outside Spring Boot; from 1.0.0 `java.time` support comes from Jackson 3's
 databind itself, so no `jsr310` module is declared or needed.
 
