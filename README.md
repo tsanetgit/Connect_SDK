@@ -4,7 +4,9 @@ Demonstration of Integration with TSANet API - In Java.
 
 Modules: `connect-library` (the Java client for the TSANet Connect API),
 `TSANet-integration-app` (console app), `TSANet-integration-demo` (demo scenarios),
-`attachment-receiver` (the attachment receive endpoint), and `demo-ui` (the branded
+`attachment-receiver` (the storage half of receiving files: the streaming storage SPI and
+its four cloud adapters — the HTTPS endpoint that accepts the push is being built in
+`tsanetgit/Connect_Gateway`'s attachments-only profile, not here), and `demo-ui` (the branded
 web demo over the SDK facades).
 
 ## Building
@@ -41,8 +43,9 @@ The working steps, in order:
 
 An alternative to the sibling clone, for consumers who need a hermetic build, is
 vendoring the specification into the repository and pointing `connect.openapi.spec`
-at the vendored file (the pattern the Fin adapter uses). That is a maintainer
-decision and is deliberately not part of this document.
+at the vendored file (the pattern the Fin adapter used before it moved to the published
+gateway-engine artifact; the Connect Gateway author kit still vendors the spec this way). That
+is a maintainer decision and is deliberately not part of this document.
 
 ## Demo UI documentation
 
