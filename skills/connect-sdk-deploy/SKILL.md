@@ -22,8 +22,9 @@ its root `README.md`, `docs/RUNBOOK.md`, `docs/USER_GUIDE.md`, and
 answering; this skill tells you what matters, where the traps are, and what has changed
 recently, but the repo docs win on any conflict.
 
-Facts below were verified against `main` on 2026-09-07 (release v1.0.0). If months have passed, re-verify
-the release version, branch names, and module list against the live repository.
+Facts below were verified against `main` on 2026-09-07 at release v1.0.0; the release pin, module
+list and error-mode behaviour were re-checked on 2026-09-13 at release v2.0.0. If months have passed,
+re-verify the release version, branch names, and module list against the live repository.
 
 ## Repository map
 

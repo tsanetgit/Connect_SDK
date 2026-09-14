@@ -5,7 +5,7 @@
       "id": 0,
       "eval_name": "local-demo",
       "prompt": "We're a TSANet member on the BETA environment and I want to run the Connect SDK demo locally on my MacBook (Apple Silicon, Homebrew tooling) so our support team can click through a case lifecycle. Write me the exact step-by-step plan, commands included, plus anything that usually trips people up. Save it as demo-local-plan.md",
-      "expected_output": "A runbook-style plan: sibling clone of the private Connect-API-Code repo on the beta branch, JDK 21 JAVA_HOME setup, the two Maven build commands, running the demo-ui jar on localhost:8090, entering member credentials in Settings, and the known traps (500-on-bad-login badge, wrong sibling branch).",
+      "expected_output": "A runbook-style plan: sibling clone of the private Connect-API-Code repo on the beta branch, JDK 21 JAVA_HOME setup, the two Maven build commands, running the demo-ui jar on localhost:8090, entering member credentials in Settings, and the known traps (the amber 'Auth failed: Authentication Failed' badge on a bad login, wrong sibling branch).",
       "files": [],
       "assertions": [
         "Instructs cloning tsanetgit/Connect-API-Code as a sibling directory and checking out the beta branch",
@@ -13,7 +13,7 @@
         "Specifies JDK 21 with explicit JAVA_HOME setup for Homebrew keg-only openjdk@21",
         "Builds connect-library and demo-ui with Maven and runs the demo-ui jar",
         "States the app listens on localhost:8090 and credentials are entered in the Settings tab",
-        "Explains that a bad login shows as 'Connect API returned 500', not a 401"
+        "Explains that through the SDK a bad login reads HTTP 401 Authentication Failed (the SDK sends the problem+json Accept header), and that only a raw client without that header sees the legacy 500"
       ]
     },
     {
