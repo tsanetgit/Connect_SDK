@@ -29,7 +29,7 @@ import tools.jackson.databind.json.JsonMapper;
  * interceptor apply exactly as they do to the generated V1 calls. The V2 paths are not in
  * the OpenAPI spec yet (tsanetgit/Connect-API-Code#147 is a draft), which is the only
  * reason this class exists instead of a generated one.
- * PROVISIONAL(tsanetgit/Connect-API-Code#147): replaced via tsanetgit/Connect_SDK#96.
+ * <p>PROVISIONAL(tsanetgit/Connect-API-Code#149): replaced via tsanetgit/Connect_SDK#96.
  *
  * <p>Errors: an {@code application/problem+json} body is mapped to
  * {@link AttachmentV2Exception} with the platform's {@code type}, {@code title} and
