@@ -3,18 +3,16 @@ name: spec-develop
 # Builds connect-library against Connect-API-Code's develop spec, daily and on
 # demand. verify builds against beta and runs only when this repo changes, so a
 # develop spec change that breaks the generated client would otherwise go unseen
-# until it reached beta. This check used to run on every Connect-API-Code PR
-# (tsanetgit/Connect-API-Code#164); it lives here so a red main in this repo
-# cannot fail API PRs. A scheduled run's failure notifies whoever last changed
-# this file.
+# until it reached beta. It was first proposed as a job on every
+# Connect-API-Code PR (tsanetgit/Connect-API-Code#164) and lives here instead so
+# a red main in this repo cannot fail API PRs.
 on:
   schedule:
     - cron: "17 13 * * *"
   workflow_dispatch:
     inputs:
       spec-ref:
-        description: "Connect-API-Code branch, tag or SHA to build against"
-        default: develop
+        description: "Connect-API-Code branch, tag or SHA to build against (blank: develop)"
 
 permissions:
   contents: read
