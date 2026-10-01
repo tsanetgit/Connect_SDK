@@ -31,6 +31,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.function.Supplier;
 import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
 
 /**
@@ -158,6 +159,9 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
 
     @Override
     public AttachmentGrant complete(String caseToken, AttachmentGrant grant, UploadReceipts receipts) {
+        if (grant == null) {
+            throw new IllegalArgumentException("grant must not be null");
+        }
         requireSupportedMode(grant);
         return switch (grant.mode()) {
             case SINGLE -> completeSingle(caseToken, grant.grantId());
@@ -199,7 +203,10 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         try {
             return completeWithRetry(caseToken, grant, receipts);
         } catch (RuntimeException completeFailure) {
-            abandonUnlessTerminal(caseToken, grant.grantId(), completeFailure);
+            AttachmentGrant completed = abandonAfterFailedComplete(caseToken, grant.grantId(), completeFailure);
+            if (completed != null) {
+                return completed;
+            }
             throw completeFailure;
         }
     }
@@ -248,7 +255,7 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
      * suppressed. A 409 means the grant is already terminal: there is nothing left to abandon.
      */
     private void abandonUnlessTerminal(String caseToken, long grantId, RuntimeException primary) {
-        if (primary instanceof AttachmentV2Exception e && e.is(AttachmentV2Exception.GRANT_TERMINAL)) {
+        if (isTerminal(primary)) {
             return;
         }
         try {
@@ -256,6 +263,37 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         } catch (RuntimeException abandonFailure) {
             primary.addSuppressed(abandonFailure);
         }
+    }
+
+    /**
+     * {@link #abandonUnlessTerminal}, for a complete that failed. When every complete lost its
+     * answer, one of them may still have landed: then abandon answers 409 and the grant reads
+     * completed, which is a delivery, not a failure. Returns that grant, or null.
+     */
+    private AttachmentGrant abandonAfterFailedComplete(String caseToken, long grantId, RuntimeException primary) {
+        if (isTerminal(primary)) {
+            return null;
+        }
+        try {
+            abandon(caseToken, grantId);
+        } catch (RuntimeException abandonFailure) {
+            if (isTerminal(abandonFailure)) {
+                try {
+                    AttachmentGrant current = getGrant(caseToken, grantId);
+                    if (current.completed()) {
+                        return current;
+                    }
+                } catch (RuntimeException readFailure) {
+                    abandonFailure.addSuppressed(readFailure);
+                }
+            }
+            primary.addSuppressed(abandonFailure);
+        }
+        return null;
+    }
+
+    private static boolean isTerminal(RuntimeException failure) {
+        return failure instanceof AttachmentV2Exception e && e.is(AttachmentV2Exception.GRANT_TERMINAL);
     }
 
     private <T> T call(String operation, Supplier<T> request) {
@@ -269,11 +307,16 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
             // the status, not the words.
             int status = e.getStatusCode().value();
             throw new AttachmentV2Exception(operation + " failed: HTTP " + status, status, codeFor(status), e);
-        } catch (RestClientException e) {
+        } catch (ResourceAccessException e) {
             // Spring's message can carry the expanded request URL, and these paths carry the
             // case token: name the failure by its type only.
             throw new AttachmentV2Exception(operation + " failed: " + e.getClass().getSimpleName(), 0,
                 AttachmentV2Exception.CONNECTIVITY, e);
+        } catch (RestClientException e) {
+            // An answer arrived and could not be read, for example a value the generated model
+            // doesn't know. Not a connectivity failure, so not retried.
+            throw new AttachmentV2Exception(operation + " failed: could not read the answer ("
+                + e.getClass().getSimpleName() + ")", 0, AttachmentV2Exception.API_ERROR, e);
         }
     }
 

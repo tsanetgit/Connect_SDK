@@ -41,6 +41,8 @@ if (grant.completed()) {
 abandons the grant and throws `AttachmentV2Exception`, except on a `409`, where the grant is
 already completed, abandoned or expired. Complete is retried on a `5xx` (the spec documents
 `502`) or a lost response, because completing an already-completed grant returns it unchanged.
+If every complete loses its answer, `send` checks the grant before reporting a failure: a grant
+that reads completed is returned as delivered.
 
 Every Connect API call is also on the facade on its own, for a client that drives the flow
 itself: `createGrant`, `getGrant`, `listGrants`, `singleUploadLink`, `s3PartLinks`,
@@ -69,9 +71,9 @@ How the SDK uploads:
 | `attachment/forbidden` | `403`: the caller isn't the case's sender, or the receiver isn't on the sender's allowlist |
 | `attachment/not-found` | `404`: no such case or grant, or a call that doesn't match the grant's mode |
 | `attachment/grant-terminal` | `409`: the grant is completed, abandoned or expired |
-| `attachment/upload-mismatch` | `422`: complete found the upload doesn't match the grant; the grant stays open |
+| `attachment/upload-mismatch` | `422`: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
 | `attachment/provider-error` | `502`: the receiver's storage provider failed; nothing changed |
-| `attachment/api-error` | any other error answer from the Connect API |
+| `attachment/api-error` | any other error answer from the Connect API, or an answer the SDK could not read |
 | `client/upload-rejected` | the storage refused a `PUT`, or kept failing it |
 | `client/upload-unreachable` | a `PUT` got no answer after three attempts |
 | `client/link-not-refreshable` | a link expired and asking again returned the same link |

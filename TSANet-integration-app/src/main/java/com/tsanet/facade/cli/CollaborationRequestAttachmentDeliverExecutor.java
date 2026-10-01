@@ -42,6 +42,10 @@ public class CollaborationRequestAttachmentDeliverExecutor {
             System.out.println(EntityPrinter.error(cliRunContext, "Attachment path is not a regular file: " + file));
             return;
         }
+        if (CliArgs.description(args).isPresent() || List.of(args).contains("--sha256")) {
+            System.out.println(EntityPrinter.info(cliRunContext,
+                "Ignoring --description and --sha256: a V2 grant takes only the file's name and size"));
+        }
         System.out.println(EntityPrinter.info(cliRunContext, "Delivering " + file.getFileName()
             + " to the partner on request id=" + request.id() + " token=" + request.token()));
         try {

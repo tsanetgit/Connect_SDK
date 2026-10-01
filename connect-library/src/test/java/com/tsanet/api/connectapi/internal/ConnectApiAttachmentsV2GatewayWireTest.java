@@ -257,6 +257,22 @@ class ConnectApiAttachmentsV2GatewayWireTest {
     }
 
     @Test
+    void anAnswerTheClientCannotReadIsAnApiErrorNotConnectivity() {
+        server.expect(requestTo(GRANT + "/single/complete"))
+            .andRespond(withStatus(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON)
+                .body(grantJson("ociMultipart", "completed", "")));
+
+        assertThatThrownBy(() -> gateway.completeSingle(TOKEN, GRANT_ID))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.code()).isEqualTo(AttachmentV2Exception.API_ERROR);
+                assertThat(ex.getMessage()).contains("could not read the answer");
+            });
+        server.verify();
+    }
+
+    @Test
     void aConnectivityFailureNeverEchoesTheCaseTokenThatRidesInTheUrl() {
         // A plain RestTemplate against a closed port: Spring's own message carries the expanded
         // request URL, and the V2 paths carry the case token in that URL.

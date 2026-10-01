@@ -24,11 +24,11 @@ public class AttachmentV2Exception extends RuntimeException {
     public static final String NOT_FOUND = "attachment/not-found";
     /** 409: the grant is completed, abandoned or expired, so it can't take this call. */
     public static final String GRANT_TERMINAL = "attachment/grant-terminal";
-    /** 422: complete found the upload doesn't match the grant; the grant stays open. */
+    /** 422: complete found the upload doesn't match the grant. The platform leaves the grant open; {@code send} abandons it. */
     public static final String UPLOAD_MISMATCH = "attachment/upload-mismatch";
     /** 502: the receiver's storage provider failed; nothing changed, retry later. */
     public static final String PROVIDER_ERROR = "attachment/provider-error";
-    /** Any other non-2xx answer from the Connect API. */
+    /** Any other non-2xx answer from the Connect API, or an answer this client could not read. */
     public static final String API_ERROR = "attachment/api-error";
 
     /** The storage answered an upload {@code PUT} with a status this client doesn't retry, or kept failing. */

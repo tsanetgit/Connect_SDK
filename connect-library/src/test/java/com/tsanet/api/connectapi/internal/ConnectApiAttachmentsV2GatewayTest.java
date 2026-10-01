@@ -248,6 +248,44 @@ class ConnectApiAttachmentsV2GatewayTest {
     }
 
     @Test
+    void aCompleteWhoseAnswersWereAllLostButLandedIsADelivery() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenThrow(apiError(409));
+        when(api.getAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.COMPLETED));
+
+        AttachmentGrant result = gateway.send(TOKEN, file, null);
+
+        assertThat(result.completed()).isTrue();
+        verify(api, times(3)).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api).getAttachmentGrant(TOKEN, GRANT_ID);
+    }
+
+    @Test
+    void aLostCompleteOnAGrantThatDidNotCompleteStaysAFailure() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenThrow(apiError(409));
+        when(api.getAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.EXPIRED));
+
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.code()).isEqualTo(AttachmentV2Exception.CONNECTIVITY);
+                assertThat(ex.getSuppressed()).hasSize(1);
+                assertThat(((AttachmentV2Exception) ex.getSuppressed()[0]).code())
+                    .isEqualTo(AttachmentV2Exception.GRANT_TERMINAL);
+            });
+    }
+
+    @Test
     void aProviderErrorOnCompleteIsRetriedThenAbandonedWhenItPersists() {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));

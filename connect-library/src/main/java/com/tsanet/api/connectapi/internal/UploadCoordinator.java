@@ -81,6 +81,9 @@ class UploadCoordinator {
 
     UploadReceipts upload(AttachmentGrant grant, Path file, LinkSource source, UploadProgressListener listener) {
         UploadMode mode = grant.mode();
+        // GCS is deferred to a later release by a decision comment on
+        // tsanetgit/Connect-API-Code#147 (2026-09-24), with no issue of its own, so this refusal
+        // carries no PROVISIONAL marker; give it one when an issue tracks turning GCS on.
         if (mode == null || mode == UploadMode.GCS_RESUMABLE) {
             throw new AttachmentV2Exception("upload mode " + (mode == null ? "(none)" : mode.value())
                 + " is not supported by this client", 0, AttachmentV2Exception.UNSUPPORTED_UPLOAD_MODE);
