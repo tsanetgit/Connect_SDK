@@ -224,6 +224,10 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         };
     }
 
+    // PROVISIONAL(tsanetgit/Connect-API-Code#182): the platform has GCS turned off, so the client
+    // refuses gcsResumable grants here, in unsupported() and in the GCS_RESUMABLE arms of
+    // complete() and linkSource(). Once GCS is on, these give way to support for the mode (the
+    // same refusal is in UploadCoordinator.upload).
     private static void requireSupportedMode(AttachmentGrant grant) {
         if (grant.mode() == null || grant.mode() == UploadMode.GCS_RESUMABLE) {
             throw unsupported(grant);
