@@ -69,7 +69,7 @@ How the SDK uploads:
 |---|---|
 | `attachment/invalid-request` | `400`: a part or block number outside the plan, or S3 receipts that don't cover it |
 | `attachment/forbidden` | `403`: the caller isn't the case's sender, or the receiver isn't on the sender's allowlist |
-| `attachment/not-found` | `404`: no such case or grant, or a call that doesn't match the grant's mode |
+| `attachment/not-found` | `404`: no such case or grant, a receiver with no storage configuration (on create), or a call that doesn't match the grant's mode |
 | `attachment/grant-terminal` | `409`: the grant is completed, abandoned or expired |
 | `attachment/upload-mismatch` | `422`: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
 | `attachment/provider-error` | `502`: the receiver's storage provider failed; nothing changed |
@@ -100,7 +100,7 @@ Content-Type: application/json
 201 Created
 {"grantId": 9001, "status": "open", "fileName": "diag.tar.gz",
  "expectedSizeBytes": 734003200, "createdAt": "...", "expiresAt": "...",
- "mode": "s3Multipart", "s3Multipart": {"totalParts": 7, "partSizeBytes": 104857600}}
+ "mode": "s3Multipart", "s3Multipart": {"totalParts": 140, "partSizeBytes": 5242880}}
 ```
 
 `mode` is `single`, `s3Multipart` or `azureBlock`. The spec also lists `gcsResumable` and
@@ -108,6 +108,16 @@ documents it as not available in the current release. An `s3Multipart` grant car
 `s3Multipart.totalParts` and `partSizeBytes`; an `azureBlock` grant carries
 `azureBlock.totalBlocks` and `blockSizeBytes`. Parts and blocks are numbered from 1; each is
 the plan's size except the last, which holds the rest of the file.
+
+The platform decides the plan; read it from the grant rather than working it out yourself.
+With the platform's defaults, a file of up to 5 MiB gets a `single` upload. Above that, S3
+parts are 5 MiB, or the file size divided by 10,000 if that is larger; Azure blocks are
+8 MiB, or the file size divided by 50,000 if that is larger. So the 700 MiB file above
+uploads as 140 parts of 5 MiB.
+
+A `404` means the case wasn't found, or the receiving company hasn't registered a storage
+configuration for V2 delivery; the `detail` says which ("Receiver has not registered a
+storage configuration"). Until the receiver registers one, there is nothing to retry.
 
 A `502` means the receiver's storage provider failed and no grant was created: retry later.
 

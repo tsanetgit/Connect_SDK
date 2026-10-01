@@ -20,7 +20,10 @@ public class AttachmentV2Exception extends RuntimeException {
     public static final String INVALID_REQUEST = "attachment/invalid-request";
     /** 403: the caller's company isn't the case's sender, or the receiver isn't on its allowlist. */
     public static final String FORBIDDEN = "attachment/forbidden";
-    /** 404: no such case or grant, or a link or complete call that doesn't match the grant's mode. */
+    /**
+     * 404: no such case or grant, a receiver that has registered no storage configuration (on
+     * create), or a link or complete call that doesn't match the grant's mode.
+     */
     public static final String NOT_FOUND = "attachment/not-found";
     /** 409: the grant is completed, abandoned or expired, so it can't take this call. */
     public static final String GRANT_TERMINAL = "attachment/grant-terminal";
