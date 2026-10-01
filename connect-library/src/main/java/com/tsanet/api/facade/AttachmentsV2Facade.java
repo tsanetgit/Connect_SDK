@@ -62,8 +62,10 @@ public interface AttachmentsV2Facade {
 
     /**
      * Create a grant, upload, complete. A failed upload or complete abandons the grant and
-     * rethrows, except a 409, where the grant is already terminal. Complete is retried on a
-     * 5xx answer (a 502 is the documented one) or a lost response: completing an
+     * rethrows, except a 409, where the grant is already terminal. That includes a 422 from
+     * complete, although the platform leaves that grant open for another upload: a caller who
+     * wants to upload again drives {@link #upload} and {@link #complete} itself. Complete is
+     * retried on a 5xx answer (a 502 is the documented one) or a lost response: completing an
      * already-completed grant returns it unchanged.
      *
      * @param listener progress callback, or null

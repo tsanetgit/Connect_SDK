@@ -30,6 +30,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.function.Supplier;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 
 /**
@@ -262,6 +263,12 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
             return request.get();
         } catch (ConnectApiException e) {
             throw translate(operation, e);
+        } catch (HttpStatusCodeException e) {
+            // Only a RestTemplate without the library's error handler answers this way. Its body
+            // is unscrubbed and can echo the request path, which carries the case token: keep
+            // the status, not the words.
+            int status = e.getStatusCode().value();
+            throw new AttachmentV2Exception(operation + " failed: HTTP " + status, status, codeFor(status), e);
         } catch (RestClientException e) {
             // Spring's message can carry the expanded request URL, and these paths carry the
             // case token: name the failure by its type only.
@@ -276,7 +283,12 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
             return new AttachmentV2Exception(operation + " failed: " + e.getMessage(), 0,
                 AttachmentV2Exception.CONNECTIVITY, e);
         }
-        String code = switch (e.status()) {
+        return new AttachmentV2Exception(operation + " failed: " + e.getMessage(), e.status(), codeFor(e.status()), e);
+    }
+
+    /** The code for an error status, as the spec documents each one for these endpoints. */
+    private static String codeFor(int status) {
+        return switch (status) {
             case 400 -> AttachmentV2Exception.INVALID_REQUEST;
             case 403 -> AttachmentV2Exception.FORBIDDEN;
             case 404 -> AttachmentV2Exception.NOT_FOUND;
@@ -285,7 +297,6 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
             case 502 -> AttachmentV2Exception.PROVIDER_ERROR;
             default -> AttachmentV2Exception.API_ERROR;
         };
-        return new AttachmentV2Exception(operation + " failed: " + e.getMessage(), e.status(), code, e);
     }
 
     static AttachmentGrant toGrant(AttachmentGrantDTO dto) {

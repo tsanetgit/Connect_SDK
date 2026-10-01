@@ -232,6 +232,31 @@ class ConnectApiAttachmentsV2GatewayWireTest {
     }
 
     @Test
+    void anHttpErrorOnAPlainRestTemplateKeepsItsStatusCodeAndDropsTheBody() {
+        // Without the library's error handler, Spring answers with its own status exception,
+        // whose body is unscrubbed.
+        RestTemplate plain = new RestTemplate();
+        MockRestServiceServer plainServer = MockRestServiceServer.bindTo(plain).build();
+        ApiClient plainClient = new ApiClient(plain);
+        plainClient.setBasePath(BASE);
+        plainClient.setBearerToken(() -> "bearer-123");
+        ConnectApiAttachmentsV2Gateway plainGateway = new ConnectApiAttachmentsV2Gateway(
+            new AttachmentGrantsApi(plainClient), GatewayTestSupport.authenticatedSessionStore());
+        plainServer.expect(requestTo(GRANT + "/abandon"))
+            .andRespond(withStatus(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"detail\":\"/v2/collaboration-requests/" + TOKEN + " is terminal\"}"));
+
+        assertThatThrownBy(() -> plainGateway.abandon(TOKEN, GRANT_ID))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.code()).isEqualTo(AttachmentV2Exception.GRANT_TERMINAL);
+                assertThat(ex.status()).isEqualTo(409);
+                assertThat(ex.getMessage()).doesNotContain(TOKEN);
+            });
+    }
+
+    @Test
     void aConnectivityFailureNeverEchoesTheCaseTokenThatRidesInTheUrl() {
         // A plain RestTemplate against a closed port: Spring's own message carries the expanded
         // request URL, and the V2 paths carry the case token in that URL.
