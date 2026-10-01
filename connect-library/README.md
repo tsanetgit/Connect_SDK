@@ -292,36 +292,33 @@ Case responses include approval and other comment-like activity on a collaborati
 
 ### Direct delivery (V2) — `session.attachmentsV2()`
 
-The sender's side of the V2 attachment contract: the file goes straight into the partner's
-store and nothing passes through the Connect API. Built against the draft contract in
-`tsanetgit/Connect-API-Code#147`; the platform endpoint is not live yet, and the request and
-result types here will be replaced by generated ones when the contract lands in the spec.
-The member-facing walkthrough, including the three calls without the SDK, is
+The sender's side of V2 attachment delivery: the file goes straight into the receiving
+company's storage and nothing passes through the Connect API. Generated from the Attachment
+Grants operations in the Connect OpenAPI spec, which marks them `x-stability-level: alpha`.
+The member-facing walkthrough, including the calls without the SDK, is
 [`docs/attachments-v2-client.md`](../docs/attachments-v2-client.md).
 
 | Method | Description |
 |--------|-------------|
-| `send(caseToken, file, contentType, description, withSha256, listener)` | Grant, upload, complete. Abandons the grant and throws `AttachmentV2Exception` on any upload failure; on a complete-time `attachment/grant-expired` it re-grants once and uploads again. |
-| `grant(caseToken, request)` | Ask the platform for permission and upload instructions for one file. |
-| `upload(grant, file, listener)` | Execute the grant's upload block verbatim (single, multipart, resumable or relay), streaming from disk one part at a time. |
-| `complete(caseToken, grantId, request)` | Report the upload finished; the platform seals it, verifies arrival and records the outcome. |
-| `abandon(caseToken, grantId)` | Abandon a grant; any open upload session is aborted and nothing becomes visible. |
+| `send(caseToken, file, listener)` | Create a grant, upload, complete. Abandons the grant and throws `AttachmentV2Exception` if the upload or the complete fails (except on a `409`, where the grant is already terminal); retries complete on a `5xx` or a lost response. |
+| `createGrant(caseToken, fileName, expectedSizeBytes)` | Create a grant. The receiver's storage decides its mode and plan. |
+| `getGrant(caseToken, grantId)`, `listGrants(caseToken, page, size)` | Read one grant, or a page of the case's grants. |
+| `singleUploadLink`, `s3PartLinks`, `azureBlockLinks` | Upload links for the grant's mode, at most 1,000 numbers per call. |
+| `upload(caseToken, grant, file, listener)` | Upload the file for any supported mode: links requested just before use, refreshed within 60 seconds of expiry or after a `403`, three attempts per part. Never completes or abandons. |
+| `complete(caseToken, grant, receipts)` | The complete call for the grant's mode (`completeSingle`, `completeS3Multipart`, `completeAzureBlock`). |
+| `abandon(caseToken, grantId)` | No more links, no completion, nothing announced on the case. |
 
 ```java
-AttachmentCompleteResult outcome = session.attachmentsV2().send(
+AttachmentGrant grant = session.attachmentsV2().send(
     caseToken,
     Path.of("diag.tar.gz"),
-    "application/gzip",
-    "Diagnostics from the failing node",   // optional, goes into the case note
-    true,                                  // compute and send a SHA-256
-    progress -> log.info("{} {}/{} parts, {} of {} bytes", progress.mode(),
+    progress -> log.info("{} {}/{} parts, {} of {} bytes", progress.mode().value(),
         progress.partsDone(), progress.partsTotal(), progress.bytesSent(), progress.bytesTotal()));
 ```
 
-`outcome.status()` is the platform's word, never the client's: `DELIVERED` (verified),
-`DELIVERED_UNVERIFIED` (sender-reported, the case note says so), `FAILED` or `EXPIRED`
-(nothing was announced to the partner). A client that sent every byte still reports whatever
-this says.
+The returned grant is the platform's record: `grant.completed()` is true once the platform
+has completed it. Failures carry a `code()`, for example `attachment/upload-mismatch` when
+the platform finds the upload doesn't match the grant.
 
 ---
 
@@ -448,10 +445,10 @@ add-attachment --token abc-case-token-xyz --description "Screenshot" --file ./sc
 stored-attachments --id 123
 ```
 
-Deliver one file on the direct path (V2, draft contract; see the facade section above):
+Deliver one file on the direct path (V2; see the facade section above):
 
 ```text
-deliver-attachment --id 123 --file ./diag.tar.gz --description "Diagnostics from the failing node" --sha256
+deliver-attachment --id 123 --file ./diag.tar.gz
 ```
 
 Analyze and set HTTPS transport configuration:
