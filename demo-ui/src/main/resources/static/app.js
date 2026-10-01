@@ -586,12 +586,8 @@ function renderUploadState(status, s) {
         return;
     }
     const o = s.outcome || {};
-    const verified = o.verification ? ` (${o.verification.method || 'no method'}`
-        + `${o.verification.sizeMatched === true ? ', size matched' : ''}`
-        + `${o.verification.checksumMatched === true ? ', checksum matched' : ''})` : '';
-    const note = o.noteId ? `, note ${o.noteId}` : '';
-    const message = o.message ? ` — ${o.message}` : '';
-    status.textContent = `Platform outcome: ${o.status}${verified}${note}${message}`;
+    status.textContent = `Platform outcome: grant ${o.grantId} ${String(o.status || '').toLowerCase()}`
+        + ` (${formatBytes(o.expectedSizeBytes || 0)}, ${s.mode})`;
 }
 
 document.getElementById('attach-v2-form').addEventListener('submit', async (event) => {
@@ -600,8 +596,6 @@ document.getElementById('attach-v2-form').addEventListener('submit', async (even
     const status = document.getElementById('attach-v2-status');
     const data = new FormData();
     data.append('file', form.file.files[0]);
-    if (form.description.value) data.append('description', form.description.value);
-    data.append('sha256', form.sha256.checked ? 'true' : 'false');
     status.textContent = 'Uploading to the demo...';
     try {
         const {uploadId} = await fetchJson(

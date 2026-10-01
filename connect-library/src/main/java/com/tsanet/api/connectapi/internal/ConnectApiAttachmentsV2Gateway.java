@@ -1,164 +1,391 @@
 package com.tsanet.api.connectapi.internal;
 
-import com.tsanet.api.attachments.v2.AttachmentCompleteRequest;
-import com.tsanet.api.attachments.v2.AttachmentCompleteResult;
+import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.attachments.v2.AttachmentGrant;
-import com.tsanet.api.attachments.v2.AttachmentGrantRequest;
+import com.tsanet.api.attachments.v2.AttachmentGrant.UploadMode;
+import com.tsanet.api.attachments.v2.AttachmentGrantPage;
 import com.tsanet.api.attachments.v2.AttachmentV2Exception;
+import com.tsanet.api.attachments.v2.UploadLink;
 import com.tsanet.api.attachments.v2.UploadProgressListener;
 import com.tsanet.api.attachments.v2.UploadReceipts;
 import com.tsanet.api.facade.AttachmentsV2Facade;
+import com.tsanet.api.generated.api.AttachmentGrantsApi;
+import com.tsanet.api.generated.model.AttachmentGrantCreateRequestDTO;
+import com.tsanet.api.generated.model.AttachmentGrantDTO;
+import com.tsanet.api.generated.model.AttachmentGrantPageDTO;
+import com.tsanet.api.generated.model.AzureBlockDTO;
+import com.tsanet.api.generated.model.AzureBlockPlanDTO;
+import com.tsanet.api.generated.model.AzureBlockSignRequestDTO;
+import com.tsanet.api.generated.model.AzureBlocksDTO;
+import com.tsanet.api.generated.model.S3MultipartCompletionRequestDTO;
+import com.tsanet.api.generated.model.S3MultipartPartReceiptDTO;
+import com.tsanet.api.generated.model.S3MultipartPlanDTO;
+import com.tsanet.api.generated.model.S3PartDTO;
+import com.tsanet.api.generated.model.S3PartSignRequestDTO;
+import com.tsanet.api.generated.model.S3PartsDTO;
+import com.tsanet.api.generated.model.SingleUploadUrlDTO;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
-import java.util.HexFormat;
-import java.util.UUID;
+import java.util.List;
+import java.util.function.Supplier;
+import org.springframework.web.client.RestClientException;
 
 /**
- * {@link AttachmentsV2Facade} over the {@link AttachmentsV2Api} seam and the
- * {@link AttachmentUploadExecutor}. Owns the flow rules of the contract
- * (tsanetgit/Connect-API-Code#147): abandon on any upload failure, one re-grant on a
- * complete-time {@code grant-expired}, complete retried on transient failure because it is
- * idempotent on the grant id, and the platform's recorded outcome returned unchanged.
+ * {@link AttachmentsV2Facade} over the generated {@link AttachmentGrantsApi} and the
+ * {@link UploadCoordinator}. Generated DTOs stay inside this class: every one is mapped to an
+ * SDK record on arrival, field by field through its getters, so renaming a field in the spec
+ * breaks this build instead of a caller at runtime. A generated link DTO's {@code toString}
+ * prints its URL, so none is ever logged or put in a message.
+ *
+ * <p>Errors from the Connect API become {@link AttachmentV2Exception}s whose code follows the
+ * HTTP status, as the spec documents it for these endpoints.
  */
 public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
 
-    static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
     private static final int COMPLETE_ATTEMPTS = 3;
 
-    private final AttachmentsV2Api api;
+    private final AttachmentGrantsApi api;
     private final ConnectApiSessionStore sessionStore;
-    private final AttachmentUploadExecutor executor;
+    private final UploadCoordinator coordinator;
     private final Duration completeBackoff;
 
-    public ConnectApiAttachmentsV2Gateway(AttachmentsV2Api api, ConnectApiSessionStore sessionStore) {
-        this(api, sessionStore, new AttachmentUploadExecutor(), Duration.ofSeconds(1));
+    public ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore) {
+        this(api, sessionStore, new UploadCoordinator(), Duration.ofSeconds(1));
     }
 
-    ConnectApiAttachmentsV2Gateway(AttachmentsV2Api api, ConnectApiSessionStore sessionStore,
-                                   AttachmentUploadExecutor executor, Duration completeBackoff) {
+    ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,
+                                   UploadCoordinator coordinator, Duration completeBackoff) {
         this.api = api;
         this.sessionStore = sessionStore;
-        this.executor = executor;
+        this.coordinator = coordinator;
         this.completeBackoff = completeBackoff;
     }
 
     @Override
-    public AttachmentGrant grant(String caseToken, AttachmentGrantRequest request) {
-        requireLogin();
-        requireToken(caseToken);
-        return api.createGrant(caseToken, request, UUID.randomUUID().toString());
+    public AttachmentGrant createGrant(String caseToken, String fileName, long expectedSizeBytes) {
+        requireCase(caseToken);
+        if (fileName == null || fileName.isBlank()) {
+            throw new IllegalArgumentException("fileName must not be blank");
+        }
+        if (expectedSizeBytes < 1) {
+            throw new IllegalArgumentException("expectedSizeBytes must be at least 1, got " + expectedSizeBytes);
+        }
+        AttachmentGrantCreateRequestDTO request = new AttachmentGrantCreateRequestDTO()
+            .fileName(fileName)
+            .expectedSizeBytes(expectedSizeBytes);
+        return toGrant(call("create grant", () -> api.createAttachmentGrant(caseToken, request)));
     }
 
     @Override
-    public UploadReceipts upload(AttachmentGrant grant, Path file, UploadProgressListener listener) {
+    public AttachmentGrant getGrant(String caseToken, long grantId) {
+        requireCase(caseToken);
+        return toGrant(call("get grant", () -> api.getAttachmentGrant(caseToken, grantId)));
+    }
+
+    @Override
+    public AttachmentGrantPage listGrants(String caseToken, int page, int size) {
+        requireCase(caseToken);
+        AttachmentGrantPageDTO dto = call("list grants", () -> api.listAttachmentGrants(caseToken, page, size));
+        if (dto == null) {
+            throw emptyAnswer("list grants");
+        }
+        List<AttachmentGrant> content = dto.getContent() == null ? List.of()
+            : dto.getContent().stream().map(ConnectApiAttachmentsV2Gateway::toGrant).toList();
+        return new AttachmentGrantPage(content, orZero(dto.getTotalElements()), orZero(dto.getTotalPages()),
+            orZero(dto.getSize()), orZero(dto.getNumber()));
+    }
+
+    @Override
+    public UploadLink singleUploadLink(String caseToken, long grantId) {
+        requireCase(caseToken);
+        SingleUploadUrlDTO dto = call("sign single upload link", () -> api.signSingleUploadUrl(caseToken, grantId));
+        if (dto == null) {
+            throw emptyAnswer("sign single upload link");
+        }
+        return new UploadLink(1, required(dto.getUrl(), "url"), dto.getHeaders(), null, dto.getExpiresAt());
+    }
+
+    @Override
+    public List<UploadLink> s3PartLinks(String caseToken, long grantId, List<Integer> partNumbers) {
+        requireCase(caseToken);
+        requireNumbers(partNumbers);
+        S3PartSignRequestDTO request = new S3PartSignRequestDTO().partNumbers(List.copyOf(partNumbers));
+        S3PartsDTO dto = call("sign S3 part links", () -> api.signS3Parts(caseToken, grantId, request));
+        if (dto == null || dto.getParts() == null) {
+            throw emptyAnswer("sign S3 part links");
+        }
+        return dto.getParts().stream().map(ConnectApiAttachmentsV2Gateway::toLink).toList();
+    }
+
+    @Override
+    public List<UploadLink> azureBlockLinks(String caseToken, long grantId, List<Integer> blockNumbers) {
+        requireCase(caseToken);
+        requireNumbers(blockNumbers);
+        AzureBlockSignRequestDTO request = new AzureBlockSignRequestDTO().blockNumbers(List.copyOf(blockNumbers));
+        AzureBlocksDTO dto = call("sign Azure block links", () -> api.signAzureBlocks(caseToken, grantId, request));
+        if (dto == null || dto.getBlocks() == null) {
+            throw emptyAnswer("sign Azure block links");
+        }
+        return dto.getBlocks().stream().map(ConnectApiAttachmentsV2Gateway::toLink).toList();
+    }
+
+    @Override
+    public AttachmentGrant completeSingle(String caseToken, long grantId) {
+        requireCase(caseToken);
+        return toGrant(call("complete single upload", () -> api.completeSingleUpload(caseToken, grantId)));
+    }
+
+    @Override
+    public AttachmentGrant completeS3Multipart(String caseToken, long grantId, List<UploadReceipts.PartReceipt> receipts) {
+        requireCase(caseToken);
+        if (receipts == null || receipts.isEmpty()) {
+            throw new IllegalArgumentException("receipts must cover every part of the plan");
+        }
+        S3MultipartCompletionRequestDTO request = new S3MultipartCompletionRequestDTO().parts(receipts.stream()
+            .map(r -> new S3MultipartPartReceiptDTO().partNumber(r.partNumber()).etag(r.etag()))
+            .toList());
+        return toGrant(call("complete S3 multipart upload", () -> api.completeS3Multipart(caseToken, grantId, request)));
+    }
+
+    @Override
+    public AttachmentGrant completeAzureBlock(String caseToken, long grantId) {
+        requireCase(caseToken);
+        return toGrant(call("complete Azure block upload", () -> api.completeAzureBlockUpload(caseToken, grantId)));
+    }
+
+    @Override
+    public AttachmentGrant complete(String caseToken, AttachmentGrant grant, UploadReceipts receipts) {
+        requireSupportedMode(grant);
+        return switch (grant.mode()) {
+            case SINGLE -> completeSingle(caseToken, grant.grantId());
+            case S3_MULTIPART -> completeS3Multipart(caseToken, grant.grantId(), receipts == null ? null : receipts.parts());
+            case AZURE_BLOCK -> completeAzureBlock(caseToken, grant.grantId());
+            case GCS_RESUMABLE -> throw unsupported(grant);
+        };
+    }
+
+    @Override
+    public AttachmentGrant abandon(String caseToken, long grantId) {
+        requireCase(caseToken);
+        return toGrant(call("abandon grant", () -> api.abandonAttachmentGrant(caseToken, grantId)));
+    }
+
+    @Override
+    public UploadReceipts upload(String caseToken, AttachmentGrant grant, Path file, UploadProgressListener listener) {
+        requireCase(caseToken);
         if (grant == null) {
             throw new IllegalArgumentException("grant must not be null");
         }
+        requireSupportedMode(grant);
         requireRegularFile(file);
-        return executor.execute(grant, file, listener);
+        return coordinator.upload(grant, file, linkSource(caseToken, grant), listener);
     }
 
     @Override
-    public AttachmentCompleteResult complete(String caseToken, UUID grantId, AttachmentCompleteRequest request) {
-        requireLogin();
-        requireToken(caseToken);
-        return completeWithRetry(caseToken, grantId, request);
-    }
-
-    @Override
-    public void abandon(String caseToken, UUID grantId) {
-        requireLogin();
-        requireToken(caseToken);
-        api.abandon(caseToken, grantId);
-    }
-
-    @Override
-    public AttachmentCompleteResult send(String caseToken, Path file, String contentType, String description,
-                                         boolean withSha256, UploadProgressListener listener) {
-        requireLogin();
-        requireToken(caseToken);
+    public AttachmentGrant send(String caseToken, Path file, UploadProgressListener listener) {
+        requireCase(caseToken);
         requireRegularFile(file);
-        long size = sizeOf(file);
-        String sha256 = withSha256 ? sha256Of(file) : null;
-        String type = contentType == null || contentType.isBlank() ? DEFAULT_CONTENT_TYPE : contentType.strip();
-        String text = description == null || description.isBlank() ? null : description.strip();
-        AttachmentGrantRequest request =
-            new AttachmentGrantRequest(file.getFileName().toString(), type, size, sha256, text);
-
-        AttachmentGrant grant = api.createGrant(caseToken, request, UUID.randomUUID().toString());
-        UploadReceipts receipts = uploadOrAbandon(caseToken, grant, file, listener);
+        AttachmentGrant grant = createGrant(caseToken, file.getFileName().toString(), sizeOf(file));
+        UploadReceipts receipts;
         try {
-            return completeWithRetry(caseToken, grant.grantId(), completeRequest(receipts, sha256));
-        } catch (AttachmentV2Exception e) {
-            if (!e.isProblem(AttachmentV2Exception.GRANT_EXPIRED)) {
-                throw e;
-            }
-        }
-        // The grant expired between upload and complete: one fresh grant, one more upload.
-        AttachmentGrant fresh = api.createGrant(caseToken, request, UUID.randomUUID().toString());
-        UploadReceipts again = uploadOrAbandon(caseToken, fresh, file, listener);
-        return completeWithRetry(caseToken, fresh.grantId(), completeRequest(again, sha256));
-    }
-
-    private UploadReceipts uploadOrAbandon(String caseToken, AttachmentGrant grant, Path file,
-                                           UploadProgressListener listener) {
-        try {
-            return executor.execute(grant, file, listener);
+            receipts = coordinator.upload(grant, file, linkSource(caseToken, grant), listener);
         } catch (RuntimeException uploadFailure) {
-            // Best effort, and the upload failure stays primary: nothing may become visible.
-            try {
-                api.abandon(caseToken, grant.grantId());
-            } catch (RuntimeException abandonFailure) {
-                uploadFailure.addSuppressed(abandonFailure);
-            }
+            abandonUnlessTerminal(caseToken, grant.grantId(), uploadFailure);
             throw uploadFailure;
         }
+        try {
+            return completeWithRetry(caseToken, grant, receipts);
+        } catch (RuntimeException completeFailure) {
+            abandonUnlessTerminal(caseToken, grant.grantId(), completeFailure);
+            throw completeFailure;
+        }
     }
 
-    private AttachmentCompleteResult completeWithRetry(String caseToken, UUID grantId, AttachmentCompleteRequest request) {
-        AttachmentV2Exception last = null;
-        for (int attempt = 1; attempt <= COMPLETE_ATTEMPTS; attempt++) {
+    /** The link calls for the grant's mode, bound to this case and grant. */
+    private UploadCoordinator.LinkSource linkSource(String caseToken, AttachmentGrant grant) {
+        long grantId = grant.grantId();
+        return switch (grant.mode()) {
+            case SINGLE -> numbers -> List.of(singleUploadLink(caseToken, grantId));
+            case S3_MULTIPART -> numbers -> s3PartLinks(caseToken, grantId, numbers);
+            case AZURE_BLOCK -> numbers -> azureBlockLinks(caseToken, grantId, numbers);
+            case GCS_RESUMABLE -> numbers -> {
+                throw unsupported(grant);
+            };
+        };
+    }
+
+    private static void requireSupportedMode(AttachmentGrant grant) {
+        if (grant.mode() == null || grant.mode() == UploadMode.GCS_RESUMABLE) {
+            throw unsupported(grant);
+        }
+    }
+
+    private static AttachmentV2Exception unsupported(AttachmentGrant grant) {
+        return new AttachmentV2Exception("upload mode " + (grant.mode() == null ? "(none)" : grant.mode().value())
+            + " is not supported by this client", 0, AttachmentV2Exception.UNSUPPORTED_UPLOAD_MODE);
+    }
+
+    /** Complete is safe to repeat: completing a completed grant returns it unchanged. */
+    private AttachmentGrant completeWithRetry(String caseToken, AttachmentGrant grant, UploadReceipts receipts) {
+        for (int attempt = 1; ; attempt++) {
             try {
-                return api.complete(caseToken, grantId, request);
+                return complete(caseToken, grant, receipts);
             } catch (AttachmentV2Exception e) {
-                boolean transientFailure = e.status() == 0 || e.status() / 100 == 5;
-                if (!transientFailure || attempt == COMPLETE_ATTEMPTS) {
+                boolean retryable = e.is(AttachmentV2Exception.CONNECTIVITY) || e.status() / 100 == 5;
+                if (!retryable || attempt >= COMPLETE_ATTEMPTS) {
                     throw e;
                 }
-                last = e;
                 pause(completeBackoff.multipliedBy(attempt));
             }
         }
-        throw last;
     }
 
-    private static void pause(Duration duration) {
-        if (duration.isZero() || duration.isNegative()) {
+    /**
+     * Best effort; the original failure stays primary and keeps the abandon failure as
+     * suppressed. A 409 means the grant is already terminal: there is nothing left to abandon.
+     */
+    private void abandonUnlessTerminal(String caseToken, long grantId, RuntimeException primary) {
+        if (primary instanceof AttachmentV2Exception e && e.is(AttachmentV2Exception.GRANT_TERMINAL)) {
             return;
         }
         try {
-            Thread.sleep(duration.toMillis());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AttachmentV2Exception("interrupted while retrying complete", 0,
+            abandon(caseToken, grantId);
+        } catch (RuntimeException abandonFailure) {
+            primary.addSuppressed(abandonFailure);
+        }
+    }
+
+    private <T> T call(String operation, Supplier<T> request) {
+        try {
+            return request.get();
+        } catch (ConnectApiException e) {
+            throw translate(operation, e);
+        } catch (RestClientException e) {
+            // Spring's message can carry the expanded request URL, and these paths carry the
+            // case token: name the failure by its type only.
+            throw new AttachmentV2Exception(operation + " failed: " + e.getClass().getSimpleName(), 0,
                 AttachmentV2Exception.CONNECTIVITY, e);
         }
     }
 
-    private static AttachmentCompleteRequest completeRequest(UploadReceipts receipts, String sha256) {
-        return new AttachmentCompleteRequest(receipts.bytesSent(), sha256, receipts.parts());
+    /** The runtime's client already classified the answer; keep its words and map its status to a code. */
+    static AttachmentV2Exception translate(String operation, ConnectApiException e) {
+        if (e.kind() == ConnectApiException.Kind.CONNECTIVITY) {
+            return new AttachmentV2Exception(operation + " failed: " + e.getMessage(), 0,
+                AttachmentV2Exception.CONNECTIVITY, e);
+        }
+        String code = switch (e.status()) {
+            case 400 -> AttachmentV2Exception.INVALID_REQUEST;
+            case 403 -> AttachmentV2Exception.FORBIDDEN;
+            case 404 -> AttachmentV2Exception.NOT_FOUND;
+            case 409 -> AttachmentV2Exception.GRANT_TERMINAL;
+            case 422 -> AttachmentV2Exception.UPLOAD_MISMATCH;
+            case 502 -> AttachmentV2Exception.PROVIDER_ERROR;
+            default -> AttachmentV2Exception.API_ERROR;
+        };
+        return new AttachmentV2Exception(operation + " failed: " + e.getMessage(), e.status(), code, e);
     }
 
-    private void requireLogin() {
+    static AttachmentGrant toGrant(AttachmentGrantDTO dto) {
+        if (dto == null) {
+            throw emptyAnswer("grant call");
+        }
+        UploadMode mode = toMode(dto.getMode());
+        AttachmentGrant.UploadPlan plan = switch (mode) {
+            case S3_MULTIPART -> toPlan(dto.getS3Multipart());
+            case AZURE_BLOCK -> toPlan(dto.getAzureBlock());
+            case SINGLE, GCS_RESUMABLE -> null;
+        };
+        return new AttachmentGrant(
+            required(dto.getGrantId(), "grantId"),
+            toStatus(dto.getStatus()),
+            dto.getFileName(),
+            required(dto.getExpectedSizeBytes(), "expectedSizeBytes"),
+            dto.getCreatedAt(),
+            dto.getExpiresAt(),
+            mode,
+            plan
+        );
+    }
+
+    // Exhaustive switches over the generated enums: a value added to the spec fails this build.
+    private static AttachmentGrant.Status toStatus(com.tsanet.api.generated.model.AttachmentGrantStatus status) {
+        if (status == null) {
+            throw emptyAnswer("grant status");
+        }
+        return switch (status) {
+            case OPEN -> AttachmentGrant.Status.OPEN;
+            case COMPLETED -> AttachmentGrant.Status.COMPLETED;
+            case ABANDONED -> AttachmentGrant.Status.ABANDONED;
+            case EXPIRED -> AttachmentGrant.Status.EXPIRED;
+        };
+    }
+
+    private static UploadMode toMode(com.tsanet.api.generated.model.AttachmentUploadMode mode) {
+        if (mode == null) {
+            throw emptyAnswer("grant mode");
+        }
+        return switch (mode) {
+            case SINGLE -> UploadMode.SINGLE;
+            case S3_MULTIPART -> UploadMode.S3_MULTIPART;
+            case AZURE_BLOCK -> UploadMode.AZURE_BLOCK;
+            case GCS_RESUMABLE -> UploadMode.GCS_RESUMABLE;
+        };
+    }
+
+    // A plan without its counts maps to no plan, which the coordinator refuses as unusable.
+    private static AttachmentGrant.UploadPlan toPlan(S3MultipartPlanDTO plan) {
+        return plan == null || plan.getTotalParts() == null || plan.getPartSizeBytes() == null ? null
+            : new AttachmentGrant.UploadPlan(plan.getTotalParts(), plan.getPartSizeBytes());
+    }
+
+    private static AttachmentGrant.UploadPlan toPlan(AzureBlockPlanDTO plan) {
+        return plan == null || plan.getTotalBlocks() == null || plan.getBlockSizeBytes() == null ? null
+            : new AttachmentGrant.UploadPlan(plan.getTotalBlocks(), plan.getBlockSizeBytes());
+    }
+
+    private static UploadLink toLink(S3PartDTO part) {
+        return new UploadLink(required(part.getPartNumber(), "partNumber"), required(part.getUrl(), "url"),
+            part.getHeaders(), part.getSizeBytes(), part.getExpiresAt());
+    }
+
+    private static UploadLink toLink(AzureBlockDTO block) {
+        return new UploadLink(required(block.getBlockNumber(), "blockNumber"), required(block.getUrl(), "url"),
+            block.getHeaders(), block.getSizeBytes(), block.getExpiresAt());
+    }
+
+    /** A field the spec requires; its absence is named, never its value. */
+    private static <T> T required(T value, String field) {
+        if (value == null) {
+            throw new AttachmentV2Exception("the answer has no " + field, 0, AttachmentV2Exception.CLIENT_PRECONDITION);
+        }
+        return value;
+    }
+
+    private static long orZero(Long value) {
+        return value == null ? 0 : value;
+    }
+
+    private static int orZero(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private static AttachmentV2Exception emptyAnswer(String operation) {
+        return new AttachmentV2Exception(operation + " returned no usable answer", 0,
+            AttachmentV2Exception.CLIENT_PRECONDITION);
+    }
+
+    private static void requireNumbers(List<Integer> numbers) {
+        if (numbers == null || numbers.isEmpty() || numbers.size() > UploadCoordinator.MAX_LINKS_PER_CALL) {
+            throw new IllegalArgumentException("ask for between 1 and " + UploadCoordinator.MAX_LINKS_PER_CALL
+                + " numbers per call");
+        }
+    }
+
+    private void requireCase(String caseToken) {
         sessionStore.getBearerToken().orElseThrow(() -> new IllegalStateException("Not logged in"));
-    }
-
-    private static void requireToken(String caseToken) {
         if (caseToken == null || caseToken.isBlank()) {
             throw new IllegalArgumentException("caseToken must not be blank");
         }
@@ -179,21 +406,16 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         }
     }
 
-    /** One streaming pass of its own, never inside a retried upload write. */
-    static String sha256Of(Path file) {
-        try (InputStream in = Files.newInputStream(file)) {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] buffer = new byte[AttachmentUploadExecutor.READ_BUFFER];
-            int read;
-            while ((read = in.read(buffer)) > 0) {
-                digest.update(buffer, 0, read);
-            }
-            return HexFormat.of().formatHex(digest.digest());
-        } catch (IOException e) {
-            throw new AttachmentV2Exception("cannot digest the file to send: " + e.getClass().getSimpleName(), 0,
-                AttachmentV2Exception.CLIENT_PRECONDITION, e);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable", e);
+    private static void pause(Duration duration) {
+        if (duration.isZero() || duration.isNegative()) {
+            return;
+        }
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AttachmentV2Exception("interrupted while retrying complete", 0,
+                AttachmentV2Exception.CONNECTIVITY, e);
         }
     }
 }

@@ -1,6 +1,6 @@
 package com.tsanet.demo.web;
 
-import com.tsanet.api.attachments.v2.AttachmentCompleteResult;
+import com.tsanet.api.attachments.v2.AttachmentGrant;
 import com.tsanet.api.attachments.v2.UploadProgress;
 import com.tsanet.api.connectapi.dto.AttachmentConfigDto;
 import com.tsanet.api.connectapi.dto.AttachmentForwardResultDto;
@@ -40,8 +40,8 @@ public class AttachmentsController {
 
     /**
      * What the page polls: phase, the grant's mode, parts done of total, bytes sent of total,
-     * and once finished the platform's recorded outcome or the failure message. The outcome
-     * is the facade's return value verbatim; the demo never synthesizes a status.
+     * and once finished the platform's recorded grant or the failure message. The grant is
+     * the facade's return value verbatim; the demo never synthesizes a status.
      */
     public record UploadState(
         String uploadId,
@@ -52,15 +52,15 @@ public class AttachmentsController {
         int partsTotal,
         long bytesSent,
         long bytesTotal,
-        AttachmentCompleteResult outcome,
+        AttachmentGrant outcome,
         String error
     ) {
         UploadState progressed(UploadProgress p) {
-            return new UploadState(uploadId, fileName, "uploading", p.mode(), p.partsDone(), p.partsTotal(),
+            return new UploadState(uploadId, fileName, "uploading", p.mode().value(), p.partsDone(), p.partsTotal(),
                 p.bytesSent(), p.bytesTotal(), null, null);
         }
 
-        UploadState finished(AttachmentCompleteResult result) {
+        UploadState finished(AttachmentGrant result) {
             return new UploadState(uploadId, fileName, "done", mode, partsDone, partsTotal, bytesSent, bytesTotal, result, null);
         }
 
@@ -71,16 +71,14 @@ public class AttachmentsController {
 
     /**
      * Direct delivery (V2): the file goes from this demo straight into the partner's store
-     * under the platform's instructions, then the platform verifies and posts the note. Runs
-     * on a background thread because a large file takes a while; the page polls
-     * {@link #uploadState}.
+     * through links the platform signs, and the platform checks the upload when it completes
+     * the grant. Runs on a background thread because a large file takes a while; the page
+     * polls {@link #uploadState}.
      */
     @PostMapping("/api/requests/{token}/attachments/v2")
     public Map<String, String> deliver(
         @PathVariable String token,
-        @RequestParam("file") MultipartFile file,
-        @RequestParam(value = "description", required = false) String description,
-        @RequestParam(value = "sha256", defaultValue = "false") boolean sha256
+        @RequestParam("file") MultipartFile file
     ) {
         // Resolve the facade here, on the request thread: an account-scoped session picks its
         // delegate per call, and a delivery must not follow an account switch made mid-flight.
@@ -99,8 +97,8 @@ public class AttachmentsController {
         uploads.put(uploadId, new UploadState(uploadId, original, "starting", null, 0, 0, 0, file.getSize(), null, null));
         deliveries.submit(() -> {
             try {
-                AttachmentCompleteResult outcome = attachments.send(token, temp, file.getContentType(),
-                    description, sha256, progress -> uploads.computeIfPresent(uploadId, (k, v) -> v.progressed(progress)));
+                AttachmentGrant outcome = attachments.send(token, temp,
+                    progress -> uploads.computeIfPresent(uploadId, (k, v) -> v.progressed(progress)));
                 uploads.computeIfPresent(uploadId, (k, v) -> v.finished(outcome));
             } catch (RuntimeException e) {
                 uploads.computeIfPresent(uploadId, (k, v) -> v.failed(e.getMessage()));
