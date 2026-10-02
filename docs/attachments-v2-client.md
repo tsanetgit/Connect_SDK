@@ -41,14 +41,20 @@ if (grant.completed()) {
 abandons the grant and throws `AttachmentV2Exception`, except on a `409`, where the grant is
 already completed, abandoned or expired. Complete is retried on a `5xx` (the spec documents
 `502`) or a lost response, because completing an already-completed grant returns it unchanged.
-If every complete loses its answer, `send` checks the grant before reporting a failure: a grant
+
+<!-- sync: AttachmentsV2Facade.send. SendDocSyncTest keeps this paragraph equal to the javadoc's. -->
+
+When complete fails and abandon doesn't settle the grant, the grant is read once, and a grant
 that reads completed is returned as delivered. An interrupted thread makes no more calls: it
 doesn't start an abandon or a read, and an open grant expires on the platform. The code is
 usually `client/interrupted`, but an interrupt during a complete call that isn't retried (the
 last attempt, or a failure that isn't retryable) surfaces that call's own code; the interrupt
 flag is set either way. So after the upload, `client/connectivity`, any failure with the
-interrupt flag set, or an unreadable answer (`attachment/api-error`) doesn't prove the file
-wasn't delivered: read the grant before sending it again.
+interrupt flag set, or an `attachment/api-error` for an answer this client couldn't read (a
+client built against an older spec than the server runs) doesn't prove the file wasn't
+delivered: read the grant before sending it again.
+
+<!-- /sync -->
 
 Every Connect API call is also on the facade on its own, for a client that drives the flow
 itself: `createGrant`, `getGrant`, `listGrants`, `singleUploadLink`, `s3PartLinks`,
