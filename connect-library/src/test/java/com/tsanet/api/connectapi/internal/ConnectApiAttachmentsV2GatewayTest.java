@@ -286,6 +286,98 @@ class ConnectApiAttachmentsV2GatewayTest {
     }
 
     @Test
+    void aCompleteThatLandedIsADeliveryEvenWhenTheAbandonAnswerIsLostToo() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")));
+        when(api.getAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.COMPLETED));
+
+        AttachmentGrant result = gateway.send(TOKEN, file, null);
+
+        assertThat(result.completed()).isTrue();
+        verify(api).getAttachmentGrant(TOKEN, GRANT_ID);
+    }
+
+    @Test
+    void anAbandonThatAnsweredSettlesItAndTheGrantIsNotReadBack() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenThrow(apiError(502));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.ABANDONED));
+
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.PROVIDER_ERROR);
+                assertThat(e.getSuppressed()).isEmpty();
+            });
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void whenAbandonAndTheReadBackBothFailThePrimaryCarriesBoth() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        ConnectApiException lost = ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenThrow(lost);
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenThrow(lost);
+        when(api.getAttachmentGrant(TOKEN, GRANT_ID)).thenThrow(lost);
+
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.CONNECTIVITY);
+                assertThat(e.getSuppressed()).hasSize(2);
+            });
+    }
+
+    @Test
+    void anInterruptDuringTheCompleteBackoffStopsWithNoMoreCalls() {
+        ConnectApiAttachmentsV2Gateway backingOff = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofMillis(50));
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
+        });
+        try {
+            assertThatThrownBy(() -> backingOff.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void anInterruptedUploadIsNotAbandonedOverTheNetwork() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        AttachmentV2Exception interrupted = new AttachmentV2Exception("interrupted while uploading part 1", 0,
+            AttachmentV2Exception.INTERRUPTED);
+        when(coordinator.upload(any(), eq(file), any(), any())).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw interrupted;
+        });
+        try {
+            assertThatThrownBy(() -> gateway.send(TOKEN, file, null)).isSameAs(interrupted);
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
     void aProviderErrorOnCompleteIsRetriedThenAbandonedWhenItPersists() {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));

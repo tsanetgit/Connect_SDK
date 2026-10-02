@@ -46,6 +46,8 @@ public class AttachmentV2Exception extends RuntimeException {
     public static final String CLIENT_PRECONDITION = "client/precondition";
     /** The Connect API could not be reached at all. */
     public static final String CONNECTIVITY = "client/connectivity";
+    /** The calling thread was interrupted; the interrupt is restored and nothing more is sent. */
+    public static final String INTERRUPTED = "client/interrupted";
 
     private final int status;
     private final String code;

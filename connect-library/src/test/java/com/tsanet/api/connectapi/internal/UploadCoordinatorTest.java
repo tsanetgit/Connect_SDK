@@ -107,11 +107,15 @@ class UploadCoordinatorTest {
         }
 
         @Override
-        PutResult put(UploadLink link, Path file, long offset, long length, LongConsumer onBytes) throws IOException {
+        PutResult put(UploadLink link, Path file, long offset, long length, LongConsumer onBytes)
+            throws IOException, InterruptedException {
             puts.add(new Put(link.number(), link.url(), offset, length));
             onPut.run();
             Object next = script.getOrDefault(link.number(), new ArrayDeque<>()).poll();
             if (next instanceof IOException e) {
+                throw e;
+            }
+            if (next instanceof InterruptedException e) {
                 throw e;
             }
             int status = next == null ? 201 : (Integer) next;
@@ -406,6 +410,35 @@ class UploadCoordinatorTest {
     void retryAfterIsHonoredAndCapped() {
         assertThat(coordinator.backoff(1, Optional.of("7"))).isEqualTo(Duration.ofSeconds(7));
         assertThat(coordinator.backoff(1, Optional.of("3600"))).isEqualTo(Duration.ofSeconds(30));
+    }
+
+    @Test
+    void anInterruptDuringAPutIsReportedAsAnInterruptAndKeepsTheFlag() throws IOException {
+        transport.answer(1, new InterruptedException());
+        try {
+            assertThatThrownBy(() -> coordinator.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(transport.puts).hasSize(1);
+    }
+
+    @Test
+    void anInterruptDuringTheBackoffIsReportedAsAnInterrupt() throws IOException {
+        UploadCoordinator backingOff = new UploadCoordinator(transport, clock, Duration.ofSeconds(60), Duration.ofMillis(50));
+        transport.answer(1, 500);
+        transport.onPut = () -> Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> backingOff.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(transport.puts).hasSize(1);
     }
 
     @Test
