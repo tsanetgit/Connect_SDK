@@ -64,7 +64,7 @@ public class CollaborationRequestNoteAddExecutor {
                     "Note created: id=" + created.id()
                         + " summary=" + created.summary()
                         + " priority=" + created.priority()
-                        + " type=" + created.type()
+                        + " type=" + (created.type() != null ? created.type() : "")
                 )
             );
 

@@ -5,7 +5,8 @@ package com.tsanet.api.connectapi.dto;
  *
  * @param type      the note's type exactly as the API sent it ({@code USER_PUBLIC},
  *                  {@code USER_PARTNER} or {@code SYSTEM}); null when the API sent none
- * @param companyId the authoring company's id; null for a platform-generated note
+ * @param companyId the authoring company's id; null when the API sent none, which the spec
+ *                  says is the case for a platform-generated note
  * @param direction {@code OUTBOUND} when the reading company wrote the note, {@code INBOUND}
  *                  otherwise; relative to the account that fetched it, and null when absent
  */

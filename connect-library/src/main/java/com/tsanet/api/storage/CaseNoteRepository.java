@@ -124,7 +124,7 @@ public class CaseNoteRepository {
         );
     }
 
-    /** The driver refuses getObject(column, Long.class) on a NULL, and a platform note has no company. */
+    /** The driver refuses getObject(column, Long.class) on a NULL, and company_id is NULL whenever the API sent none. */
     private static Long nullableLong(ResultSet rs, String column) throws SQLException {
         long value = rs.getLong(column);
         return rs.wasNull() ? null : value;
