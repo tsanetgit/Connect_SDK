@@ -102,7 +102,7 @@ class ConnectApiNotesGatewayTest {
             .priority(NotePriority.LOW)
             .token("note-token-8")
             .type(NoteType.USER_PUBLIC)
-            .companyId(1112L)
+            .companyId(101L)
             .direction(CollaborationRequestDirection.OUTBOUND);
         when(caseNotesApi.getNotes("tok-3", null, null, false)).thenReturn(List.of(apiNote));
 
@@ -110,12 +110,12 @@ class ConnectApiNotesGatewayTest {
 
         assertThat(notes).singleElement().satisfies(note -> {
             assertThat(note.type()).isEqualTo("USER_PUBLIC");
-            assertThat(note.companyId()).isEqualTo(1112L);
+            assertThat(note.companyId()).isEqualTo(101L);
             assertThat(note.direction()).isEqualTo("OUTBOUND");
         });
         assertThat(storageService.findByCaseToken("tok-3")).singleElement()
             .extracting(CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
-            .containsExactly("USER_PUBLIC", 1112L, "OUTBOUND");
+            .containsExactly("USER_PUBLIC", 101L, "OUTBOUND");
     }
 
     @Test

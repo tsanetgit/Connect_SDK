@@ -28,13 +28,13 @@ class CaseNoteRepositoryTest {
         CaseNoteRepository repository = new CaseNoteRepository(jdbcTemplate);
 
         repository.saveAll(List.of(
-            note(1L, "n1", "USER_PUBLIC", 1112L, "OUTBOUND"),
+            note(1L, "n1", "USER_PUBLIC", 101L, "OUTBOUND"),
             note(2L, "n2", null, null, null)));
 
         assertThat(repository.findByCaseToken("tok1"))
             .extracting(CaseNoteDto::id, CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
             .containsExactly(
-                org.assertj.core.groups.Tuple.tuple(1L, "USER_PUBLIC", 1112L, "OUTBOUND"),
+                org.assertj.core.groups.Tuple.tuple(1L, "USER_PUBLIC", 101L, "OUTBOUND"),
                 org.assertj.core.groups.Tuple.tuple(2L, null, null, null));
     }
 
@@ -77,12 +77,12 @@ class CaseNoteRepositoryTest {
         DatabaseInitializer.createSchema(jdbcTemplate);
         DatabaseInitializer.createSchema(jdbcTemplate);
         CaseNoteRepository upgraded = new CaseNoteRepository(jdbcTemplate);
-        upgraded.saveAll(List.of(note(1L, "n1", "USER_PARTNER", 1113L, "INBOUND")));
+        upgraded.saveAll(List.of(note(1L, "n1", "USER_PARTNER", 202L, "INBOUND")));
 
         assertThat(upgraded.findAll())
             .extracting(CaseNoteDto::id, CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
             .containsExactly(
-                org.assertj.core.groups.Tuple.tuple(1L, "USER_PARTNER", 1113L, "INBOUND"),
+                org.assertj.core.groups.Tuple.tuple(1L, "USER_PARTNER", 202L, "INBOUND"),
                 org.assertj.core.groups.Tuple.tuple(2L, null, null, null));
     }
 }
