@@ -157,8 +157,9 @@ A `403` on create is either a caller that isn't the case's sender (problem type
 allowlist (`https://api.tsanet.org/errors/attachment-receiver-not-allowed`). The platform
 sends these types; the spec doesn't document them yet (`tsanetgit/Connect-API-Code#183`). To
 check a receiver yourself before creating a grant, read the case
-(`GET /v1/collaboration-requests/{token}`) and compare its `receiveCompanyId` with your own
-list, refusing when it's missing.
+(`GET /v1/collaboration-requests/{token}`). If its `direction` is `INBOUND`, you received the
+case and only its sender can create a grant, so there is nothing to check. Otherwise compare
+its `receiveCompanyId` with your own list, refusing when it's missing.
 
 A `502` means the receiver's storage provider failed and no grant was created: retry later.
 
