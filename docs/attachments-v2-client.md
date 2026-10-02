@@ -84,7 +84,9 @@ How the SDK uploads:
 `TsaNetApiConfiguration`, and `allowed-receiver-company-ids` in the console's account
 configuration. With a list set, `createGrant` (and so `send`) reads the case's receiving
 company first and refuses one that isn't on it with `attachment/receiver-not-allowed`, before
-any grant is requested. A case that doesn't say who its receiving company is fails closed with
+any grant is requested. A case the account receives (it reads `INBOUND`) isn't checked: only
+the sender can create a grant, so the platform refuses it with `attachment/forbidden`, as it
+would with no list. A case that doesn't say who its receiving company is fails closed with
 `client/precondition`; a case read that fails keeps that failure's own code (for example
 `attachment/not-found`). No list (the default) is unrestricted, and the case isn't read. This
 is a second check: the platform keeps its own sender allowlist and refuses grant creation

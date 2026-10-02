@@ -18,7 +18,7 @@ import com.tsanet.api.generated.model.AzureBlockDTO;
 import com.tsanet.api.generated.model.AzureBlockPlanDTO;
 import com.tsanet.api.generated.model.AzureBlockSignRequestDTO;
 import com.tsanet.api.generated.model.AzureBlocksDTO;
-import com.tsanet.api.generated.model.CollaborationRequestStatusDTO;
+import com.tsanet.api.generated.model.CollaborationRequestDirection;
 import com.tsanet.api.generated.model.S3MultipartCompletionRequestDTO;
 import com.tsanet.api.generated.model.S3MultipartPartReceiptDTO;
 import com.tsanet.api.generated.model.S3MultipartPlanDTO;
@@ -66,15 +66,36 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     private final UploadCoordinator coordinator;
     private final Duration completeBackoff;
     private final Set<Long> allowedReceiverCompanyIds;
-    private final Function<String, Optional<Long>> receivingCompanyOf;
+    private final Function<String, Optional<CaseSide>> receivingCompanyOf;
 
     /**
-     * The receiving-company lookup the runtime gives the allowlist check: the case read straight
-     * from the API, so nothing is cached, and an answer without a receiving company is unknown.
+     * What the allowlist check needs from a case, as this account reads it.
+     *
+     * @param inbound          the case reads {@code INBOUND}: this account is its receiver, not its
+     *                         sender. False when it reads {@code OUTBOUND} or the answer has no direction
+     * @param receiveCompanyId the case's receiving company; null when the answer doesn't say
      */
-    public static Function<String, Optional<Long>> receivingCompanyFrom(CollaborationRequestsApi api) {
+    public record CaseSide(boolean inbound, Long receiveCompanyId) {
+    }
+
+    /**
+     * The case lookup the runtime gives the allowlist check: the case read straight from the API,
+     * so nothing is cached. The server sets a case's direction relative to the reader, so
+     * {@code INBOUND} means this account didn't send it.
+     */
+    public static Function<String, Optional<CaseSide>> receivingCompanyFrom(CollaborationRequestsApi api) {
         return caseToken -> Optional.ofNullable(api.getCollaborationRequestByToken(caseToken, false))
-            .map(CollaborationRequestStatusDTO::getReceiveCompanyId);
+            .map(dto -> new CaseSide(isInbound(dto.getDirection()), dto.getReceiveCompanyId()));
+    }
+
+    private static boolean isInbound(CollaborationRequestDirection direction) {
+        if (direction == null) {
+            return false;
+        }
+        return switch (direction) {
+            case INBOUND -> true;
+            case OUTBOUND -> false;
+        };
     }
 
     /** No receiver allowlist: every receiver the server accepts is allowed. */
@@ -84,12 +105,12 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
 
     /**
      * @param allowedReceiverCompanyIds receivers this account may deliver to; empty means unrestricted
-     * @param receivingCompanyOf        the case's receiving company, read only when the list isn't empty;
-     *                                  empty when the case doesn't say
+     * @param receivingCompanyOf        the case as this account reads it, read only when the list isn't
+     *                                  empty; empty when there is no case in the answer
      */
     public ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,
                                           Set<Long> allowedReceiverCompanyIds,
-                                          Function<String, Optional<Long>> receivingCompanyOf) {
+                                          Function<String, Optional<CaseSide>> receivingCompanyOf) {
         this(api, sessionStore, new UploadCoordinator(), Duration.ofSeconds(1), allowedReceiverCompanyIds,
             receivingCompanyOf);
     }
@@ -102,7 +123,7 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,
                                    UploadCoordinator coordinator, Duration completeBackoff,
                                    Set<Long> allowedReceiverCompanyIds,
-                                   Function<String, Optional<Long>> receivingCompanyOf) {
+                                   Function<String, Optional<CaseSide>> receivingCompanyOf) {
         this.api = api;
         this.sessionStore = sessionStore;
         this.coordinator = coordinator;
@@ -138,20 +159,26 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
      * Defense in depth for the sender's receiver allowlist (the server enforces its own): with a
      * non-empty list, the case's receiving company is read and checked before any grant request.
      * Only the case's sender can create a grant and its receiver is always the case's receiving
-     * company, so this one check covers {@link #createGrant} and {@link #send}. An empty list is
-     * unrestricted and reads nothing.
+     * company, so this one check covers {@link #createGrant} and {@link #send}. A case this
+     * account receives ({@code INBOUND}) isn't checked: it isn't a delivery from this account, and
+     * the server's sender check answers it as {@code attachment/forbidden}, as it does without a
+     * list. An empty list is unrestricted and reads nothing.
      */
     private void requireReceiverAllowed(String caseToken) {
         if (allowedReceiverCompanyIds.isEmpty()) {
             return;
         }
-        Optional<Long> receiver = call("read the case's receiving company", () -> receivingCompanyOf.apply(caseToken));
-        if (receiver.isEmpty()) {
+        Optional<CaseSide> side = call("read the case's receiving company", () -> receivingCompanyOf.apply(caseToken));
+        if (side.isPresent() && side.get().inbound()) {
+            return;
+        }
+        Long receiver = side.map(CaseSide::receiveCompanyId).orElse(null);
+        if (receiver == null) {
             throw new AttachmentV2Exception("the case's receiving company is unknown, so the receiver allowlist can't be"
                 + " checked", 0, AttachmentV2Exception.CLIENT_PRECONDITION);
         }
-        if (!allowedReceiverCompanyIds.contains(receiver.get())) {
-            throw new AttachmentV2Exception("receiver company " + receiver.get() + " is not on this account's receiver"
+        if (!allowedReceiverCompanyIds.contains(receiver)) {
+            throw new AttachmentV2Exception("receiver company " + receiver + " is not on this account's receiver"
                 + " allowlist", 0, AttachmentV2Exception.RECEIVER_NOT_ALLOWED);
         }
     }

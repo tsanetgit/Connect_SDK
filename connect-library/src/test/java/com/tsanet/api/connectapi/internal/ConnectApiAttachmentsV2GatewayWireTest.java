@@ -284,6 +284,27 @@ class ConnectApiAttachmentsV2GatewayWireTest {
     }
 
     @Test
+    void aCaseThisAccountReceivesGoesToTheServerAndGetsItsForbidden() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(101L);
+        server.expect(requestTo(CASE)).andExpect(method(HttpMethod.GET))
+            .andRespond(withStatus(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"id\":77,\"token\":\"" + TOKEN + "\",\"receiveCompanyId\":202,\"submitCompanyId\":303,"
+                    + "\"direction\":\"INBOUND\"}"));
+        server.expect(requestTo(GRANTS)).andExpect(method(HttpMethod.POST))
+            .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(forbidden("access-denied")));
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 12))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.code()).isEqualTo(AttachmentV2Exception.FORBIDDEN);
+                assertThat(ex.status()).isEqualTo(403);
+            });
+        server.verify();
+    }
+
+    @Test
     void aFailedCaseLookupKeepsItsCodeAndDoesNotQuoteTheToken() {
         ConnectApiAttachmentsV2Gateway guarded = allowlisted(101L);
         server.expect(requestTo(CASE)).andExpect(method(HttpMethod.GET))

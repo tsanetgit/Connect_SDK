@@ -21,6 +21,8 @@ import com.tsanet.api.generated.model.AttachmentGrantCreateRequestDTO;
 import com.tsanet.api.generated.model.AttachmentGrantDTO;
 import com.tsanet.api.generated.model.AttachmentGrantStatus;
 import com.tsanet.api.generated.model.AttachmentUploadMode;
+import com.tsanet.api.generated.model.CollaborationRequestDirection;
+import com.tsanet.api.generated.model.CollaborationRequestStatusDTO;
 import com.tsanet.api.generated.model.S3MultipartCompletionRequestDTO;
 import com.tsanet.api.generated.model.S3MultipartPlanDTO;
 import java.nio.charset.StandardCharsets;
@@ -505,11 +507,18 @@ class ConnectApiAttachmentsV2GatewayTest {
 
     private final List<String> caseLookups = new java.util.ArrayList<>();
 
+    /** A case this account sent, whose receiving company is {@code receivingCompany} (null: not said). */
     private ConnectApiAttachmentsV2Gateway allowlisted(java.util.Set<Long> allowed, Long receivingCompany) {
+        return allowlistedReading(allowed, java.util.Optional.of(
+            new ConnectApiAttachmentsV2Gateway.CaseSide(false, receivingCompany)));
+    }
+
+    private ConnectApiAttachmentsV2Gateway allowlistedReading(java.util.Set<Long> allowed,
+                                                              java.util.Optional<ConnectApiAttachmentsV2Gateway.CaseSide> side) {
         return new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), coordinator,
             Duration.ZERO, allowed, caseToken -> {
                 caseLookups.add(caseToken);
-                return java.util.Optional.ofNullable(receivingCompany);
+                return side;
             });
     }
 
@@ -561,6 +570,51 @@ class ConnectApiAttachmentsV2GatewayTest {
             .isInstanceOf(AttachmentV2Exception.class)
             .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.CLIENT_PRECONDITION));
         verifyNoInteractions(api);
+    }
+
+    @Test
+    void anAnswerWithNoCaseFailsClosedAsAPrecondition() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlistedReading(java.util.Set.of(ALLOWED), java.util.Optional.empty());
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 17))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.CLIENT_PRECONDITION));
+        verifyNoInteractions(api);
+    }
+
+    @Test
+    void aCaseThisAccountReceivesIsLeftToTheServersSenderCheck() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+
+        for (Long receiver : new Long[] {NOT_ALLOWED, null}) {
+            ConnectApiAttachmentsV2Gateway guarded = allowlistedReading(java.util.Set.of(ALLOWED),
+                java.util.Optional.of(new ConnectApiAttachmentsV2Gateway.CaseSide(true, receiver)));
+
+            assertThat(guarded.createGrant(TOKEN, "diag.log", 17).grantId()).as("receiver %s", receiver)
+                .isEqualTo(GRANT_ID);
+        }
+        verify(api, times(2)).createAttachmentGrant(eq(TOKEN), any());
+    }
+
+    @Test
+    void theCaseLookupReadsTheDirectionAsThisAccountSeesIt() {
+        com.tsanet.api.generated.api.CollaborationRequestsApi cases =
+            org.mockito.Mockito.mock(com.tsanet.api.generated.api.CollaborationRequestsApi.class);
+        var lookup = ConnectApiAttachmentsV2Gateway.receivingCompanyFrom(cases);
+
+        when(cases.getCollaborationRequestByToken("in", false)).thenReturn(new CollaborationRequestStatusDTO()
+            .direction(CollaborationRequestDirection.INBOUND).receiveCompanyId(ALLOWED));
+        when(cases.getCollaborationRequestByToken("out", false)).thenReturn(new CollaborationRequestStatusDTO()
+            .direction(CollaborationRequestDirection.OUTBOUND).receiveCompanyId(NOT_ALLOWED));
+        when(cases.getCollaborationRequestByToken("unsaid", false)).thenReturn(new CollaborationRequestStatusDTO()
+            .receiveCompanyId(NOT_ALLOWED));
+
+        assertThat(lookup.apply("in")).contains(new ConnectApiAttachmentsV2Gateway.CaseSide(true, ALLOWED));
+        assertThat(lookup.apply("out")).contains(new ConnectApiAttachmentsV2Gateway.CaseSide(false, NOT_ALLOWED));
+        assertThat(lookup.apply("unsaid")).as("no direction is checked like a case this account sent")
+            .contains(new ConnectApiAttachmentsV2Gateway.CaseSide(false, NOT_ALLOWED));
+        assertThat(lookup.apply("none")).isEmpty();
     }
 
     @Test

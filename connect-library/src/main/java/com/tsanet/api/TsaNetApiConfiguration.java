@@ -6,8 +6,8 @@ import java.util.Set;
 
 /**
  * @param allowedReceiverCompanyIds the companies this account may deliver V2 attachments to;
- *                                  empty means unrestricted. Checked against a case's receiving
- *                                  company before any grant is requested.
+ *                                  empty means unrestricted. Checked against the receiving company
+ *                                  of a case this account sent, before any grant is requested.
  */
 public record TsaNetApiConfiguration(
     String apiBaseUrl,
