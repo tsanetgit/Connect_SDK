@@ -216,6 +216,53 @@ class ConnectApiAttachmentsV2GatewayWireTest {
         });
     }
 
+    private static String forbidden(String type) {
+        return "{" + (type == null ? "" : "\"type\":\"https://api.tsanet.org/errors/" + type + "\",")
+            + "\"title\":\"Forbidden\",\"status\":403,\"detail\":\"why\"}";
+    }
+
+    @Test
+    void theServersAllowlistRefusalOnCreateIsReceiverNotAllowed() {
+        server.expect(requestTo(GRANTS)).andExpect(method(HttpMethod.POST))
+            .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(forbidden("attachment-receiver-not-allowed")));
+
+        assertThatThrownBy(() -> gateway.createGrant(TOKEN, "diag.log", 12))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.code()).isEqualTo(AttachmentV2Exception.RECEIVER_NOT_ALLOWED);
+                assertThat(ex.status()).isEqualTo(403);
+                assertThat(ex.getCause()).isInstanceOf(ConnectApiException.class);
+            });
+    }
+
+    @Test
+    void anyOtherForbiddenOnCreateStaysForbidden() {
+        for (String type : new String[] {"access-denied", null}) {
+            server.reset();
+            server.expect(requestTo(GRANTS)).andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                    .body(forbidden(type)));
+
+            assertThatThrownBy(() -> gateway.createGrant(TOKEN, "diag.log", 12))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).as("type %s", type)
+                    .isEqualTo(AttachmentV2Exception.FORBIDDEN));
+        }
+    }
+
+    @Test
+    void theAllowlistTypeOnAnyOtherCallStaysForbidden() {
+        server.expect(requestTo(GRANT + "/single/complete"))
+            .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(forbidden("attachment-receiver-not-allowed")));
+
+        assertThatThrownBy(() -> gateway.completeSingle(TOKEN, GRANT_ID))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.FORBIDDEN));
+    }
+
     @Test
     void anErrorBodyThatEchoesTheRequestPathDoesNotLeakTheCaseToken() {
         server.expect(requestTo(GRANT + "/abandon"))

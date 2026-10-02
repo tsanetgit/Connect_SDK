@@ -2,12 +2,19 @@ package com.tsanet.api;
 
 import com.tsanet.api.auth.AccountAuthConfig;
 import com.tsanet.api.auth.PasswordAuthConfig;
+import java.util.Set;
 
+/**
+ * @param allowedReceiverCompanyIds the companies this account may deliver V2 attachments to;
+ *                                  empty means unrestricted. Checked against a case's receiving
+ *                                  company before any grant is requested.
+ */
 public record TsaNetApiConfiguration(
     String apiBaseUrl,
     String sqlitePath,
     String accountId,
-    AccountAuthConfig auth
+    AccountAuthConfig auth,
+    Set<Long> allowedReceiverCompanyIds
 ) {
     public TsaNetApiConfiguration {
         if (apiBaseUrl == null || apiBaseUrl.isBlank()) {
@@ -22,6 +29,12 @@ public record TsaNetApiConfiguration(
         if (auth == null) {
             throw new IllegalArgumentException("auth is required");
         }
+        allowedReceiverCompanyIds = allowedReceiverCompanyIds == null ? Set.of() : Set.copyOf(allowedReceiverCompanyIds);
+    }
+
+    /** A configuration with no receiver allowlist (unrestricted). */
+    public TsaNetApiConfiguration(String apiBaseUrl, String sqlitePath, String accountId, AccountAuthConfig auth) {
+        this(apiBaseUrl, sqlitePath, accountId, auth, Set.of());
     }
 
     public static TsaNetApiConfiguration of(String apiBaseUrl, String sqlitePath, String username, String password) {

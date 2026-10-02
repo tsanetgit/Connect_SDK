@@ -29,6 +29,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
@@ -48,21 +51,50 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
 
     private static final int COMPLETE_ATTEMPTS = 3;
 
+    // PROVISIONAL(tsanetgit/Connect-API-Code#183): the spec doesn't document this problem type;
+    // the server's ProblemDetailFactory sends it for an allowlist refusal. Once the spec documents
+    // createAttachmentGrant's 403 types, this becomes the documented value.
+    private static final String RECEIVER_NOT_ALLOWED_TYPE = "https://api.tsanet.org/errors/attachment-receiver-not-allowed";
+
     private final AttachmentGrantsApi api;
     private final ConnectApiSessionStore sessionStore;
     private final UploadCoordinator coordinator;
     private final Duration completeBackoff;
+    private final Set<Long> allowedReceiverCompanyIds;
+    private final Function<String, Optional<Long>> receivingCompanyOf;
 
+    /** No receiver allowlist: every receiver the server accepts is allowed. */
     public ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore) {
-        this(api, sessionStore, new UploadCoordinator(), Duration.ofSeconds(1));
+        this(api, sessionStore, Set.of(), caseToken -> Optional.empty());
+    }
+
+    /**
+     * @param allowedReceiverCompanyIds receivers this account may deliver to; empty means unrestricted
+     * @param receivingCompanyOf        the case's receiving company, read only when the list isn't empty;
+     *                                  empty when the case doesn't say
+     */
+    public ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,
+                                          Set<Long> allowedReceiverCompanyIds,
+                                          Function<String, Optional<Long>> receivingCompanyOf) {
+        this(api, sessionStore, new UploadCoordinator(), Duration.ofSeconds(1), allowedReceiverCompanyIds,
+            receivingCompanyOf);
     }
 
     ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,
                                    UploadCoordinator coordinator, Duration completeBackoff) {
+        this(api, sessionStore, coordinator, completeBackoff, Set.of(), caseToken -> Optional.empty());
+    }
+
+    ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,
+                                   UploadCoordinator coordinator, Duration completeBackoff,
+                                   Set<Long> allowedReceiverCompanyIds,
+                                   Function<String, Optional<Long>> receivingCompanyOf) {
         this.api = api;
         this.sessionStore = sessionStore;
         this.coordinator = coordinator;
         this.completeBackoff = completeBackoff;
+        this.allowedReceiverCompanyIds = Set.copyOf(allowedReceiverCompanyIds);
+        this.receivingCompanyOf = receivingCompanyOf;
     }
 
     @Override
@@ -74,10 +106,46 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         if (expectedSizeBytes < 1) {
             throw new IllegalArgumentException("expectedSizeBytes must be at least 1, got " + expectedSizeBytes);
         }
+        requireReceiverAllowed(caseToken);
         AttachmentGrantCreateRequestDTO request = new AttachmentGrantCreateRequestDTO()
             .fileName(fileName)
             .expectedSizeBytes(expectedSizeBytes);
-        return toGrant(call("create grant", () -> api.createAttachmentGrant(caseToken, request)));
+        try {
+            return toGrant(call("create grant", () -> api.createAttachmentGrant(caseToken, request)));
+        } catch (AttachmentV2Exception e) {
+            throw receiverNotAllowedOr(e);
+        }
+    }
+
+    /**
+     * Defense in depth for the sender's receiver allowlist (the server enforces its own): with a
+     * non-empty list, the case's receiving company is read and checked before any grant request.
+     * Only the case's sender can create a grant and its receiver is always the case's receiving
+     * company, so this one check covers {@link #createGrant} and {@link #send}. An empty list is
+     * unrestricted and reads nothing.
+     */
+    private void requireReceiverAllowed(String caseToken) {
+        if (allowedReceiverCompanyIds.isEmpty()) {
+            return;
+        }
+        Optional<Long> receiver = call("read the case's receiving company", () -> receivingCompanyOf.apply(caseToken));
+        if (receiver.isEmpty()) {
+            throw new AttachmentV2Exception("the case's receiving company is unknown, so the receiver allowlist can't be"
+                + " checked", 0, AttachmentV2Exception.CLIENT_PRECONDITION);
+        }
+        if (!allowedReceiverCompanyIds.contains(receiver.get())) {
+            throw new AttachmentV2Exception("receiver company " + receiver.get() + " is not on this account's receiver"
+                + " allowlist", 0, AttachmentV2Exception.RECEIVER_NOT_ALLOWED);
+        }
+    }
+
+    /** Grant creation only: the server's allowlist refusal reads the same as this client's. */
+    private static AttachmentV2Exception receiverNotAllowedOr(AttachmentV2Exception e) {
+        if (e.status() == 403 && e.getCause() instanceof ConnectApiException cause
+            && RECEIVER_NOT_ALLOWED_TYPE.equals(cause.type())) {
+            return new AttachmentV2Exception(e.getMessage(), 403, AttachmentV2Exception.RECEIVER_NOT_ALLOWED, cause);
+        }
+        return e;
     }
 
     @Override

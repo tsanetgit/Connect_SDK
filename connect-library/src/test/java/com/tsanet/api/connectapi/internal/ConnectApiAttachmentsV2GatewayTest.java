@@ -339,4 +339,83 @@ class ConnectApiAttachmentsV2GatewayTest {
             .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(api);
     }
+
+    // ---------- the receiver allowlist (tsanetgit/Connect_SDK#92) ----------
+
+    private static final long ALLOWED = 1112L;
+    private static final long NOT_ALLOWED = 1113L;
+
+    private final List<String> caseLookups = new java.util.ArrayList<>();
+
+    private ConnectApiAttachmentsV2Gateway allowlisted(java.util.Set<Long> allowed, Long receivingCompany) {
+        return new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), coordinator,
+            Duration.ZERO, allowed, caseToken -> {
+                caseLookups.add(caseToken);
+                return java.util.Optional.ofNullable(receivingCompany);
+            });
+    }
+
+    @Test
+    void aReceiverOffTheAllowlistIsRefusedBeforeAnyGrantRequest() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(java.util.Set.of(ALLOWED), NOT_ALLOWED);
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 17))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.RECEIVER_NOT_ALLOWED));
+        verifyNoInteractions(api);
+    }
+
+    @Test
+    void sendIsRefusedTheSameWayAndUploadsNothing() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(java.util.Set.of(ALLOWED), NOT_ALLOWED);
+
+        assertThatThrownBy(() -> guarded.send(TOKEN, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.RECEIVER_NOT_ALLOWED));
+        verifyNoInteractions(api, coordinator);
+    }
+
+    @Test
+    void aReceiverOnTheAllowlistGetsItsGrant() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(java.util.Set.of(ALLOWED), ALLOWED);
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+
+        assertThat(guarded.createGrant(TOKEN, "diag.log", 17).grantId()).isEqualTo(GRANT_ID);
+        assertThat(caseLookups).containsExactly(TOKEN);
+    }
+
+    @Test
+    void anEmptyAllowlistIsUnrestrictedAndNeverReadsTheCase() {
+        ConnectApiAttachmentsV2Gateway open = allowlisted(java.util.Set.of(), NOT_ALLOWED);
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+
+        assertThat(open.createGrant(TOKEN, "diag.log", 17).grantId()).isEqualTo(GRANT_ID);
+        assertThat(caseLookups).isEmpty();
+    }
+
+    @Test
+    void aCaseWithNoReceivingCompanyFailsClosedAsAPrecondition() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(java.util.Set.of(ALLOWED), null);
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 17))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.CLIENT_PRECONDITION));
+        verifyNoInteractions(api);
+    }
+
+    @Test
+    void aCaseLookupThatFailsKeepsItsOwnCodeAndRequestsNoGrant() {
+        ConnectApiAttachmentsV2Gateway guarded = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ZERO, java.util.Set.of(ALLOWED),
+            caseToken -> {
+                throw apiError(404);
+            });
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 17))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.NOT_FOUND));
+        verifyNoInteractions(api);
+    }
 }

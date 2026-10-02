@@ -10,16 +10,24 @@ package com.tsanet.api.attachments.v2;
  * client exception there can name the request URL, which carries the case token; it never
  * carries an upload link, which this client keeps out of every exception it builds.
  *
- * <p>{@link #code()} says what happened. The V2 endpoints define no problem types, so the
- * {@code attachment/...} codes come from the HTTP status of the call that failed, as the spec
- * documents each one; the {@code client/...} codes are failures that never reached the platform.
+ * <p>{@link #code()} says what happened. The {@code attachment/...} codes come from the HTTP
+ * status of the call that failed, as the spec documents each one, with one exception: on grant
+ * creation, a {@code 403} whose problem type is the server's allowlist refusal is
+ * {@link #RECEIVER_NOT_ALLOWED}. The {@code client/...} codes are failures that never reached
+ * the platform.
  */
 public class AttachmentV2Exception extends RuntimeException {
 
     /** 400: a link call named a part or block number outside the plan, or S3 receipts don't cover it. */
     public static final String INVALID_REQUEST = "attachment/invalid-request";
-    /** 403: the caller's company isn't the case's sender, or the receiver isn't on its allowlist. */
+    /** 403: the caller's company isn't the case's sender, or any other refusal not named below. */
     public static final String FORBIDDEN = "attachment/forbidden";
+    /**
+     * The case's receiving company isn't allowed: either this account's receiver allowlist
+     * refused it before any grant request, or the server's sender allowlist refused grant
+     * creation with a {@code 403}. Either way no grant exists and nothing was uploaded.
+     */
+    public static final String RECEIVER_NOT_ALLOWED = "attachment/receiver-not-allowed";
     /**
      * 404: no such case or grant, a receiver that has registered no storage configuration (on
      * create), or a link or complete call that doesn't match the grant's mode.
