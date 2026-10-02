@@ -78,10 +78,11 @@ public interface AttachmentsV2Facade {
      * The code is usually {@code client/interrupted}, but an interrupt during a complete call
      * that isn't retried (the last attempt, or a failure that isn't retryable) surfaces that
      * call's own code; the interrupt flag is set either way. So after the upload,
-     * {@code client/connectivity}, any failure with the interrupt flag set, or an
+     * {@code client/connectivity}, any failure with the interrupt flag set, an
      * {@code attachment/api-error} for an answer this client couldn't read (a client built
-     * against an older spec than the server runs) doesn't prove the file wasn't delivered: read
-     * the grant before sending it again.
+     * against an older spec than the server runs), or a {@code client/precondition} for an answer
+     * this client couldn't use (empty, or missing a field it needs) doesn't prove the file wasn't
+     * delivered: read the grant before sending it again.
      *
      * @param listener progress callback, or null
      * @return the completed grant
