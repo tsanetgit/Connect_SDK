@@ -33,7 +33,11 @@ public interface AttachmentsV2Facade {
 
     AttachmentGrant getGrant(String caseToken, long grantId);
 
-    /** One page of the case's grants; {@code page} counts from 0. */
+    /**
+     * One page of the case's grants; {@code page} counts from 0. A grant on the page that this
+     * client can't read, one missing a required field, fails the whole page rather than being
+     * left out.
+     */
     AttachmentGrantPage listGrants(String caseToken, int page, int size);
 
     /** The upload link for a {@code single} grant. Asking again signs a fresh one. */
@@ -72,6 +76,18 @@ public interface AttachmentsV2Facade {
      * wants to upload again drives {@link #upload} and {@link #complete} itself. Complete is
      * retried on a 5xx answer (a 502 is the documented one) or a lost response: completing an
      * already-completed grant returns it unchanged.
+     *
+     * <p>When complete fails and abandon doesn't settle the grant, the grant is read once, and a
+     * grant that reads completed is returned as delivered. An interrupted thread makes no more
+     * calls: it doesn't start an abandon or a read, and an open grant expires on the platform.
+     * The code is usually {@code client/interrupted}, but an interrupt during a complete call
+     * that isn't retried (the last attempt, or a failure that isn't retryable) surfaces that
+     * call's own code; the interrupt flag is set either way. So after the upload,
+     * {@code client/connectivity}, any failure with the interrupt flag set, an
+     * {@code attachment/api-error} for an answer this client couldn't read (a client built
+     * against an older spec than the server runs), or a {@code client/precondition} for an answer
+     * this client couldn't use (empty, or missing a field it needs) doesn't prove the file wasn't
+     * delivered: read the grant before sending it again.
      *
      * @param listener progress callback, or null
      * @return the completed grant

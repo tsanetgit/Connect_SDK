@@ -48,15 +48,20 @@ public class AttachmentV2Exception extends RuntimeException {
     public static final String UPLOAD_UNREACHABLE = "client/upload-unreachable";
     /** A link is past its expiry and asking again returned the same link, so the upload can't go on. */
     public static final String LINK_NOT_REFRESHABLE = "client/link-not-refreshable";
-    /** The grant's mode is not one this client uploads. */
+    // PROVISIONAL(tsanetgit/Connect-API-Code#182): gcsResumable is named because it is the one mode
+    // this client refuses. Once GCS is on, the client uploads it and this javadoc names no mode.
+    /** The grant's mode is not one this client uploads ({@code gcsResumable}). */
     public static final String UNSUPPORTED_UPLOAD_MODE = "client/unsupported-upload-mode";
     /**
-     * A client-side precondition failed: the file, the plan, a link that doesn't fit the plan, or
-     * (with a receiver allowlist) a case that doesn't say who its receiving company is.
+     * A client-side precondition failed: the file is empty, unreadable or not the size the grant
+     * expects; the grant's plan is missing or doesn't fit the file; a link doesn't fit the plan or
+     * isn't a usable request; or an answer is empty or missing a field this client needs.
      */
     public static final String CLIENT_PRECONDITION = "client/precondition";
-    /** The Connect API could not be reached at all. */
+    /** The Connect API could not be reached, or its answer was lost. */
     public static final String CONNECTIVITY = "client/connectivity";
+    /** The calling thread was interrupted; the interrupt is restored and nothing more is sent. */
+    public static final String INTERRUPTED = "client/interrupted";
 
     private final int status;
     private final String code;

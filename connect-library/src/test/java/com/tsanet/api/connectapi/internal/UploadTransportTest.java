@@ -178,6 +178,68 @@ class UploadTransportTest {
             .hasNoCause();
     }
 
+    /**
+     * The coordinator keeps the transport's IOException as the cause of client/upload-unreachable,
+     * so the JDK's own failures must not quote the signed URL. These are real HttpClient failures
+     * (refused, reset mid-body, unresolvable host); JDK 21 names none of the URL. A later JDK
+     * that does fails here, and the cause then has to be dropped.
+     */
+    @Test
+    void realTransportFailuresDoNotQuoteTheLink() throws Exception {
+        String query = "/SENTINEL-PATH/obj?X-Amz-Signature=SENTINEL-SIG";
+        Path file = file("leak.bin", 5 * 1024 * 1024);
+        List<Throwable> failures = new ArrayList<>();
+
+        int closedPort;
+        try (java.net.ServerSocket probe = new java.net.ServerSocket(0)) {
+            closedPort = probe.getLocalPort();
+        }
+        failures.add(failureOf(() -> transport.put(new UploadLink(1, "http://127.0.0.1:" + closedPort + query,
+            Map.of(), null, null), file, 0, 1024, null)));
+
+        try (java.net.ServerSocket reset = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            Thread resetter = new Thread(() -> {
+                try (java.net.Socket client = reset.accept()) {
+                    client.getInputStream().readNBytes(4096);
+                    client.setSoLinger(true, 0);
+                } catch (IOException ignored) {
+                    // The client side is what's under test.
+                }
+            });
+            resetter.start();
+            failures.add(failureOf(() -> transport.put(new UploadLink(2, "http://127.0.0.1:" + reset.getLocalPort()
+                + query, Map.of(), null, null), file, 0, 5 * 1024 * 1024, null)));
+            resetter.join(10_000);
+        }
+
+        failures.add(failureOf(() -> transport.put(new UploadLink(3, "http://sentinel-host.invalid" + query,
+            Map.of(), null, null), file, 0, 1024, null)));
+
+        assertThat(failures).hasSize(3).allSatisfy(f -> assertThat(f).isInstanceOf(IOException.class));
+        for (Throwable failure : failures) {
+            for (Throwable t = failure; t != null; t = t.getCause()) {
+                assertThat(String.valueOf(t.getMessage()) + " " + t).doesNotContainIgnoringCase("sentinel");
+                for (Throwable suppressed : t.getSuppressed()) {
+                    assertThat(String.valueOf(suppressed.getMessage()) + " " + suppressed).doesNotContainIgnoringCase("sentinel");
+                }
+            }
+        }
+    }
+
+    @FunctionalInterface
+    private interface Put {
+        void run() throws Exception;
+    }
+
+    private static Throwable failureOf(Put put) {
+        try {
+            put.run();
+            return null;
+        } catch (Exception e) {
+            return e;
+        }
+    }
+
     @Test
     void reportsBytesAsTheBodyStreams() throws Exception {
         int size = 3 * 1024 * 1024 + 5;
