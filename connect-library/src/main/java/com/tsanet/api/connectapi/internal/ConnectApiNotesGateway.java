@@ -5,6 +5,7 @@ import static com.tsanet.api.connectapi.internal.OpenApiMapping.enumValue;
 
 import com.tsanet.api.connectapi.CaseNoteValidation;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
+import com.tsanet.api.facade.CaseNotesFacade;
 import com.tsanet.api.generated.api.CaseNotesApi;
 import com.tsanet.api.generated.model.CaseNoteDTO;
 import com.tsanet.api.generated.model.CaseNoteTemplateDTO;
@@ -46,8 +47,9 @@ public class ConnectApiNotesGateway {
     }
 
     public CaseNoteDto createNote(String caseToken, String summary, String description, String priority, String type) {
-        if (NoteType.SYSTEM.getValue().equals(type)) {
-            throw new IllegalArgumentException("SYSTEM notes are written by the platform; create USER_PARTNER or USER_PUBLIC");
+        if (type != null && !CaseNotesFacade.CREATABLE_NOTE_TYPES.contains(type)) {
+            throw new IllegalArgumentException("Type must be one of: " + String.join(", ", CaseNotesFacade.CREATABLE_NOTE_TYPES)
+                + " (SYSTEM notes are written by the platform)");
         }
         requireLogin();
 

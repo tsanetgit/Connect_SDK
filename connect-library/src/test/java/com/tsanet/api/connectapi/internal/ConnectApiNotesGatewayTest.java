@@ -182,6 +182,17 @@ class ConnectApiNotesGatewayTest {
     }
 
     @Test
+    void theCreatableTypesAreEverySpecNoteTypeButSystem() {
+        assertThat(com.tsanet.api.facade.CaseNotesFacade.CREATABLE_NOTE_TYPES)
+            .as("CaseNotesFacade.CREATABLE_NOTE_TYPES must be the spec's NoteType values minus SYSTEM;"
+                + " when it changes, update demo-ui/src/main/resources/static/app.js's note type select too")
+            .containsExactlyInAnyOrderElementsOf(java.util.Arrays.stream(NoteType.values())
+                .filter(type -> type != NoteType.SYSTEM)
+                .map(NoteType::getValue)
+                .toList());
+    }
+
+    @Test
     void itReturnsEmptyListWhenApiReturnsNull() {
         when(caseNotesApi.getNotes("tok-empty", null, null, false)).thenReturn(null);
 

@@ -4,6 +4,7 @@ import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.CaseNoteValidation;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
+import com.tsanet.api.facade.CaseNotesFacade;
 import java.util.List;
 import java.util.Locale;
 import java.util.Scanner;
@@ -14,7 +15,6 @@ import org.springframework.stereotype.Component;
 public class CollaborationRequestNoteAddExecutor {
     private static final String DEFAULT_PRIORITY = "MEDIUM";
     private static final Set<String> VALID_PRIORITIES = Set.of("LOW", "MEDIUM", "HIGH");
-    private static final Set<String> VALID_TYPES = Set.of("USER_PARTNER", "USER_PUBLIC");
     private static final int AUTO_SUMMARY_MAX_LENGTH = 80;
 
     private final TsaNetApiSession session;
@@ -103,11 +103,11 @@ public class CollaborationRequestNoteAddExecutor {
         return priority;
     }
 
-    /** The optional {@code --type}: USER_PARTNER or USER_PUBLIC, or null for the server's default. */
+    /** The optional {@code --type}, one of the library's creatable types, or null for the server's default. */
     static String resolveType(String[] args) {
         String type = CliArgs.noteType(args).map(value -> value.toUpperCase(Locale.ROOT)).orElse(null);
-        if (type != null && !VALID_TYPES.contains(type)) {
-            throw new IllegalArgumentException("Type must be one of: USER_PARTNER, USER_PUBLIC");
+        if (type != null && !CaseNotesFacade.CREATABLE_NOTE_TYPES.contains(type)) {
+            throw new IllegalArgumentException("Type must be one of: " + String.join(", ", CaseNotesFacade.CREATABLE_NOTE_TYPES));
         }
         return type;
     }

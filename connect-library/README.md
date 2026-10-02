@@ -232,7 +232,7 @@ wrong password reads `HTTP 401 Authentication Failed`; an invalid lifecycle tran
 | `listStoredNotes()` | Returns all notes from SQLite. |
 | `listStoredNotesForRequest(caseToken)` | Returns cached notes for one request. |
 | `createNote(caseToken, summary, description, priority)` | Creates a note on the API with the server's default type, `USER_PARTNER`. Validates non-empty summary/text and OpenAPI size limits (summary ≤ 500, description ≤ 5000). Refreshes the full notes list in SQLite for that request. |
-| `createNote(caseToken, summary, description, priority, type)` | The same, with a type: `USER_PARTNER` or `USER_PUBLIC`. A null type is left out, so the server's default applies. `SYSTEM` is reserved for platform notes, and it and any other value are refused with `IllegalArgumentException` before any request. |
+| `createNote(caseToken, summary, description, priority, type)` | The same, with a type: `USER_PARTNER` or `USER_PUBLIC`, the list in `CaseNotesFacade.CREATABLE_NOTE_TYPES`. A null type is left out, so the server's default applies. `SYSTEM` is reserved for platform notes, and it and any other value are refused with `IllegalArgumentException` before any request. |
 
 Each `CaseNoteDto` carries the note's `type` (`USER_PUBLIC`, `USER_PARTNER` or `SYSTEM`, exactly as the API sent it), the authoring company's `companyId`, and its `direction`: `OUTBOUND` when the company of the account that fetched it wrote the note, `INBOUND` when another company did. A platform-generated note comes without `companyId` and `direction`. Each is null when the API didn't send it, and the SQLite cache stores all three. The 14-argument constructor from before these fields is deprecated.
 

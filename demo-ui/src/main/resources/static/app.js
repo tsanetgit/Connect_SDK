@@ -466,6 +466,7 @@ const ACTION_FORMS = {
             ['summary', 'Summary', 'text'],
             ['description', 'Description', 'textarea'],
             ['priority', 'Priority', 'select', ['LOW', 'MEDIUM', 'HIGH']],
+            // CaseNotesFacade.CREATABLE_NOTE_TYPES; ConnectApiNotesGatewayTest's spec check names this list.
             ['type', 'Type', 'select', ['USER_PARTNER', 'USER_PUBLIC']],
         ],
     },
