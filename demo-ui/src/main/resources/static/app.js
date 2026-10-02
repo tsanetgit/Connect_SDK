@@ -328,7 +328,10 @@ function renderCase(detail) {
     renderCaseActions(dir);
     renderTimeline('case-notes', detail.notes.map(n => ({
         title: n.summary,
-        meta: `${n.creatorName ?? n.creatorUsername ?? '?'} (${n.companyName ?? '?'}) · ${n.priority ?? ''} · ${n.createdAt ?? ''}`,
+        // type and direction exactly as the API sent them; a note without them shows neither.
+        meta: `${n.creatorName ?? n.creatorUsername ?? '?'} (${n.companyName ?? '?'}) · ${n.priority ?? ''}`
+            + [n.type, n.direction].filter(Boolean).map(v => ` · ${v}`).join('')
+            + ` · ${n.createdAt ?? ''}`,
         body: n.description,
     })), 'No notes yet.');
     renderTimeline('case-responses', detail.responses.map(r => ({
@@ -463,6 +466,7 @@ const ACTION_FORMS = {
             ['summary', 'Summary', 'text'],
             ['description', 'Description', 'textarea'],
             ['priority', 'Priority', 'select', ['LOW', 'MEDIUM', 'HIGH']],
+            ['type', 'Type', 'select', ['USER_PARTNER', 'USER_PUBLIC']],
         ],
     },
 };

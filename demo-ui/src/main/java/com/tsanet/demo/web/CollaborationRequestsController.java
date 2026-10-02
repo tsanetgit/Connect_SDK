@@ -70,7 +70,8 @@ public class CollaborationRequestsController {
 
     @PostMapping("/api/requests/{token}/notes")
     public CaseNoteDto addNote(@PathVariable String token, @RequestBody NoteBody body) {
-        return guard.session().caseNotes().createNote(token, body.summary(), body.description(), body.priority());
+        String type = body.type() == null || body.type().isBlank() ? null : body.type();
+        return guard.session().caseNotes().createNote(token, body.summary(), body.description(), body.priority(), type);
     }
 
     @PostMapping("/api/requests/{token}/approve")
@@ -111,7 +112,8 @@ public class CollaborationRequestsController {
     ) {
     }
 
-    public record NoteBody(String summary, String description, String priority) {
+    /** {@code type} is {@code USER_PARTNER} or {@code USER_PUBLIC}; blank or absent leaves the server's default. */
+    public record NoteBody(String summary, String description, String priority, String type) {
     }
 
     /** Shared body for approve/reject/request-info; {@code text} carries nextSteps, reason, or requestedInformation. */
