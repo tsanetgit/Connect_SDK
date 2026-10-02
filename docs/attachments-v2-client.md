@@ -148,6 +148,8 @@ A `404` means the case wasn't found, or the receiving company hasn't registered 
 configuration for V2 delivery; the `detail` says which ("Receiver has not registered a
 storage configuration"). Until the receiver registers one, there is nothing to retry.
 
+<!-- PROVISIONAL(tsanetgit/Connect-API-Code#183): the two problem types below are what the server sends today, not documented values. Once the spec documents createAttachmentGrant's 403 types, name the documented ones and drop "the spec doesn't document them yet". -->
+
 A `403` on create is either a caller that isn't the case's sender (problem type
 `https://api.tsanet.org/errors/access-denied`) or a receiver that isn't on the sender's
 allowlist (`https://api.tsanet.org/errors/attachment-receiver-not-allowed`). The platform

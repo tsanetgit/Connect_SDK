@@ -216,6 +216,10 @@ class ConnectApiAttachmentsV2GatewayWireTest {
         });
     }
 
+    // PROVISIONAL(tsanetgit/Connect-API-Code#183): the spec doesn't document createAttachmentGrant's
+    // 403 problem types, so this base URL and the types the tests pass (attachment-receiver-not-allowed,
+    // access-denied) are what the server's ProblemDetailFactory sends today. Once the spec documents
+    // them, these become the documented values.
     private static String forbidden(String type) {
         return "{" + (type == null ? "" : "\"type\":\"https://api.tsanet.org/errors/" + type + "\",")
             + "\"title\":\"Forbidden\",\"status\":403,\"detail\":\"why\"}";
