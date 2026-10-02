@@ -82,20 +82,20 @@ How the SDK uploads:
 
 | Code | Cause |
 |---|---|
-| `attachment/invalid-request` | `400`: a part or block number outside the plan, or S3 receipts that don't cover it |
-| `attachment/forbidden` | `403`: the caller isn't the case's sender, or the receiver isn't on the sender's allowlist |
-| `attachment/not-found` | `404`: no such case or grant, a receiver with no storage configuration (on create), or a call that doesn't match the grant's mode |
-| `attachment/grant-terminal` | `409`: the grant is completed, abandoned or expired |
-| `attachment/upload-mismatch` | `422`: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
-| `attachment/provider-error` | `502`: the receiver's storage provider failed; nothing changed |
+| `attachment/invalid-request` | 400: a link call named a part or block number outside the plan, or S3 receipts don't cover it |
+| `attachment/forbidden` | 403: the caller's company isn't the case's sender, or the receiver isn't on its allowlist |
+| `attachment/not-found` | 404: no such case or grant, a receiver that has registered no storage configuration (on create), or a link or complete call that doesn't match the grant's mode |
+| `attachment/grant-terminal` | 409: the grant is completed, abandoned or expired, so it can't take this call |
+| `attachment/upload-mismatch` | 422: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
+| `attachment/provider-error` | 502: the receiver's storage provider failed; nothing changed, retry later |
 | `attachment/api-error` | any other non-2xx answer from the Connect API, or an answer this client could not read |
-| `client/upload-rejected` | the storage refused a `PUT`, or kept failing it |
-| `client/upload-unreachable` | a `PUT` got no answer after three attempts |
-| `client/link-not-refreshable` | a link expired and asking again returned the same link |
-| `client/unsupported-upload-mode` | the grant's mode isn't one the SDK uploads (`gcsResumable`) |
-| `client/precondition` | the file doesn't match the grant, or a link doesn't fit the plan |
-| `client/connectivity` | the Connect API could not be reached |
-| `client/interrupted` | the calling thread was interrupted; nothing more was sent |
+| `client/upload-rejected` | the storage answered an upload `PUT` with a status this client doesn't retry, or kept failing |
+| `client/upload-unreachable` | an upload `PUT` could not reach the storage after the retry budget |
+| `client/link-not-refreshable` | a link is past its expiry and asking again returned the same link, so the upload can't go on |
+| `client/unsupported-upload-mode` | the grant's mode is not one this client uploads (`gcsResumable`) |
+| `client/precondition` | a client-side precondition failed: the file, the plan, or a link that doesn't fit the plan |
+| `client/connectivity` | the Connect API could not be reached at all |
+| `client/interrupted` | the calling thread was interrupted; the interrupt is restored and nothing more is sent |
 
 ## Without the SDK
 

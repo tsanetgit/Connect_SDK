@@ -2,12 +2,19 @@ package com.tsanet.api.facade;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tsanet.api.attachments.v2.AttachmentV2Exception;
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -22,6 +29,8 @@ class AttachmentsV2GuideSyncTest {
     private static final Path GUIDE = Path.of("../docs/attachments-v2-client.md");
     private static final String OPEN = "<!-- sync: AttachmentsV2Facade.send.";
     private static final String CLOSE = "<!-- /sync -->";
+    private static final String TABLE_HEADER = "| Code | Cause |";
+    private static final Pattern TABLE_ROW = Pattern.compile("^\\| `([^`]+)` \\| (.*) \\|$");
 
     @Test
     void theGuideCarriesSendsJavadocWordForWord() throws IOException {
@@ -34,19 +43,26 @@ class AttachmentsV2GuideSyncTest {
             .isEqualTo(javadoc);
     }
 
-    /** Each listed code's cause in the guide's code table is its constant's javadoc. */
+    /** The guide's code table has one row per code constant, and each row's cause is that constant's javadoc. */
     @Test
-    void theCodeTableCarriesTheConstantsJavadoc() throws IOException {
-        List<String> guide = Files.readAllLines(GUIDE);
-        for (String code : List.of("attachment/api-error")) {
-            String row = "| `" + code + "` | ";
-            List<String> rows = guide.stream().filter(line -> line.startsWith(row)).toList();
-            assertThat(rows).as("one %s row in %s", code, GUIDE).hasSize(1);
-            String cause = rows.get(0).substring(row.length()).replaceFirst("\\s*\\|\\s*$", "");
+    void theCodeTableCarriesTheConstantsJavadoc() throws IOException, IllegalAccessException {
+        Map<String, String> table = codeTable();
+        List<String> codes = new ArrayList<>();
+        for (Field field : AttachmentV2Exception.class.getDeclaredFields()) {
+            int modifiers = field.getModifiers();
+            if (Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers) && field.getType() == String.class) {
+                codes.add((String) field.get(null));
+            }
+        }
+        assertThat(codes).as("the public String constants of %s", AttachmentV2Exception.class).isNotEmpty();
+        assertThat(table.keySet()).as("the codes in %s's table, against the constants in %s", GUIDE, EXCEPTION)
+            .containsExactlyInAnyOrderElementsOf(codes);
 
+        for (String code : codes) {
+            String cause = table.get(code);
             String javadoc = constantJavadoc(code);
             String expected = Character.toLowerCase(javadoc.charAt(0)) + javadoc.substring(1).replaceFirst("\\.$", "");
-            assertThat(normalize(cause))
+            assertThat(cause)
                 .as("the %s row in %s must equal the javadoc of its constant in %s", code, GUIDE, EXCEPTION)
                 .isEqualTo(expected);
         }
@@ -116,6 +132,21 @@ class AttachmentsV2GuideSyncTest {
         String javadoc = javadocText(text.toString());
         assertThat(javadoc).as("the javadoc of the constant for %s in %s", code, EXCEPTION).isNotBlank();
         return javadoc;
+    }
+
+    /** The guide's code table, code to cause, in the guide's order. */
+    private static Map<String, String> codeTable() throws IOException {
+        List<String> lines = Files.readAllLines(GUIDE);
+        int header = lines.indexOf(TABLE_HEADER);
+        assertThat(header).as("%s in %s", TABLE_HEADER, GUIDE).isNotNegative();
+        Map<String, String> table = new LinkedHashMap<>();
+        for (int i = header + 2; i < lines.size() && lines.get(i).startsWith("|"); i++) {
+            Matcher row = TABLE_ROW.matcher(lines.get(i));
+            assertThat(row.matches()).as("a | `code` | cause | row in %s: %s", GUIDE, lines.get(i)).isTrue();
+            assertThat(table.put(row.group(1), normalize(row.group(2))))
+                .as("one %s row in %s", row.group(1), GUIDE).isNull();
+        }
+        return table;
     }
 
     private static List<String> guideParagraphs() throws IOException {
