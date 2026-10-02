@@ -242,6 +242,24 @@ class ConnectApiAttachmentsV2GatewayWireTest {
     }
 
     @Test
+    void theAllowlistTypeIsMatchedByItsLastSegmentNotItsHost() {
+        java.util.Map<String, String> expected = new java.util.LinkedHashMap<>();
+        expected.put("https://errors.example.test/attachment-receiver-not-allowed", AttachmentV2Exception.RECEIVER_NOT_ALLOWED);
+        expected.put("https://api.tsanet.org/errors/not-attachment-receiver-not-allowed", AttachmentV2Exception.FORBIDDEN);
+        expected.put("https://api.tsanet.org/errors/attachment-receiver-not-allowed/v2", AttachmentV2Exception.FORBIDDEN);
+        expected.forEach((type, code) -> {
+            server.reset();
+            server.expect(requestTo(GRANTS)).andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                    .body("{\"type\":\"" + type + "\",\"title\":\"Forbidden\",\"status\":403,\"detail\":\"why\"}"));
+
+            assertThatThrownBy(() -> gateway.createGrant(TOKEN, "diag.log", 12))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).as("type %s", type).isEqualTo(code));
+        });
+    }
+
+    @Test
     void anyOtherForbiddenOnCreateStaysForbidden() {
         for (String type : new String[] {"access-denied", null}) {
             server.reset();

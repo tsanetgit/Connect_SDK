@@ -11,10 +11,11 @@ package com.tsanet.api.attachments.v2;
  * carries an upload link, which this client keeps out of every exception it builds.
  *
  * <p>{@link #code()} says what happened. The {@code attachment/...} codes come from the HTTP
- * status of the call that failed, as the spec documents each one, with one exception: on grant
- * creation, a {@code 403} whose problem type is the server's allowlist refusal is
- * {@link #RECEIVER_NOT_ALLOWED}. The {@code client/...} codes are failures that never reached
- * the platform.
+ * status of the call that failed, as the spec documents each one, with one exception:
+ * {@link #RECEIVER_NOT_ALLOWED} is either the server's allowlist refusal on grant creation (a
+ * {@code 403} with its own problem type) or this client's receiver allowlist refusing before any
+ * grant request, where {@link #status()} is 0. The {@code client/...} codes are failures that
+ * never reached the platform.
  */
 public class AttachmentV2Exception extends RuntimeException {
 
