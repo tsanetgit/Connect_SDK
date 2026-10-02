@@ -26,7 +26,6 @@ import com.tsanet.api.generated.api.IdentityApi;
 import com.tsanet.api.generated.api.WebhooksApi;
 import com.tsanet.api.generated.api.WebhooksV1Api;
 import com.tsanet.api.generated.invoker.ApiClient;
-import com.tsanet.api.generated.model.CollaborationRequestStatusDTO;
 import com.tsanet.api.storage.AttachmentConfigRepository;
 import com.tsanet.api.storage.AttachmentConfigStorageService;
 import com.tsanet.api.storage.AttachmentForwardResultRepository;
@@ -54,7 +53,6 @@ import com.tsanet.api.connectapi.internal.OAuthTokenGateway;
 import com.tsanet.api.connectapi.internal.TokenManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Optional;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.sqlite.SQLiteDataSource;
@@ -173,14 +171,11 @@ public final class TsaNetApiRuntime {
             attachmentForwardResultStorageService
         );
 
-        // The allowlist check reads the case's receiving company straight from the API: no cache
-        // write, and an empty answer is "unknown", which the check refuses.
         ConnectApiAttachmentsV2Gateway attachmentsV2Gateway = new ConnectApiAttachmentsV2Gateway(
             new AttachmentGrantsApi(apiClient),
             sessionStore,
             configuration.allowedReceiverCompanyIds(),
-            caseToken -> Optional.ofNullable(collaborationRequestsApi.getCollaborationRequestByToken(caseToken, false))
-                .map(CollaborationRequestStatusDTO::getReceiveCompanyId)
+            ConnectApiAttachmentsV2Gateway.receivingCompanyFrom(collaborationRequestsApi)
         );
 
         return new DefaultTsaNetApiSession(

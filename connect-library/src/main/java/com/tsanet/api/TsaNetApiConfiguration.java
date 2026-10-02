@@ -29,6 +29,9 @@ public record TsaNetApiConfiguration(
         if (auth == null) {
             throw new IllegalArgumentException("auth is required");
         }
+        if (allowedReceiverCompanyIds != null && allowedReceiverCompanyIds.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new IllegalArgumentException("allowedReceiverCompanyIds must not contain null");
+        }
         allowedReceiverCompanyIds = allowedReceiverCompanyIds == null ? Set.of() : Set.copyOf(allowedReceiverCompanyIds);
     }
 

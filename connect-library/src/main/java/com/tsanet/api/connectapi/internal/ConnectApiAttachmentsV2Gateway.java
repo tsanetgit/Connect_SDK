@@ -10,6 +10,7 @@ import com.tsanet.api.attachments.v2.UploadProgressListener;
 import com.tsanet.api.attachments.v2.UploadReceipts;
 import com.tsanet.api.facade.AttachmentsV2Facade;
 import com.tsanet.api.generated.api.AttachmentGrantsApi;
+import com.tsanet.api.generated.api.CollaborationRequestsApi;
 import com.tsanet.api.generated.model.AttachmentGrantCreateRequestDTO;
 import com.tsanet.api.generated.model.AttachmentGrantDTO;
 import com.tsanet.api.generated.model.AttachmentGrantPageDTO;
@@ -17,6 +18,7 @@ import com.tsanet.api.generated.model.AzureBlockDTO;
 import com.tsanet.api.generated.model.AzureBlockPlanDTO;
 import com.tsanet.api.generated.model.AzureBlockSignRequestDTO;
 import com.tsanet.api.generated.model.AzureBlocksDTO;
+import com.tsanet.api.generated.model.CollaborationRequestStatusDTO;
 import com.tsanet.api.generated.model.S3MultipartCompletionRequestDTO;
 import com.tsanet.api.generated.model.S3MultipartPartReceiptDTO;
 import com.tsanet.api.generated.model.S3MultipartPlanDTO;
@@ -62,6 +64,15 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     private final Duration completeBackoff;
     private final Set<Long> allowedReceiverCompanyIds;
     private final Function<String, Optional<Long>> receivingCompanyOf;
+
+    /**
+     * The receiving-company lookup the runtime gives the allowlist check: the case read straight
+     * from the API, so nothing is cached, and an answer without a receiving company is unknown.
+     */
+    public static Function<String, Optional<Long>> receivingCompanyFrom(CollaborationRequestsApi api) {
+        return caseToken -> Optional.ofNullable(api.getCollaborationRequestByToken(caseToken, false))
+            .map(CollaborationRequestStatusDTO::getReceiveCompanyId);
+    }
 
     /** No receiver allowlist: every receiver the server accepts is allowed. */
     public ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore) {

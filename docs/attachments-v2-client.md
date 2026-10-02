@@ -68,8 +68,9 @@ How the SDK uploads:
 `TsaNetApiConfiguration`, and `allowed-receiver-company-ids` in the console's account
 configuration. With a list set, `createGrant` (and so `send`) reads the case's receiving
 company first and refuses one that isn't on it with `attachment/receiver-not-allowed`, before
-any grant is requested. A case whose receiving company can't be read fails closed with
-`client/precondition`. No list (the default) is unrestricted, and the case isn't read. This
+any grant is requested. A case that doesn't say who its receiving company is fails closed with
+`client/precondition`; a case read that fails keeps that failure's own code (for example
+`attachment/not-found`). No list (the default) is unrestricted, and the case isn't read. This
 is a second check: the platform keeps its own sender allowlist and refuses grant creation
 with a `403`, which the SDK reports with the same code.
 
@@ -89,7 +90,7 @@ with a `403`, which the SDK reports with the same code.
 | `client/upload-unreachable` | a `PUT` got no answer after three attempts |
 | `client/link-not-refreshable` | a link expired and asking again returned the same link |
 | `client/unsupported-upload-mode` | the grant's mode isn't one the SDK uploads (`gcsResumable`) |
-| `client/precondition` | the file doesn't match the grant, a link doesn't fit the plan, or a receiver allowlist is set and the case's receiving company can't be read |
+| `client/precondition` | the file doesn't match the grant, a link doesn't fit the plan, or a receiver allowlist is set and the case doesn't say who its receiving company is |
 | `client/connectivity` | the Connect API could not be reached |
 
 ## Without the SDK

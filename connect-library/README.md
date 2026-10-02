@@ -168,6 +168,9 @@ tsanet:
   accounts:
     - id: production
       sqlite-path: "${user.home}/.tsanet/production.db"
+      # Optional V2 receiver allowlist (empty or absent = unrestricted). The console app binds it to
+      # ApplicationUserAccount.withAllowedReceiverCompanyIds; another app passes it the same way.
+      allowed-receiver-company-ids: [1001, 1002]
       auth:
         type: client-credentials
         tenant-id: "..."

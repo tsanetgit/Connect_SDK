@@ -48,4 +48,21 @@ class TsaNetApiSessionFactoryTest {
         assertThat(ApplicationUserAccount.passwordAccount("a", "/tmp/x.db", "u", "p").withAllowedReceiverCompanyIds(null)
             .allowedReceiverCompanyIds()).isEmpty();
     }
+
+    @Test
+    void aNullCompanyIdIsRefusedClearlyAndAnImmutableSetIsAccepted() {
+        var auth = new com.tsanet.api.auth.PasswordAuthConfig("u", "p");
+        java.util.List<Long> withNull = java.util.Arrays.asList(1112L, null);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> ApplicationUserAccount.passwordAccount("a", "/tmp/x.db", "u", "p")
+                .withAllowedReceiverCompanyIds(withNull))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("null");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> new TsaNetApiConfiguration("http://x", "/tmp/x.db", "a", auth,
+                new java.util.HashSet<>(withNull)))
+            .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("null");
+        assertThat(new TsaNetApiConfiguration("http://x", "/tmp/x.db", "a", auth, java.util.Set.of(1112L))
+            .allowedReceiverCompanyIds()).containsExactly(1112L);
+        assertThat(new ApplicationUserAccount("a", "/tmp/x.db", auth, java.util.Set.of(1112L))
+            .allowedReceiverCompanyIds()).containsExactly(1112L);
+    }
 }

@@ -21,6 +21,9 @@ public record ApplicationUserAccount(String id, String sqlitePath, AccountAuthCo
         if (auth == null) {
             throw new IllegalArgumentException("account auth is required");
         }
+        if (allowedReceiverCompanyIds != null && allowedReceiverCompanyIds.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new IllegalArgumentException("allowedReceiverCompanyIds must not contain null");
+        }
         allowedReceiverCompanyIds = allowedReceiverCompanyIds == null ? Set.of() : Set.copyOf(allowedReceiverCompanyIds);
     }
 
@@ -31,7 +34,7 @@ public record ApplicationUserAccount(String id, String sqlitePath, AccountAuthCo
 
     /** This account with the given receiver allowlist; null or empty means unrestricted. */
     public ApplicationUserAccount withAllowedReceiverCompanyIds(Collection<Long> companyIds) {
-        return new ApplicationUserAccount(id, sqlitePath, auth, companyIds == null ? Set.of() : Set.copyOf(companyIds));
+        return new ApplicationUserAccount(id, sqlitePath, auth, companyIds == null ? null : new java.util.HashSet<>(companyIds));
     }
 
     public static ApplicationUserAccount passwordAccount(String id, String sqlitePath, String username, String password) {
