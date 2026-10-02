@@ -408,6 +408,13 @@ class UploadCoordinatorTest {
         assertThat(coordinator.backoff(1, Optional.of("3600"))).isEqualTo(Duration.ofSeconds(30));
     }
 
+    @Test
+    void aLinkWithoutAUrlCannotBeBuilt() {
+        assertThatThrownBy(() -> new UploadLink(1, null, Map.of(), null, null))
+            .isInstanceOf(NullPointerException.class)
+            .hasMessage("url");
+    }
+
     // ---------- links are credentials ----------
 
     @Test
