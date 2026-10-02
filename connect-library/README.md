@@ -231,7 +231,10 @@ wrong password reads `HTTP 401 Authentication Failed`; an invalid lifecycle tran
 | `listNotesForAllRequests()` | Fetches notes for every known collaboration request. |
 | `listStoredNotes()` | Returns all notes from SQLite. |
 | `listStoredNotesForRequest(caseToken)` | Returns cached notes for one request. |
-| `createNote(caseToken, summary, description, priority)` | Creates a note on the API. Validates non-empty summary/text and OpenAPI size limits (summary ≤ 500, description ≤ 5000). Refreshes the full notes list in SQLite for that request. |
+| `createNote(caseToken, summary, description, priority)` | Creates a note on the API with the server's default type, `USER_PARTNER`. Validates non-empty summary/text and OpenAPI size limits (summary ≤ 500, description ≤ 5000). Refreshes the full notes list in SQLite for that request. |
+| `createNote(caseToken, summary, description, priority, type)` | The same, with a type: `USER_PARTNER` or `USER_PUBLIC`. A null type is left out, so the server's default applies. `SYSTEM` is reserved for platform notes, and it and any other value are refused with `IllegalArgumentException` before any request. |
+
+Each `CaseNoteDto` carries the note's `type` (`USER_PUBLIC`, `USER_PARTNER` or `SYSTEM`, exactly as the API sent it), the authoring company's `companyId` (absent on a platform-generated note), and its `direction`: `OUTBOUND` when the company of the account that fetched it wrote the note, `INBOUND` otherwise. Each is null when the API didn't send it, and the SQLite cache stores all three. The 14-argument constructor from before these fields is deprecated.
 
 ### Case responses — `session.caseResponses()`
 
@@ -413,7 +416,7 @@ The console application (`TSANet-integration-app`) exposes CLI commands that cal
 | `respond-information` / `requests info-response` | `caseResponses().submitInformationResponse()` |
 | `notes` | `caseNotes().listNotesForAllRequests()` |
 | `notes list` / `notes-list` | `caseNotes().listNotesForRequest()` (chronological timeline for one request) |
-| `notes add` / `add-note` | `caseNotes().createNote()` (prompts for text when omitted) |
+| `notes add` / `add-note` | `caseNotes().createNote()` (prompts for text when omitted; optional `--type USER_PUBLIC` or `USER_PARTNER`) |
 | `responses` | `caseResponses().listResponsesForAllRequests()` |
 | `sync` | `collaborationRequests().syncAllDetails()` |
 | `me` | `users().getCurrentUser()` |
@@ -664,19 +667,23 @@ notes add --id 123
 notes add --token abc-case-token-xyz --text "Investigating on our side."
 add-note --id 123 --summary "Update" --text "Customer confirmed the issue."
 notes add --id 123 --text "Follow-up" --priority HIGH
+notes add --id 123 --text "Follow-up" --type USER_PUBLIC
 ```
 
-After a successful post, the command prints a confirmation and the refreshed notes timeline:
+`--type` takes `USER_PUBLIC` or `USER_PARTNER`, in any case. Without it, the server's default (`USER_PARTNER`) applies.
+
+After a successful post, the command prints a confirmation and the refreshed notes timeline. The timeline shows each note's type and direction after its author, whichever of the two the API sent:
 
 ```text
-Note created: id=42 summary=Investigating on our side. priority=MEDIUM
+Note created: id=42 summary=Investigating on our side. priority=MEDIUM type=USER_PARTNER
 Notes timeline for request id=123 token=... status=ACCEPTED
- 1. [2026-01-01T12:00:00Z] engineer@example.com | Investigating on our side.
+ 1. [2026-01-01T12:00:00Z] engineer@example.com (USER_PARTNER, OUTBOUND) | Investigating on our side.
 ```
 
 Validation examples:
 
 ```text
+Failed: Type must be one of: USER_PARTNER, USER_PUBLIC
 Note text must not be empty.
 Note text exceeds maximum length of 5000 characters.
 Cannot add notes to a closed request (status=CLOSED).
