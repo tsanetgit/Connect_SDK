@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class CollaborationRequestNoteAddExecutor {
     private static final String DEFAULT_PRIORITY = "MEDIUM";
     private static final Set<String> VALID_PRIORITIES = Set.of("LOW", "MEDIUM", "HIGH");
+    private static final Set<String> VALID_TYPES = Set.of("USER_PARTNER", "USER_PUBLIC");
     private static final int AUTO_SUMMARY_MAX_LENGTH = 80;
 
     private final TsaNetApiSession session;
@@ -41,6 +42,7 @@ public class CollaborationRequestNoteAddExecutor {
         String description = resolveDescription(args, scanner);
         String summary = CliArgs.summary(args).orElseGet(() -> deriveSummary(description));
         String priority = resolvePriority(args);
+        String type = resolveType(args);
 
         CaseNoteValidation.ValidationResult validation = CaseNoteValidation.validate(summary, description);
         if (!validation.valid()) {
@@ -53,7 +55,8 @@ public class CollaborationRequestNoteAddExecutor {
                 request.token(),
                 summary,
                 description,
-                priority
+                priority,
+                type
             );
             System.out.println(
                 EntityPrinter.info(
@@ -61,6 +64,7 @@ public class CollaborationRequestNoteAddExecutor {
                     "Note created: id=" + created.id()
                         + " summary=" + created.summary()
                         + " priority=" + created.priority()
+                        + " type=" + created.type()
                 )
             );
 
@@ -97,6 +101,15 @@ public class CollaborationRequestNoteAddExecutor {
             throw new IllegalArgumentException("Priority must be one of: LOW, MEDIUM, HIGH");
         }
         return priority;
+    }
+
+    /** The optional {@code --type}: USER_PARTNER or USER_PUBLIC, or null for the server's default. */
+    static String resolveType(String[] args) {
+        String type = CliArgs.noteType(args).map(value -> value.toUpperCase(Locale.ROOT)).orElse(null);
+        if (type != null && !VALID_TYPES.contains(type)) {
+            throw new IllegalArgumentException("Type must be one of: USER_PARTNER, USER_PUBLIC");
+        }
+        return type;
     }
 
     static String deriveSummary(String description) {

@@ -28,12 +28,14 @@ public final class EntityPrinter {
         println(context, GREEN, title + " (" + notes.size() + "):");
         for (CaseNoteDto note : CollaborationRequestNotesTimeline.chronological(notes)) {
             System.out.printf(
-                " - id=%s caseToken=%s token=%s status=%s priority=%s summary=%s creator=%s%n",
+                " - id=%s caseToken=%s token=%s status=%s priority=%s type=%s direction=%s summary=%s creator=%s%n",
                 note.id(),
                 note.caseToken(),
                 note.token(),
                 note.status(),
                 note.priority(),
+                note.type() != null ? note.type() : "",
+                note.direction() != null ? note.direction() : "",
                 note.summary(),
                 CollaborationRequestNotesTimeline.author(note)
             );
@@ -59,10 +61,11 @@ public final class EntityPrinter {
         int index = 1;
         for (CaseNoteDto note : notes) {
             System.out.printf(
-                " %d. [%s] %s | %s%n",
+                " %d. [%s] %s%s | %s%n",
                 index++,
                 note.createdAt() != null ? note.createdAt() : "unknown",
                 CollaborationRequestNotesTimeline.author(note),
+                typeAndDirection(note),
                 note.summary() != null ? note.summary() : ""
             );
             String preview = CollaborationRequestNotesTimeline.contentPreview(note.description());
@@ -70,6 +73,14 @@ public final class EntityPrinter {
                 System.out.printf("    %s%n", preview);
             }
         }
+    }
+
+    /** " (USER_PUBLIC, OUTBOUND)" with whichever of the two the API sent; empty when it sent neither. */
+    private static String typeAndDirection(CaseNoteDto note) {
+        String joined = java.util.stream.Stream.of(note.type(), note.direction())
+            .filter(value -> value != null && !value.isBlank())
+            .collect(java.util.stream.Collectors.joining(", "));
+        return joined.isEmpty() ? "" : " (" + joined + ")";
     }
 
     public static void printResponses(CliRunContext context, String title, List<CaseResponseDto> responses) {
