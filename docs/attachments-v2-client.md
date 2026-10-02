@@ -63,12 +63,23 @@ How the SDK uploads:
 - Each part gets three attempts, shared by every kind of retry: a `403` refresh, and the same
   link again after an I/O failure, a `429` or a `5xx`.
 
+**Receiver allowlist.** An account can list the companies it may deliver to:
+`allowedReceiverCompanyIds` on `ApplicationUserAccount` (`withAllowedReceiverCompanyIds`) or
+`TsaNetApiConfiguration`, and `allowed-receiver-company-ids` in the console's account
+configuration. With a list set, `createGrant` (and so `send`) reads the case's receiving
+company first and refuses one that isn't on it with `attachment/receiver-not-allowed`, before
+any grant is requested. A case whose receiving company can't be read fails closed with
+`client/precondition`. No list (the default) is unrestricted, and the case isn't read. This
+is a second check: the platform keeps its own sender allowlist and refuses grant creation
+with a `403`, which the SDK reports with the same code.
+
 `AttachmentV2Exception.code()` says what failed:
 
 | Code | Cause |
 |---|---|
 | `attachment/invalid-request` | `400`: a part or block number outside the plan, or S3 receipts that don't cover it |
-| `attachment/forbidden` | `403`: the caller isn't the case's sender, or the receiver isn't on the sender's allowlist |
+| `attachment/forbidden` | `403`: the caller isn't the case's sender, or any other refusal |
+| `attachment/receiver-not-allowed` | the case's receiving company isn't on the account's receiver allowlist (checked before any grant request), or the platform's sender allowlist refused grant creation (`403`) |
 | `attachment/not-found` | `404`: no such case or grant, a receiver with no storage configuration (on create), or a call that doesn't match the grant's mode |
 | `attachment/grant-terminal` | `409`: the grant is completed, abandoned or expired |
 | `attachment/upload-mismatch` | `422`: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
@@ -78,7 +89,7 @@ How the SDK uploads:
 | `client/upload-unreachable` | a `PUT` got no answer after three attempts |
 | `client/link-not-refreshable` | a link expired and asking again returned the same link |
 | `client/unsupported-upload-mode` | the grant's mode isn't one the SDK uploads (`gcsResumable`) |
-| `client/precondition` | the file doesn't match the grant, or a link doesn't fit the plan |
+| `client/precondition` | the file doesn't match the grant, a link doesn't fit the plan, or a receiver allowlist is set and the case's receiving company can't be read |
 | `client/connectivity` | the Connect API could not be reached |
 
 ## Without the SDK
@@ -118,6 +129,14 @@ uploads as 140 parts of 5 MiB.
 A `404` means the case wasn't found, or the receiving company hasn't registered a storage
 configuration for V2 delivery; the `detail` says which ("Receiver has not registered a
 storage configuration"). Until the receiver registers one, there is nothing to retry.
+
+A `403` on create is either a caller that isn't the case's sender (problem type
+`https://api.tsanet.org/errors/access-denied`) or a receiver that isn't on the sender's
+allowlist (`https://api.tsanet.org/errors/attachment-receiver-not-allowed`). The platform
+sends these types; the spec doesn't document them yet (`tsanetgit/Connect-API-Code#183`). To
+check a receiver yourself before creating a grant, read the case
+(`GET /v1/collaboration-requests/{token}`) and compare its `receiveCompanyId` with your own
+list, refusing when it's missing.
 
 A `502` means the receiver's storage provider failed and no grant was created: retry later.
 

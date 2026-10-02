@@ -59,7 +59,7 @@ public class CollaborationRequestAttachmentDeliverExecutor {
             System.out.println(EntityPrinter.info(cliRunContext, "Platform outcome: grant " + outcome.grantId()
                 + " " + outcome.status() + " (" + outcome.mode().value() + ", " + outcome.expectedSizeBytes() + " bytes)"));
         } catch (AttachmentV2Exception ex) {
-            System.out.println(EntityPrinter.error(cliRunContext, "Delivery failed: " + ex.getMessage()));
+            System.out.println(EntityPrinter.error(cliRunContext, "Delivery failed (" + ex.code() + "): " + ex.getMessage()));
         } catch (IllegalArgumentException | IllegalStateException ex) {
             System.out.println(EntityPrinter.error(cliRunContext, ex.getMessage()));
         }
