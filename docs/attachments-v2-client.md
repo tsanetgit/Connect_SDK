@@ -83,7 +83,7 @@ How the SDK uploads:
 | Code | Cause |
 |---|---|
 | `attachment/invalid-request` | 400: a link call named a part or block number outside the plan, or S3 receipts don't cover it |
-| `attachment/forbidden` | 403: the caller's company isn't the case's sender, or the receiver isn't on its allowlist |
+| `attachment/forbidden` | 403: the caller's company isn't the case's sender, or the receiver isn't on the sender's allowlist |
 | `attachment/not-found` | 404: no such case or grant, a receiver that has registered no storage configuration (on create), or a link or complete call that doesn't match the grant's mode |
 | `attachment/grant-terminal` | 409: the grant is completed, abandoned or expired, so it can't take this call |
 | `attachment/upload-mismatch` | 422: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
@@ -93,8 +93,8 @@ How the SDK uploads:
 | `client/upload-unreachable` | an upload `PUT` could not reach the storage after the retry budget |
 | `client/link-not-refreshable` | a link is past its expiry and asking again returned the same link, so the upload can't go on |
 | `client/unsupported-upload-mode` | the grant's mode is not one this client uploads (`gcsResumable`) |
-| `client/precondition` | a client-side precondition failed: the file, the plan, or a link that doesn't fit the plan |
-| `client/connectivity` | the Connect API could not be reached at all |
+| `client/precondition` | a client-side precondition failed: the file is empty, unreadable or not the size the grant expects; the grant's plan is missing or doesn't fit the file; a link doesn't fit the plan or isn't a usable request; or an answer is empty or missing a field this client needs |
+| `client/connectivity` | the Connect API could not be reached, or its answer was lost |
 | `client/interrupted` | the calling thread was interrupted; the interrupt is restored and nothing more is sent |
 
 ## Without the SDK
