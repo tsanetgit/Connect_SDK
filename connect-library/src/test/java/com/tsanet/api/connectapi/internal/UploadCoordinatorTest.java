@@ -435,6 +435,7 @@ class UploadCoordinatorTest {
             assertThatThrownBy(() -> backingOff.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
                 .isInstanceOf(AttachmentV2Exception.class)
                 .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
             Thread.interrupted();
         }

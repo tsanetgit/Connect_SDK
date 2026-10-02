@@ -294,6 +294,9 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         } catch (RuntimeException abandonFailure) {
             primary.addSuppressed(abandonFailure);
         }
+        if (Thread.currentThread().isInterrupted()) {
+            return null;
+        }
         try {
             AttachmentGrant current = getGrant(caseToken, grantId);
             return current.completed() ? current : null;

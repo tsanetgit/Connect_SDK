@@ -170,6 +170,8 @@ class ConnectApiAttachmentsV2GatewayTest {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
         when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenThrow(apiError(422));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.ABANDONED));
 
         assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
             .isInstanceOf(AttachmentV2Exception.class)
@@ -177,6 +179,7 @@ class ConnectApiAttachmentsV2GatewayTest {
 
         verify(api).completeSingleUpload(TOKEN, GRANT_ID);
         verify(api).abandonAttachmentGrant(TOKEN, GRANT_ID);
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
     }
 
     @Test
@@ -360,6 +363,39 @@ class ConnectApiAttachmentsV2GatewayTest {
     }
 
     @Test
+    void anInterruptThatArrivesDuringAbandonStopsTheReadBack() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
+        });
+        try {
+            assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(e.getSuppressed()).hasSize(1));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void oneUnreadableGrantFailsTheWholePage() {
+        when(api.listAttachmentGrants(TOKEN, 0, 20)).thenReturn(new com.tsanet.api.generated.model.AttachmentGrantPageDTO()
+            .content(List.of(grantDto(AttachmentUploadMode.SINGLE, AttachmentGrantStatus.COMPLETED),
+                grantDto(AttachmentUploadMode.SINGLE, AttachmentGrantStatus.OPEN).grantId(null)))
+            .totalElements(2L).totalPages(1).size(20).number(0));
+
+        assertThatThrownBy(() -> gateway.listGrants(TOKEN, 0, 20))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .hasMessageContaining("grantId");
+    }
+
+    @Test
     void anInterruptedUploadIsNotAbandonedOverTheNetwork() {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
@@ -382,6 +418,8 @@ class ConnectApiAttachmentsV2GatewayTest {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
         when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenThrow(apiError(502));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.ABANDONED));
 
         assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
             .isInstanceOf(AttachmentV2Exception.class)
@@ -389,6 +427,7 @@ class ConnectApiAttachmentsV2GatewayTest {
 
         verify(api, times(3)).completeSingleUpload(TOKEN, GRANT_ID);
         verify(api).abandonAttachmentGrant(TOKEN, GRANT_ID);
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
     }
 
     @Test
