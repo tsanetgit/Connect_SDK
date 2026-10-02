@@ -236,6 +236,9 @@ wrong password reads `HTTP 401 Authentication Failed`; an invalid lifecycle tran
 
 Each `CaseNoteDto` carries the note's `type` (`USER_PUBLIC`, `USER_PARTNER` or `SYSTEM`, exactly as the API sent it), the authoring company's `companyId`, and its `direction`: `OUTBOUND` when the company of the account that fetched it wrote the note, `INBOUND` when another company did. A platform-generated note comes without `companyId` and `direction`. Each is null when the API didn't send it, and the SQLite cache stores all three. The 14-argument constructor from before these fields is deprecated.
 
+<!-- PROVISIONAL(tsanetgit/Connect-API-Code#132): the server returns notes written before note types existed as USER_PARTNER. If #132 backfills platform notes as SYSTEM, say so here instead. -->
+Notes written before note types existed, platform notes such as "Case Created" included, come back as `USER_PARTNER`. The SDK shows the type the API sends and doesn't infer one.
+
 ### Case responses — `session.caseResponses()`
 
 Case responses include approval and other comment-like activity on a collaboration request.
