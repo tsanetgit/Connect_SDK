@@ -37,12 +37,15 @@ if (grant.completed()) {
 }
 ```
 
-`send` creates the grant, uploads and completes. If the upload or the complete fails, it
-abandons the grant and throws `AttachmentV2Exception`, except on a `409`, where the grant is
-already completed, abandoned or expired. Complete is retried on a `5xx` (the spec documents
-`502`) or a lost response, because completing an already-completed grant returns it unchanged.
+What `send` does, from its javadoc:
 
-<!-- sync: AttachmentsV2Facade.send. SendDocSyncTest keeps this paragraph equal to the javadoc's. -->
+<!-- sync: AttachmentsV2Facade.send. AttachmentsV2GuideSyncTest keeps these paragraphs equal to the javadoc's. -->
+
+Create a grant, upload, complete. A failed upload or complete abandons the grant and rethrows,
+except a 409, where the grant is already terminal. That includes a 422 from complete, although
+the platform leaves that grant open for another upload: a caller who wants to upload again
+drives `upload` and `complete` itself. Complete is retried on a 5xx answer (a 502 is the
+documented one) or a lost response: completing an already-completed grant returns it unchanged.
 
 When complete fails and abandon doesn't settle the grant, the grant is read once, and a grant
 that reads completed is returned as delivered. An interrupted thread makes no more calls: it
@@ -85,7 +88,7 @@ How the SDK uploads:
 | `attachment/grant-terminal` | `409`: the grant is completed, abandoned or expired |
 | `attachment/upload-mismatch` | `422`: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
 | `attachment/provider-error` | `502`: the receiver's storage provider failed; nothing changed |
-| `attachment/api-error` | any other error answer from the Connect API, or an answer the SDK could not read |
+| `attachment/api-error` | any other non-2xx answer from the Connect API, or an answer this client could not read |
 | `client/upload-rejected` | the storage refused a `PUT`, or kept failing it |
 | `client/upload-unreachable` | a `PUT` got no answer after three attempts |
 | `client/link-not-refreshable` | a link expired and asking again returned the same link |

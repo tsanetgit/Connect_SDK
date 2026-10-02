@@ -1,0 +1,141 @@
+package com.tsanet.api.facade;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+/**
+ * docs/attachments-v2-client.md copies text from the javadoc, because members read the guide
+ * where the javadoc isn't rendered. The javadoc is the source: when it changes, copy it into the
+ * guide. Javadoc code and link tags become backticks before the two are compared.
+ */
+class AttachmentsV2GuideSyncTest {
+
+    private static final Path FACADE = Path.of("src/main/java/com/tsanet/api/facade/AttachmentsV2Facade.java");
+    private static final Path EXCEPTION = Path.of("src/main/java/com/tsanet/api/attachments/v2/AttachmentV2Exception.java");
+    private static final Path GUIDE = Path.of("../docs/attachments-v2-client.md");
+    private static final String OPEN = "<!-- sync: AttachmentsV2Facade.send.";
+    private static final String CLOSE = "<!-- /sync -->";
+
+    @Test
+    void theGuideCarriesSendsJavadocWordForWord() throws IOException {
+        List<String> javadoc = sendJavadocParagraphs();
+        List<String> guide = guideParagraphs();
+
+        assertThat(javadoc).as("send()'s javadoc paragraphs in %s", FACADE).hasSizeGreaterThan(1);
+        assertThat(guide)
+            .as("the paragraphs between the sync markers in %s must equal send()'s javadoc", GUIDE)
+            .isEqualTo(javadoc);
+    }
+
+    /** Each listed code's cause in the guide's code table is its constant's javadoc. */
+    @Test
+    void theCodeTableCarriesTheConstantsJavadoc() throws IOException {
+        List<String> guide = Files.readAllLines(GUIDE);
+        for (String code : List.of("attachment/api-error")) {
+            String row = "| `" + code + "` | ";
+            List<String> rows = guide.stream().filter(line -> line.startsWith(row)).toList();
+            assertThat(rows).as("one %s row in %s", code, GUIDE).hasSize(1);
+            String cause = rows.get(0).substring(row.length()).replaceFirst("\\s*\\|\\s*$", "");
+
+            String javadoc = constantJavadoc(code);
+            String expected = Character.toLowerCase(javadoc.charAt(0)) + javadoc.substring(1).replaceFirst("\\.$", "");
+            assertThat(normalize(cause))
+                .as("the %s row in %s must equal the javadoc of its constant in %s", code, GUIDE, EXCEPTION)
+                .isEqualTo(expected);
+        }
+    }
+
+    /** The paragraphs of the javadoc just above the one {@code send(}, up to its first tag. */
+    private static List<String> sendJavadocParagraphs() throws IOException {
+        List<String> lines = Files.readAllLines(FACADE);
+        List<Integer> sends = new ArrayList<>();
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).contains("AttachmentGrant send(")) {
+                sends.add(i);
+            }
+        }
+        assertThat(sends).as("one send( in %s; with an overload, say which javadoc the guide copies", FACADE)
+            .hasSize(1);
+        int send = sends.get(0);
+        int start = send;
+        while (start >= 0 && !lines.get(start).contains("/**")) {
+            start--;
+        }
+        assertThat(start).as("send()'s javadoc in %s", FACADE).isNotNegative();
+
+        List<String> paragraphs = new ArrayList<>();
+        StringBuilder paragraph = new StringBuilder();
+        for (int i = start + 1; i < send; i++) {
+            String line = lines.get(i).trim();
+            String text = line.replaceFirst("^\\*\\s?", "");
+            boolean end = line.startsWith("*/") || text.startsWith("@");
+            if (end || text.isEmpty()) {
+                if (!paragraph.isEmpty()) {
+                    paragraphs.add(javadocText(paragraph.toString()));
+                    paragraph.setLength(0);
+                }
+                if (end) {
+                    break;
+                }
+                continue;
+            }
+            paragraph.append(text.replaceFirst("^<p>", "")).append(' ');
+        }
+        return paragraphs;
+    }
+
+    /** The javadoc of the constant whose value is {@code code}. */
+    private static String constantJavadoc(String code) throws IOException {
+        List<String> lines = Files.readAllLines(EXCEPTION);
+        List<Integer> constants = new ArrayList<>();
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).contains("= \"" + code + "\";")) {
+                constants.add(i);
+            }
+        }
+        assertThat(constants).as("one constant for %s in %s", code, EXCEPTION).hasSize(1);
+        int constant = constants.get(0);
+        assertThat(lines.get(constant - 1).trim()).as("a javadoc ending just above the constant for %s in %s", code, EXCEPTION)
+            .endsWith("*/");
+        int start = constant - 1;
+        while (start > 0 && !lines.get(start).contains("/**")) {
+            start--;
+        }
+        StringBuilder text = new StringBuilder();
+        for (int i = start; i < constant; i++) {
+            text.append(lines.get(i).trim().replace("/**", "").replace("*/", "").replaceFirst("^\\*\\s?", ""))
+                .append(' ');
+        }
+        String javadoc = javadocText(text.toString());
+        assertThat(javadoc).as("the javadoc of the constant for %s in %s", code, EXCEPTION).isNotBlank();
+        return javadoc;
+    }
+
+    private static List<String> guideParagraphs() throws IOException {
+        String guide = Files.readString(GUIDE);
+        int open = guide.indexOf(OPEN);
+        assertThat(open).as("%s in %s", OPEN, GUIDE).isNotNegative();
+        int body = guide.indexOf("-->", open) + "-->".length();
+        int close = guide.indexOf(CLOSE, body);
+        assertThat(close).as("%s after the opening marker in %s", CLOSE, GUIDE).isPositive();
+        return Arrays.stream(guide.substring(body, close).split("\\n\\s*\\n"))
+            .map(AttachmentsV2GuideSyncTest::normalize)
+            .filter(paragraph -> !paragraph.isEmpty())
+            .toList();
+    }
+
+    private static String javadocText(String text) {
+        return normalize(text.replaceAll("\\{@code ([^}]*)}", "`$1`").replaceAll("\\{@link #?([^}]*)}", "`$1`"));
+    }
+
+    private static String normalize(String text) {
+        return text.replaceAll("\\s+", " ").trim();
+    }
+}
