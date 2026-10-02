@@ -28,7 +28,11 @@ public interface AttachmentsV2Facade {
 
     AttachmentGrant getGrant(String caseToken, long grantId);
 
-    /** One page of the case's grants; {@code page} counts from 0. */
+    /**
+     * One page of the case's grants; {@code page} counts from 0. A grant on the page that this
+     * client can't read, one missing a required field, fails the whole page rather than being
+     * left out.
+     */
     AttachmentGrantPage listGrants(String caseToken, int page, int size);
 
     /** The upload link for a {@code single} grant. Asking again signs a fresh one. */
