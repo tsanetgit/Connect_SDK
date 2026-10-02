@@ -520,8 +520,8 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     }
 
     @Override
-    public CaseNoteDto createNote(String caseToken, String summary, String description, String priority) {
-        return notesGateway.createNote(caseToken, summary, description, priority);
+    public CaseNoteDto createNote(String caseToken, String summary, String description, String priority, String type) {
+        return notesGateway.createNote(caseToken, summary, description, priority, type);
     }
 
     @Override

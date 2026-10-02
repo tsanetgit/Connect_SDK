@@ -9,6 +9,7 @@ import com.tsanet.api.generated.api.CaseNotesApi;
 import com.tsanet.api.generated.model.CaseNoteDTO;
 import com.tsanet.api.generated.model.CaseNoteTemplateDTO;
 import com.tsanet.api.generated.model.NotePriority;
+import com.tsanet.api.generated.model.NoteType;
 import com.tsanet.api.storage.CaseNoteStorageService;
 import java.util.Collections;
 import java.util.List;
@@ -41,6 +42,13 @@ public class ConnectApiNotesGateway {
     }
 
     public CaseNoteDto createNote(String caseToken, String summary, String description, String priority) {
+        return createNote(caseToken, summary, description, priority, null);
+    }
+
+    public CaseNoteDto createNote(String caseToken, String summary, String description, String priority, String type) {
+        if (NoteType.SYSTEM.getValue().equals(type)) {
+            throw new IllegalArgumentException("SYSTEM notes are written by the platform; create USER_PARTNER or USER_PUBLIC");
+        }
         requireLogin();
 
         CaseNoteValidation.ValidationResult validation = CaseNoteValidation.validate(summary, description);
@@ -52,6 +60,9 @@ public class ConnectApiNotesGateway {
         template.setSummary(summary.strip());
         template.setDescription(description.strip());
         template.setPriority(NotePriority.fromValue(priority));
+        if (type != null) {
+            template.setType(NoteType.fromValue(type));
+        }
 
         CaseNoteDTO created = caseNotesApi.createNote(caseToken, template);
         if (created == null) {
@@ -77,7 +88,10 @@ public class ConnectApiNotesGateway {
             enumValue(dto.getStatus()),
             dto.getToken(),
             dateTime(dto.getCreatedAt()),
-            dateTime(dto.getUpdatedAt())
+            dateTime(dto.getUpdatedAt()),
+            enumValue(dto.getType()),
+            dto.getCompanyId(),
+            enumValue(dto.getDirection())
         );
     }
 
