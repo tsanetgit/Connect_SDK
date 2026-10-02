@@ -200,7 +200,7 @@ class UploadCoordinator {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new AttachmentV2Exception("interrupted while uploading part " + region.number(), 0,
-                    AttachmentV2Exception.UPLOAD_UNREACHABLE, e);
+                    AttachmentV2Exception.INTERRUPTED, e);
             }
             int status = result.status();
             if (status / 100 == 2) {
@@ -291,7 +291,7 @@ class UploadCoordinator {
             Thread.sleep(duration.toMillis());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new AttachmentV2Exception("interrupted while backing off", 0, AttachmentV2Exception.UPLOAD_UNREACHABLE, e);
+            throw new AttachmentV2Exception("interrupted while backing off", 0, AttachmentV2Exception.INTERRUPTED, e);
         }
     }
 

@@ -203,7 +203,7 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         try {
             return completeWithRetry(caseToken, grant, receipts);
         } catch (RuntimeException completeFailure) {
-            AttachmentGrant completed = abandonAfterFailedComplete(caseToken, grant.grantId(), completeFailure);
+            AttachmentGrant completed = recoverAfterFailedComplete(caseToken, grant.grantId(), completeFailure);
             if (completed != null) {
                 return completed;
             }
@@ -257,9 +257,10 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     /**
      * Best effort; the original failure stays primary and keeps the abandon failure as
      * suppressed. A 409 means the grant is already terminal: there is nothing left to abandon.
+     * An interrupted thread makes no network call; the grant expires on the platform.
      */
     private void abandonUnlessTerminal(String caseToken, long grantId, RuntimeException primary) {
-        if (isTerminal(primary)) {
+        if (isTerminal(primary) || Thread.currentThread().isInterrupted()) {
             return;
         }
         try {
@@ -270,30 +271,39 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     }
 
     /**
-     * {@link #abandonUnlessTerminal}, for a complete that failed. When every complete lost its
-     * answer, one of them may still have landed: then abandon answers 409 and the grant reads
-     * completed, which is a delivery, not a failure. Returns that grant, or null.
+     * Settles a grant whose complete failed. When every complete lost its answer, one of them
+     * may still have landed, which is a delivery, not a failure. Returns the grant when it reads
+     * completed, otherwise null; the original failure stays primary and keeps every recovery
+     * failure as suppressed.
+     *
+     * <ul>
+     *   <li>An interrupted thread makes no network call.</li>
+     *   <li>A 409 from complete: the grant is already terminal and complete did not land.</li>
+     *   <li>An abandon that answered: the grant is abandoned, so the file was not delivered.</li>
+     *   <li>An abandon that failed, a 409 or a lost answer alike, settles nothing: the grant is
+     *       read once.</li>
+     * </ul>
      */
-    private AttachmentGrant abandonAfterFailedComplete(String caseToken, long grantId, RuntimeException primary) {
-        if (isTerminal(primary)) {
+    private AttachmentGrant recoverAfterFailedComplete(String caseToken, long grantId, RuntimeException primary) {
+        if (isTerminal(primary) || Thread.currentThread().isInterrupted()) {
             return null;
         }
         try {
             abandon(caseToken, grantId);
+            return null;
         } catch (RuntimeException abandonFailure) {
-            if (isTerminal(abandonFailure)) {
-                try {
-                    AttachmentGrant current = getGrant(caseToken, grantId);
-                    if (current.completed()) {
-                        return current;
-                    }
-                } catch (RuntimeException readFailure) {
-                    abandonFailure.addSuppressed(readFailure);
-                }
-            }
             primary.addSuppressed(abandonFailure);
         }
-        return null;
+        if (Thread.currentThread().isInterrupted()) {
+            return null;
+        }
+        try {
+            AttachmentGrant current = getGrant(caseToken, grantId);
+            return current.completed() ? current : null;
+        } catch (RuntimeException readFailure) {
+            primary.addSuppressed(readFailure);
+            return null;
+        }
     }
 
     private static boolean isTerminal(RuntimeException failure) {
@@ -473,7 +483,7 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new AttachmentV2Exception("interrupted while retrying complete", 0,
-                AttachmentV2Exception.CONNECTIVITY, e);
+                AttachmentV2Exception.INTERRUPTED, e);
         }
     }
 }

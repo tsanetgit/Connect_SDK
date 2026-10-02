@@ -37,12 +37,28 @@ if (grant.completed()) {
 }
 ```
 
-`send` creates the grant, uploads and completes. If the upload or the complete fails, it
-abandons the grant and throws `AttachmentV2Exception`, except on a `409`, where the grant is
-already completed, abandoned or expired. Complete is retried on a `5xx` (the spec documents
-`502`) or a lost response, because completing an already-completed grant returns it unchanged.
-If every complete loses its answer, `send` checks the grant before reporting a failure: a grant
-that reads completed is returned as delivered.
+What `send` does, from its javadoc:
+
+<!-- sync: AttachmentsV2Facade.send. AttachmentsV2GuideSyncTest keeps these paragraphs equal to the javadoc's. -->
+
+Create a grant, upload, complete. A failed upload or complete abandons the grant and rethrows,
+except a 409, where the grant is already terminal. That includes a 422 from complete, although
+the platform leaves that grant open for another upload: a caller who wants to upload again
+drives `upload` and `complete` itself. Complete is retried on a 5xx answer (a 502 is the
+documented one) or a lost response: completing an already-completed grant returns it unchanged.
+
+When complete fails and abandon doesn't settle the grant, the grant is read once, and a grant
+that reads completed is returned as delivered. An interrupted thread makes no more calls: it
+doesn't start an abandon or a read, and an open grant expires on the platform. The code is
+usually `client/interrupted`, but an interrupt during a complete call that isn't retried (the
+last attempt, or a failure that isn't retryable) surfaces that call's own code; the interrupt
+flag is set either way. So after the upload, `client/connectivity`, any failure with the
+interrupt flag set, an `attachment/api-error` for an answer this client couldn't read (a client
+built against an older spec than the server runs), or a `client/precondition` for an answer this
+client couldn't use (empty, or missing a field it needs) doesn't prove the file wasn't
+delivered: read the grant before sending it again.
+
+<!-- /sync -->
 
 Every Connect API call is also on the facade on its own, for a client that drives the flow
 itself: `createGrant`, `getGrant`, `listGrants`, `singleUploadLink`, `s3PartLinks`,
@@ -67,19 +83,20 @@ How the SDK uploads:
 
 | Code | Cause |
 |---|---|
-| `attachment/invalid-request` | `400`: a part or block number outside the plan, or S3 receipts that don't cover it |
-| `attachment/forbidden` | `403`: the caller isn't the case's sender, or the receiver isn't on the sender's allowlist |
-| `attachment/not-found` | `404`: no such case or grant, a receiver with no storage configuration (on create), or a call that doesn't match the grant's mode |
-| `attachment/grant-terminal` | `409`: the grant is completed, abandoned or expired |
-| `attachment/upload-mismatch` | `422`: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
-| `attachment/provider-error` | `502`: the receiver's storage provider failed; nothing changed |
-| `attachment/api-error` | any other error answer from the Connect API, or an answer the SDK could not read |
-| `client/upload-rejected` | the storage refused a `PUT`, or kept failing it |
-| `client/upload-unreachable` | a `PUT` got no answer after three attempts |
-| `client/link-not-refreshable` | a link expired and asking again returned the same link |
-| `client/unsupported-upload-mode` | the grant's mode isn't one the SDK uploads (`gcsResumable`) |
-| `client/precondition` | the file doesn't match the grant, or a link doesn't fit the plan |
-| `client/connectivity` | the Connect API could not be reached |
+| `attachment/invalid-request` | 400: a link call named a part or block number outside the plan, or S3 receipts don't cover it |
+| `attachment/forbidden` | 403: the caller's company isn't the case's sender, or the receiver isn't on the sender's allowlist |
+| `attachment/not-found` | 404: no such case or grant, a receiver that has registered no storage configuration (on create), or a link or complete call that doesn't match the grant's mode |
+| `attachment/grant-terminal` | 409: the grant is completed, abandoned or expired, so it can't take this call |
+| `attachment/upload-mismatch` | 422: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
+| `attachment/provider-error` | 502: the receiver's storage provider failed; nothing changed, retry later |
+| `attachment/api-error` | any other non-2xx answer from the Connect API, or an answer this client could not read |
+| `client/upload-rejected` | the storage answered an upload `PUT` with a status this client doesn't retry, or kept failing |
+| `client/upload-unreachable` | an upload `PUT` could not reach the storage after the retry budget |
+| `client/link-not-refreshable` | a link is past its expiry and asking again returned the same link, so the upload can't go on |
+| `client/unsupported-upload-mode` | the grant's mode is not one this client uploads (`gcsResumable`) |
+| `client/precondition` | a client-side precondition failed: the file is empty, unreadable or not the size the grant expects; the grant's plan is missing or doesn't fit the file; a link doesn't fit the plan or isn't a usable request; or an answer is empty or missing a field this client needs |
+| `client/connectivity` | the Connect API could not be reached, or its answer was lost |
+| `client/interrupted` | the calling thread was interrupted; the interrupt is restored and nothing more is sent |
 
 ## Without the SDK
 
