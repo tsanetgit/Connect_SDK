@@ -31,9 +31,9 @@ class TsaNetApiSessionFactoryTest {
             TsaNetApiConnectionSettings.of("http://localhost:8080", "/tmp/cache")
         );
         ApplicationUserAccount account = ApplicationUserAccount.passwordAccount("acme", "/tmp/acme.db", "u", "p")
-            .withAllowedReceiverCompanyIds(java.util.List.of(1112L, 1113L));
+            .withAllowedReceiverCompanyIds(java.util.List.of(101L, 202L));
 
-        assertThat(factory.configurationFor(account).allowedReceiverCompanyIds()).containsExactlyInAnyOrder(1112L, 1113L);
+        assertThat(factory.configurationFor(account).allowedReceiverCompanyIds()).containsExactlyInAnyOrder(101L, 202L);
         assertThat(factory.configurationFor(ApplicationUserAccount.passwordAccount("beta", "/tmp/beta.db", "u", "p"))
             .allowedReceiverCompanyIds()).isEmpty();
     }
@@ -52,7 +52,7 @@ class TsaNetApiSessionFactoryTest {
     @Test
     void aNullCompanyIdIsRefusedClearlyAndAnImmutableSetIsAccepted() {
         var auth = new com.tsanet.api.auth.PasswordAuthConfig("u", "p");
-        java.util.List<Long> withNull = java.util.Arrays.asList(1112L, null);
+        java.util.List<Long> withNull = java.util.Arrays.asList(101L, null);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> ApplicationUserAccount.passwordAccount("a", "/tmp/x.db", "u", "p")
                 .withAllowedReceiverCompanyIds(withNull))
@@ -60,9 +60,9 @@ class TsaNetApiSessionFactoryTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> new TsaNetApiConfiguration("http://x", "/tmp/x.db", "a", auth,
                 new java.util.HashSet<>(withNull)))
             .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("null");
-        assertThat(new TsaNetApiConfiguration("http://x", "/tmp/x.db", "a", auth, java.util.Set.of(1112L))
-            .allowedReceiverCompanyIds()).containsExactly(1112L);
-        assertThat(new ApplicationUserAccount("a", "/tmp/x.db", auth, java.util.Set.of(1112L))
-            .allowedReceiverCompanyIds()).containsExactly(1112L);
+        assertThat(new TsaNetApiConfiguration("http://x", "/tmp/x.db", "a", auth, java.util.Set.of(101L))
+            .allowedReceiverCompanyIds()).containsExactly(101L);
+        assertThat(new ApplicationUserAccount("a", "/tmp/x.db", auth, java.util.Set.of(101L))
+            .allowedReceiverCompanyIds()).containsExactly(101L);
     }
 }

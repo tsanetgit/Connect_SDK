@@ -268,10 +268,10 @@ class ConnectApiAttachmentsV2GatewayWireTest {
 
     @Test
     void theRealCaseLookupRefusesAReceiverOffTheListWithNoGrantRequest() {
-        ConnectApiAttachmentsV2Gateway guarded = allowlisted(1112L);
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(101L);
         server.expect(requestTo(CASE)).andExpect(method(HttpMethod.GET))
             .andRespond(withStatus(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON)
-                .body("{\"id\":3642,\"token\":\"" + TOKEN + "\",\"receiveCompanyId\":1113,\"submitCompanyId\":1112}"));
+                .body("{\"id\":77,\"token\":\"" + TOKEN + "\",\"receiveCompanyId\":202,\"submitCompanyId\":101}"));
 
         assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 12))
             .isInstanceOf(AttachmentV2Exception.class)
@@ -281,7 +281,7 @@ class ConnectApiAttachmentsV2GatewayWireTest {
 
     @Test
     void aFailedCaseLookupKeepsItsCodeAndDoesNotQuoteTheToken() {
-        ConnectApiAttachmentsV2Gateway guarded = allowlisted(1112L);
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(101L);
         server.expect(requestTo(CASE)).andExpect(method(HttpMethod.GET))
             .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .body("{\"title\":\"Not Found\",\"status\":404,\"detail\":\"no case at /v1/collaboration-requests/"

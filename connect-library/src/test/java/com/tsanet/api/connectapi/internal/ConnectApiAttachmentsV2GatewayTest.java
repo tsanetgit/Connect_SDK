@@ -342,8 +342,8 @@ class ConnectApiAttachmentsV2GatewayTest {
 
     // ---------- the receiver allowlist (tsanetgit/Connect_SDK#92) ----------
 
-    private static final long ALLOWED = 1112L;
-    private static final long NOT_ALLOWED = 1113L;
+    private static final long ALLOWED = 101L;
+    private static final long NOT_ALLOWED = 202L;
 
     private final List<String> caseLookups = new java.util.ArrayList<>();
 
