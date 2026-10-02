@@ -182,6 +182,15 @@ class ConnectApiNotesGatewayTest {
     }
 
     @Test
+    void aBadTypeIsRefusedBeforeTheLoginCheck() {
+        ConnectApiNotesGateway loggedOut = new ConnectApiNotesGateway(caseNotesApi, new ConnectApiSessionStore(), storageService);
+
+        assertThatThrownBy(() -> loggedOut.createNote("tok-9", "Typo", "Body", "LOW", "PUBLIC"))
+            .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(caseNotesApi);
+    }
+
+    @Test
     void theCreatableTypesAreEverySpecNoteTypeButSystem() {
         assertThat(com.tsanet.api.facade.CaseNotesFacade.CREATABLE_NOTE_TYPES)
             .as("CaseNotesFacade.CREATABLE_NOTE_TYPES must be the spec's NoteType values minus SYSTEM;"
