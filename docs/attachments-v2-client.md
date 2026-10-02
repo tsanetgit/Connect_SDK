@@ -42,10 +42,13 @@ abandons the grant and throws `AttachmentV2Exception`, except on a `409`, where 
 already completed, abandoned or expired. Complete is retried on a `5xx` (the spec documents
 `502`) or a lost response, because completing an already-completed grant returns it unchanged.
 If every complete loses its answer, `send` checks the grant before reporting a failure: a grant
-that reads completed is returned as delivered. An interrupted thread makes no more calls, so
-nothing is abandoned or read, and the grant expires on the platform. So `client/connectivity`,
-`client/interrupted` or an unreadable answer (`attachment/api-error`) after the upload doesn't
-prove the file wasn't delivered: read the grant before sending it again.
+that reads completed is returned as delivered. An interrupted thread makes no more calls: it
+doesn't start an abandon or a read, and an open grant expires on the platform. The code is
+usually `client/interrupted`, but an interrupt during a complete call that isn't retried (the
+last attempt, or a failure that isn't retryable) surfaces that call's own code; the interrupt
+flag is set either way. So after the upload, `client/connectivity`, any failure with the
+interrupt flag set, or an unreadable answer (`attachment/api-error`) doesn't prove the file
+wasn't delivered: read the grant before sending it again.
 
 Every Connect API call is also on the facade on its own, for a client that drives the flow
 itself: `createGrant`, `getGrant`, `listGrants`, `singleUploadLink`, `s3PartLinks`,

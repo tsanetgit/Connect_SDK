@@ -74,11 +74,14 @@ public interface AttachmentsV2Facade {
      *
      * <p>When complete fails and abandon doesn't settle the grant, the grant is read once, and a
      * grant that reads completed is returned as delivered. An interrupted thread makes no more
-     * calls ({@code client/interrupted}): nothing is abandoned, and the grant expires on the
-     * platform. So {@code client/connectivity}, {@code client/interrupted}, or an
+     * calls: it doesn't start an abandon or a read, and an open grant expires on the platform.
+     * The code is usually {@code client/interrupted}, but an interrupt during a complete call
+     * that isn't retried (the last attempt, or a failure that isn't retryable) surfaces that
+     * call's own code; the interrupt flag is set either way. So after the upload,
+     * {@code client/connectivity}, any failure with the interrupt flag set, or an
      * {@code attachment/api-error} for an answer this client couldn't read (a client built
-     * against an older spec than the server runs), after the upload, doesn't prove the file
-     * wasn't delivered: read the grant before sending it again.
+     * against an older spec than the server runs) doesn't prove the file wasn't delivered: read
+     * the grant before sending it again.
      *
      * @param listener progress callback, or null
      * @return the completed grant
