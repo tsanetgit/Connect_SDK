@@ -172,6 +172,16 @@ class ConnectApiNotesGatewayTest {
     }
 
     @Test
+    void aTypeThatIsNotExactlyAUserTypeIsRefusedBeforeAnyRequest() {
+        assertThatThrownBy(() -> gateway.createNote("tok-8", "Spoofed", "Body", "LOW", "system"))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> gateway.createNote("tok-8", "Typo", "Body", "LOW", "PUBLIC"))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(caseNotesApi);
+    }
+
+    @Test
     void itReturnsEmptyListWhenApiReturnsNull() {
         when(caseNotesApi.getNotes("tok-empty", null, null, false)).thenReturn(null);
 
