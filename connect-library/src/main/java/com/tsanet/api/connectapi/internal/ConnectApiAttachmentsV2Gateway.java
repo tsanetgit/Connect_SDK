@@ -47,7 +47,10 @@ import org.springframework.web.client.RestClientException;
  * prints its URL, so none is ever logged or put in a message.
  *
  * <p>Errors from the Connect API become {@link AttachmentV2Exception}s whose code follows the
- * HTTP status, as the spec documents it for these endpoints.
+ * HTTP status, as the spec documents it for these endpoints, with one exception: on grant
+ * creation, the server's allowlist refusal (a {@code 403} with its own problem type) is
+ * {@code attachment/receiver-not-allowed}. With a receiver allowlist, the case read that
+ * precedes grant creation is a V1 call, and its errors map by the same status rules.
  */
 public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
 
@@ -104,7 +107,10 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         this.sessionStore = sessionStore;
         this.coordinator = coordinator;
         this.completeBackoff = completeBackoff;
-        this.allowedReceiverCompanyIds = Set.copyOf(allowedReceiverCompanyIds);
+        this.allowedReceiverCompanyIds = allowedReceiverCompanyIds == null ? Set.of() : Set.copyOf(allowedReceiverCompanyIds);
+        if (!this.allowedReceiverCompanyIds.isEmpty() && receivingCompanyOf == null) {
+            throw new IllegalArgumentException("a receiver allowlist needs a way to read the case's receiving company");
+        }
         this.receivingCompanyOf = receivingCompanyOf;
     }
 

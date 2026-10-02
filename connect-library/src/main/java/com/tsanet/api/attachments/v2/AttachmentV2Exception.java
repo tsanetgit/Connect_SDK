@@ -50,7 +50,10 @@ public class AttachmentV2Exception extends RuntimeException {
     public static final String LINK_NOT_REFRESHABLE = "client/link-not-refreshable";
     /** The grant's mode is not one this client uploads. */
     public static final String UNSUPPORTED_UPLOAD_MODE = "client/unsupported-upload-mode";
-    /** A client-side precondition failed: the file, the plan, or a link that doesn't fit the plan. */
+    /**
+     * A client-side precondition failed: the file, the plan, a link that doesn't fit the plan, or
+     * (with a receiver allowlist) a case that doesn't say who its receiving company is.
+     */
     public static final String CLIENT_PRECONDITION = "client/precondition";
     /** The Connect API could not be reached at all. */
     public static final String CONNECTIVITY = "client/connectivity";

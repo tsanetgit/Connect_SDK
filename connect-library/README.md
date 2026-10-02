@@ -45,6 +45,7 @@ var requests = session.collaborationRequests().listRequests();
 | `sqlitePath` | `String` | Path to the SQLite database file (required) |
 | `username` | `String` | Optional default username for `loginWithConfiguredCredentials()` |
 | `password` | `String` | Optional default password for `loginWithConfiguredCredentials()` |
+| `allowedReceiverCompanyIds` | `Set<Long>` | Optional V2 receiver allowlist: the companies this account may deliver attachments to; empty means unrestricted. On the canonical constructor and on `ApplicationUserAccount`; `of` and `forAccount` leave it empty. See `docs/attachments-v2-client.md`. |
 
 ## Session factory (isolated caches)
 
