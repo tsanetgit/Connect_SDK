@@ -363,6 +363,33 @@ class ConnectApiAttachmentsV2GatewayTest {
     }
 
     @Test
+    void anInterruptDuringTheLastCompleteKeepsItsCodeAndTheFlag() {
+        ConnectApiAttachmentsV2Gateway backingOff = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofMillis(1));
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        ConnectApiException lost = ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(lost)
+            .thenThrow(lost)
+            .thenAnswer(invocation -> {
+                Thread.currentThread().interrupt();
+                throw apiError(502);
+            });
+        try {
+            assertThatThrownBy(() -> backingOff.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.PROVIDER_ERROR));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api, times(3)).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
     void anInterruptThatArrivesDuringAbandonStopsTheReadBack() {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
