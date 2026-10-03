@@ -27,8 +27,9 @@ public class CaseNoteRepository {
             """
             INSERT INTO case_note (
                 id, case_id, case_token, company_name, creator_username, creator_email,
-                creator_name, summary, description, priority, status, token, created_at, updated_at, fetched_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                creator_name, summary, description, priority, status, token, created_at, updated_at, fetched_at,
+                type, company_id, direction
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 case_id = excluded.case_id,
                 case_token = excluded.case_token,
@@ -43,7 +44,10 @@ public class CaseNoteRepository {
                 token = excluded.token,
                 created_at = excluded.created_at,
                 updated_at = excluded.updated_at,
-                fetched_at = excluded.fetched_at
+                fetched_at = excluded.fetched_at,
+                type = excluded.type,
+                company_id = excluded.company_id,
+                direction = excluded.direction
             """,
             notes,
             notes.size(),
@@ -63,6 +67,9 @@ public class CaseNoteRepository {
                 ps.setString(13, note.createdAt());
                 ps.setString(14, note.updatedAt());
                 ps.setString(15, fetchedAt);
+                ps.setString(16, note.type());
+                ps.setObject(17, note.companyId());
+                ps.setString(18, note.direction());
             }
         );
     }
@@ -71,7 +78,8 @@ public class CaseNoteRepository {
         return jdbcTemplate.query(
             """
             SELECT id, case_id, case_token, company_name, creator_username, creator_email,
-                   creator_name, summary, description, priority, status, token, created_at, updated_at
+                   creator_name, summary, description, priority, status, token, created_at, updated_at,
+                   type, company_id, direction
             FROM case_note
             ORDER BY created_at, id
             """,
@@ -83,7 +91,8 @@ public class CaseNoteRepository {
         return jdbcTemplate.query(
             """
             SELECT id, case_id, case_token, company_name, creator_username, creator_email,
-                   creator_name, summary, description, priority, status, token, created_at, updated_at
+                   creator_name, summary, description, priority, status, token, created_at, updated_at,
+                   type, company_id, direction
             FROM case_note
             WHERE case_token = ?
             ORDER BY created_at, id
@@ -108,7 +117,16 @@ public class CaseNoteRepository {
             rs.getString("status"),
             rs.getString("token"),
             rs.getString("created_at"),
-            rs.getString("updated_at")
+            rs.getString("updated_at"),
+            rs.getString("type"),
+            nullableLong(rs, "company_id"),
+            rs.getString("direction")
         );
+    }
+
+    /** The driver refuses getObject(column, Long.class) on a NULL, and company_id is NULL whenever the API sent none. */
+    private static Long nullableLong(ResultSet rs, String column) throws SQLException {
+        long value = rs.getLong(column);
+        return rs.wasNull() ? null : value;
     }
 }

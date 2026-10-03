@@ -4,14 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.generated.api.CaseNotesApi;
 import com.tsanet.api.generated.model.CaseNoteDTO;
 import com.tsanet.api.generated.model.CaseNoteTemplateDTO;
+import com.tsanet.api.generated.model.CollaborationRequestDirection;
 import com.tsanet.api.generated.model.NotePriority;
+import com.tsanet.api.generated.model.NoteType;
 import com.tsanet.api.storage.CaseNoteRepository;
 import com.tsanet.api.storage.CaseNoteStorageService;
 import java.util.Collections;
@@ -86,6 +90,115 @@ class ConnectApiNotesGatewayTest {
     void itRejectsInvalidNoteInput() {
         assertThatThrownBy(() -> gateway.createNote("tok-2", "  ", "Body", "HIGH"))
             .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void itMapsTypeCompanyAndDirectionAndStoresThem() {
+        CaseNoteDTO apiNote = new CaseNoteDTO()
+            .id(8L)
+            .caseId(1L)
+            .summary("Typed")
+            .description("Details")
+            .priority(NotePriority.LOW)
+            .token("note-token-8")
+            .type(NoteType.USER_PUBLIC)
+            .companyId(101L)
+            .direction(CollaborationRequestDirection.OUTBOUND);
+        when(caseNotesApi.getNotes("tok-3", null, null, false)).thenReturn(List.of(apiNote));
+
+        List<CaseNoteDto> notes = gateway.getNotes("tok-3");
+
+        assertThat(notes).singleElement().satisfies(note -> {
+            assertThat(note.type()).isEqualTo("USER_PUBLIC");
+            assertThat(note.companyId()).isEqualTo(101L);
+            assertThat(note.direction()).isEqualTo("OUTBOUND");
+        });
+        assertThat(storageService.findByCaseToken("tok-3")).singleElement()
+            .extracting(CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
+            .containsExactly("USER_PUBLIC", 101L, "OUTBOUND");
+    }
+
+    @Test
+    void absentTypeCompanyAndDirectionStayNull() {
+        CaseNoteDTO platformNote = new CaseNoteDTO()
+            .id(9L)
+            .caseId(1L)
+            .summary("Case accepted.")
+            .description("Case accepted.")
+            .priority(NotePriority.LOW)
+            .token("note-token-9");
+        when(caseNotesApi.getNotes("tok-4", null, null, false)).thenReturn(List.of(platformNote));
+
+        assertThat(gateway.getNotes("tok-4")).singleElement()
+            .extracting(CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
+            .containsExactly(null, null, null);
+        assertThat(storageService.findByCaseToken("tok-4")).singleElement()
+            .extracting(CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
+            .containsExactly(null, null, null);
+    }
+
+    @Test
+    void aTypeGivenOnCreateIsSent() {
+        when(caseNotesApi.createNote(eq("tok-5"), any(CaseNoteTemplateDTO.class)))
+            .thenReturn(new CaseNoteDTO().id(10L).token("note-token-10"));
+
+        gateway.createNote("tok-5", "Public note", "Body", "LOW", "USER_PUBLIC");
+
+        ArgumentCaptor<CaseNoteTemplateDTO> captor = ArgumentCaptor.forClass(CaseNoteTemplateDTO.class);
+        verify(caseNotesApi).createNote(eq("tok-5"), captor.capture());
+        assertThat(captor.getValue().getType()).isEqualTo(NoteType.USER_PUBLIC);
+    }
+
+    @Test
+    void noTypeOnCreateLeavesItOutForTheServersDefault() {
+        when(caseNotesApi.createNote(eq("tok-6"), any(CaseNoteTemplateDTO.class)))
+            .thenReturn(new CaseNoteDTO().id(11L).token("note-token-11"));
+
+        gateway.createNote("tok-6", "Plain note", "Body", "LOW");
+        gateway.createNote("tok-6", "Plain note", "Body", "LOW", null);
+
+        ArgumentCaptor<CaseNoteTemplateDTO> captor = ArgumentCaptor.forClass(CaseNoteTemplateDTO.class);
+        verify(caseNotesApi, times(2)).createNote(eq("tok-6"), captor.capture());
+        assertThat(captor.getAllValues()).extracting(CaseNoteTemplateDTO::getType).containsOnlyNulls();
+    }
+
+    @Test
+    void aSystemNoteIsRefusedBeforeAnyRequest() {
+        assertThatThrownBy(() -> gateway.createNote("tok-7", "Spoofed", "Body", "LOW", "SYSTEM"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("SYSTEM");
+
+        verifyNoInteractions(caseNotesApi);
+    }
+
+    @Test
+    void aTypeThatIsNotExactlyAUserTypeIsRefusedBeforeAnyRequest() {
+        assertThatThrownBy(() -> gateway.createNote("tok-8", "Spoofed", "Body", "LOW", "system"))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> gateway.createNote("tok-8", "Typo", "Body", "LOW", "PUBLIC"))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(caseNotesApi);
+    }
+
+    @Test
+    void aBadTypeIsRefusedBeforeTheLoginCheck() {
+        ConnectApiNotesGateway loggedOut = new ConnectApiNotesGateway(caseNotesApi, new ConnectApiSessionStore(), storageService);
+
+        assertThatThrownBy(() -> loggedOut.createNote("tok-9", "Typo", "Body", "LOW", "PUBLIC"))
+            .isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(caseNotesApi);
+    }
+
+    @Test
+    void theCreatableTypesAreEverySpecNoteTypeButSystem() {
+        assertThat(com.tsanet.api.facade.CaseNotesFacade.CREATABLE_NOTE_TYPES)
+            .as("CaseNotesFacade.CREATABLE_NOTE_TYPES must be the spec's NoteType values minus SYSTEM;"
+                + " when it changes, update demo-ui/src/main/resources/static/app.js's note type select too")
+            .containsExactlyInAnyOrderElementsOf(java.util.Arrays.stream(NoteType.values())
+                .filter(type -> type != NoteType.SYSTEM)
+                .map(NoteType::getValue)
+                .toList());
     }
 
     @Test
