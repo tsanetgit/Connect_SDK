@@ -72,6 +72,11 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     /**
      * What the allowlist check needs from a case, as this account reads it.
      *
+     * <p>Skipping an {@code INBOUND} case relies on the server pairing two rules: it reads a case
+     * as {@code OUTBOUND} only for the company that submitted it, and it refuses grant creation by
+     * any company but the submitter before its own allowlist is consulted. A case read as
+     * {@code INBOUND} therefore never gets a grant, with or without this check.
+     *
      * @param inbound          the case reads {@code INBOUND}: this account is its receiver, not its
      *                         sender. False when it reads {@code OUTBOUND} or the answer has no direction
      * @param receiveCompanyId the case's receiving company; null when the answer doesn't say

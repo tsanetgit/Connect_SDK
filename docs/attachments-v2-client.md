@@ -90,7 +90,11 @@ would with no list. A case that doesn't say who its receiving company is fails c
 `client/precondition`; a case read that fails keeps that failure's own code (for example
 `attachment/not-found`). No list (the default) is unrestricted, and the case isn't read. This
 is a second check: the platform keeps its own sender allowlist and refuses grant creation
-with a `403`, which the SDK reports with the same code.
+with a `403`, which the SDK reports with the same code. Both checks run when a grant is
+created. The calls that take a grant you already have (`upload`, `singleUploadLink`,
+`s3PartLinks`, `azureBlockLinks` and the `complete` calls) don't read the list, so the SDK
+doesn't check an upload to an existing grant, including one created by another account,
+against this account's list.
 
 `AttachmentV2Exception.code()` says what failed:
 

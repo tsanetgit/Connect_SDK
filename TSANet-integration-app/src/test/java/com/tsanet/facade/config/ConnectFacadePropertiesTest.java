@@ -2,13 +2,22 @@ package com.tsanet.facade.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tsanet.api.ApplicationUserAccount;
+import com.tsanet.api.ApplicationUserAccountRegistry;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.source.MapConfigurationPropertySource;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
-/** An account's {@code allowed-receiver-company-ids}, bound as the console binds it, reaches its ApplicationUserAccount. */
+/**
+ * An account's {@code allowed-receiver-company-ids}, bound as the console binds it, reaches its
+ * ApplicationUserAccount, and an account without one is named at startup.
+ */
+@ExtendWith(OutputCaptureExtension.class)
 class ConnectFacadePropertiesTest {
 
     private static List<ConnectFacadeProperties.ApplicationUserAccountConfig> accounts(Map<String, String> properties) {
@@ -43,5 +52,17 @@ class ConnectFacadePropertiesTest {
         assertThat(accounts.get(1).toAccount().allowedReceiverCompanyIds()).as("auth block")
             .containsExactly(303L);
         assertThat(accounts.get(2).toAccount().allowedReceiverCompanyIds()).as("no list").isEmpty();
+    }
+
+    @Test
+    void anAccountWithoutAReceiverAllowlistIsNamedAtStartup(CapturedOutput output) {
+        ConnectFacadeConfiguration.logUnrestrictedAccounts(ApplicationUserAccountRegistry.of(List.of(
+            ApplicationUserAccount.passwordAccount("open", "target/open.db", "open@example.test", "pw"),
+            ApplicationUserAccount.passwordAccount("listed", "target/listed.db", "listed@example.test", "pw")
+                .withAllowedReceiverCompanyIds(List.of(101L))
+        )));
+
+        assertThat(output.getOut()).contains("Account open has no V2 receiver allowlist")
+            .doesNotContain("Account listed");
     }
 }
