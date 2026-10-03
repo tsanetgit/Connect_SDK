@@ -167,6 +167,16 @@ class ReceiverStorageSettingsTest {
     }
 
     @Test
+    void thePlatformsForbiddenIsAForbiddenNotABadGateway() throws Exception {
+        when(storage.register(any())).thenThrow(new AttachmentV2Exception("register storage config failed: Forbidden",
+            403, AttachmentV2Exception.FORBIDDEN));
+
+        mvc(true).perform(put("/api/settings/dev/receiver-storage").contentType(MediaType.APPLICATION_JSON).content(S3_BODY))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error").value("attachment/forbidden: register storage config failed: Forbidden"));
+    }
+
+    @Test
     void anUnknownEnvironmentIsRefused() throws Exception {
         mvc(true).perform(get("/api/settings/prod/receiver-storage"))
             .andExpect(status().isBadRequest());

@@ -182,6 +182,7 @@ public class SettingsController {
             return call.get();
         } catch (AttachmentV2Exception e) {
             HttpStatus status = e.is(AttachmentV2Exception.INVALID_REQUEST) ? HttpStatus.BAD_REQUEST
+                : e.is(AttachmentV2Exception.FORBIDDEN) ? HttpStatus.FORBIDDEN
                 : e.is(AttachmentV2Exception.NOT_FOUND) ? HttpStatus.NOT_FOUND
                 : HttpStatus.BAD_GATEWAY;
             throw new ResponseStatusException(status, e.code() + ": " + e.getMessage());

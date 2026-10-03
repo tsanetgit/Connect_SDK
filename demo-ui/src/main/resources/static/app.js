@@ -65,6 +65,7 @@ function showView(name) {
         t.classList.toggle('active', t.dataset.view === name));
     if (name === 'dashboard') loadRequests();
     if (name === 'webhooks') loadWebhooks();
+    if (name === 'settings') loadReceiverStorageIfShown();
 }
 
 // ---------- identity + environments ----------
@@ -162,7 +163,7 @@ function renderEnvSettings() {
         btn.addEventListener('click', () => onClearEnvCredentials(btn.dataset.env)));
     host.querySelectorAll('.env-switch-btn').forEach(btn =>
         btn.addEventListener('click', () => onSwitchEnvironment(btn.dataset.env)));
-    host.querySelectorAll('.receiver-storage').forEach(box => loadReceiverStorage(box));
+    loadReceiverStorageIfShown();
 }
 
 // ---------- V2 receiver storage (Settings) ----------
@@ -179,6 +180,13 @@ const STORAGE_VERIFICATION = {
     FAILED: ['test failed', 'st-rejected'],
     NEVER_TESTED: ['not tested', 'st-pending'],
 };
+
+// Each configured card's storage read signs in to that environment, so it runs only while Settings
+// is showing: on opening it, and when the cards re-render there. Other tabs cause no traffic.
+function loadReceiverStorageIfShown() {
+    if (document.getElementById('view-settings')?.classList.contains('hidden')) return;
+    document.querySelectorAll('#env-settings .receiver-storage').forEach(box => loadReceiverStorage(box));
+}
 
 async function loadReceiverStorage(box, resultText) {
     if (box.dataset.configured !== 'true') {
