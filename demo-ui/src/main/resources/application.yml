@@ -28,6 +28,10 @@ tsanet:
     # unless allow-insecure-http is true. That switch exists for a local mock; it admits any
     # non-https host, so it stays false elsewhere.
     allow-insecure-http: false
+    # Lets Settings register each environment's V2 receiver storage (AWS S3 or Azure Blob) for the
+    # signed-in company. Reading and testing it are always available. Off by default: the platform
+    # lets any API user of a company repoint its storage (tsanetgit/Connect-API-Code#170).
+    receiver-storage-editable: ${TSANET_DEMO_RECEIVER_STORAGE_EDITABLE:false}
     # Production is connect2.tsanet.org — deliberately NOT listed here.
     # entra-tenant-id / entra-audience enable the OAuth client-credentials
     # login mode for an environment. Tenant is shared; audiences differ per
