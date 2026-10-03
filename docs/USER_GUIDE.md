@@ -124,11 +124,10 @@ Opens from the Dashboard or after creating a case.
   when the partner supports it, the upload form forwards files to the case.
   *(Unverified against live BETA.)*
 - **Direct delivery (V2)** — *Deliver directly (V2)* sends one file straight into
-  the partner's store, with live progress (mode, parts, bytes), and shows the
-  platform's recorded outcome: DELIVERED, DELIVERED_UNVERIFIED, FAILED or EXPIRED.
-  Built against the draft grant/complete contract in `tsanetgit/Connect-API-Code#147`;
-  the platform endpoint is not live yet, so on BETA today the grant step fails
-  because the endpoint does not exist there.
+  the partner's store, with live progress (mode, parts, bytes), and shows the grant
+  as the platform recorded it (completed, or the failure). Only the case's submitting
+  company can deliver. It needs an environment that serves the Attachment Grants
+  endpoints; where they aren't deployed, the grant step fails.
 
 Engineer emails in action forms must be on your member company's registered
 domain — the API rejects others (business rule, not a demo bug).

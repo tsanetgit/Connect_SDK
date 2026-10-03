@@ -3,27 +3,35 @@ package com.tsanet.api.connectapi.internal;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.tsanet.api.attachments.v2.AttachmentCompleteRequest;
-import com.tsanet.api.attachments.v2.AttachmentCompleteResult;
+import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.attachments.v2.AttachmentGrant;
-import com.tsanet.api.attachments.v2.AttachmentGrantRequest;
 import com.tsanet.api.attachments.v2.AttachmentV2Exception;
 import com.tsanet.api.attachments.v2.UploadReceipts;
+import com.tsanet.api.generated.api.AttachmentGrantsApi;
+import com.tsanet.api.generated.model.AttachmentGrantCreateRequestDTO;
+import com.tsanet.api.generated.model.AttachmentGrantDTO;
+import com.tsanet.api.generated.model.AttachmentGrantStatus;
+import com.tsanet.api.generated.model.AttachmentUploadMode;
+import com.tsanet.api.generated.model.CollaborationRequestDirection;
+import com.tsanet.api.generated.model.CollaborationRequestStatusDTO;
+import com.tsanet.api.generated.model.S3MultipartCompletionRequestDTO;
+import com.tsanet.api.generated.model.S3MultipartPlanDTO;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,22 +41,21 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * The flow rules, with the Connect API seam and the executor mocked: abandon on upload
- * failure, one re-grant on a complete-time grant-expired, complete retried on transient
- * failure, the platform's outcome returned unchanged, and the digest computed only on
- * request.
+ * The flow rules of {@code send}, with the generated API and the upload coordinator mocked:
+ * the grant asks for the file's name and size, complete follows the grant's mode with the S3
+ * receipts, a failure abandons the grant (except a 409, where it is already terminal),
+ * complete is retried on a 502 or a lost response, and nothing else is retried.
  */
 @ExtendWith(MockitoExtension.class)
 class ConnectApiAttachmentsV2GatewayTest {
 
     private static final String TOKEN = "case-1";
-    private static final UUID GRANT_A = UUID.randomUUID();
-    private static final UUID GRANT_B = UUID.randomUUID();
+    private static final long GRANT_ID = 77L;
 
     @Mock
-    private AttachmentsV2Api api;
+    private AttachmentGrantsApi api;
     @Mock
-    private AttachmentUploadExecutor executor;
+    private UploadCoordinator coordinator;
 
     private ConnectApiAttachmentsV2Gateway gateway;
     private Path file;
@@ -58,162 +65,569 @@ class ConnectApiAttachmentsV2GatewayTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        gateway = new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), executor,
-            java.time.Duration.ZERO);
+        gateway = new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), coordinator,
+            Duration.ZERO);
         file = tmp.resolve("diag.log");
         Files.write(file, "hello attachments".getBytes(StandardCharsets.UTF_8));
     }
 
-    private static AttachmentGrant grant(UUID id) {
-        return new AttachmentGrant(id, "diag.log", OffsetDateTime.now().plusMinutes(15), null,
-            new AttachmentGrant.Upload("single", "PUT", "https://store.example/x", Map.of(), null),
-            new AttachmentGrant.Verification("platform"));
+    private static AttachmentGrantDTO grantDto(AttachmentUploadMode mode, AttachmentGrantStatus status) {
+        AttachmentGrantDTO dto = new AttachmentGrantDTO()
+            .grantId(GRANT_ID)
+            .status(status)
+            .fileName("diag.log")
+            .expectedSizeBytes(17L)
+            .createdAt(OffsetDateTime.parse("2026-10-01T12:00:00Z"))
+            .expiresAt(OffsetDateTime.parse("2026-10-01T13:00:00Z"))
+            .mode(mode);
+        if (mode == AttachmentUploadMode.S3_MULTIPART) {
+            dto.s3Multipart(new S3MultipartPlanDTO().totalParts(2).partSizeBytes(10L));
+        }
+        return dto;
     }
 
-    private static AttachmentCompleteResult outcome(UUID id, String status) {
-        return new AttachmentCompleteResult(id, "diag.log", status, null, 9L, null);
+    private static ConnectApiException apiError(int status) {
+        return new ConnectApiException(ConnectApiException.Kind.OTHER, status, null, null, "HTTP " + status, null, null);
     }
 
-    @Test
-    void sendGrantsUploadsAndCompletesWithTheReceiptsAndReturnsThePlatformsOutcome() {
-        when(api.createGrant(eq(TOKEN), any(), anyString())).thenReturn(grant(GRANT_A));
-        when(executor.execute(any(), eq(file), any())).thenReturn(new UploadReceipts("multipart", 17,
-            List.of(new AttachmentCompleteRequest.PartReceipt(1, "\"e1\""))));
-        when(api.complete(eq(TOKEN), eq(GRANT_A), any())).thenReturn(outcome(GRANT_A, "DELIVERED_UNVERIFIED"));
-
-        AttachmentCompleteResult result = gateway.send(TOKEN, file, "text/plain", "  logs ", false, null);
-
-        assertThat(result.status()).isEqualTo("DELIVERED_UNVERIFIED");
-        ArgumentCaptor<AttachmentGrantRequest> request = ArgumentCaptor.forClass(AttachmentGrantRequest.class);
-        verify(api).createGrant(eq(TOKEN), request.capture(), anyString());
-        assertThat(request.getValue().fileName()).isEqualTo("diag.log");
-        assertThat(request.getValue().contentType()).isEqualTo("text/plain");
-        assertThat(request.getValue().sizeBytes()).isEqualTo(17);
-        assertThat(request.getValue().sha256()).isNull();
-        assertThat(request.getValue().description()).isEqualTo("logs");
-        ArgumentCaptor<AttachmentCompleteRequest> complete = ArgumentCaptor.forClass(AttachmentCompleteRequest.class);
-        verify(api).complete(eq(TOKEN), eq(GRANT_A), complete.capture());
-        assertThat(complete.getValue().sizeBytes()).isEqualTo(17);
-        assertThat(complete.getValue().parts()).extracting(AttachmentCompleteRequest.PartReceipt::receipt).containsExactly("\"e1\"");
-        verify(api, never()).abandon(any(), any());
+    private static UploadReceipts s3Receipts() {
+        return new UploadReceipts(AttachmentGrant.UploadMode.S3_MULTIPART, 17, List.of(
+            new UploadReceipts.PartReceipt(1, "\"e1\""), new UploadReceipts.PartReceipt(2, "\"e2\"")));
     }
 
     @Test
-    void sendComputesTheDigestOnlyWhenAskedAndForwardsItOnGrantAndComplete() {
-        when(api.createGrant(eq(TOKEN), any(), anyString())).thenReturn(grant(GRANT_A));
-        when(executor.execute(any(), eq(file), any())).thenReturn(new UploadReceipts("single", 17, List.of()));
-        when(api.complete(eq(TOKEN), eq(GRANT_A), any())).thenReturn(outcome(GRANT_A, "DELIVERED"));
+    void sendGrantsForTheFilesNameAndSizeUploadsAndCompletesWithTheReceipts() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.S3_MULTIPART,
+            AttachmentGrantStatus.OPEN));
+        when(coordinator.upload(any(), eq(file), any(), any())).thenReturn(s3Receipts());
+        when(api.completeS3Multipart(eq(TOKEN), eq(GRANT_ID), any())).thenReturn(grantDto(AttachmentUploadMode.S3_MULTIPART,
+            AttachmentGrantStatus.COMPLETED));
 
-        gateway.send(TOKEN, file, null, null, true, null);
+        AttachmentGrant result = gateway.send(TOKEN, file, null);
 
-        String expected = ConnectApiAttachmentsV2Gateway.sha256Of(file);
-        assertThat(expected).hasSize(64);
-        ArgumentCaptor<AttachmentGrantRequest> request = ArgumentCaptor.forClass(AttachmentGrantRequest.class);
-        verify(api).createGrant(eq(TOKEN), request.capture(), anyString());
-        assertThat(request.getValue().sha256()).isEqualTo(expected);
-        assertThat(request.getValue().contentType()).isEqualTo(ConnectApiAttachmentsV2Gateway.DEFAULT_CONTENT_TYPE);
-        ArgumentCaptor<AttachmentCompleteRequest> complete = ArgumentCaptor.forClass(AttachmentCompleteRequest.class);
-        verify(api).complete(eq(TOKEN), eq(GRANT_A), complete.capture());
-        assertThat(complete.getValue().sha256()).isEqualTo(expected);
+        assertThat(result.completed()).isTrue();
+        assertThat(result.plan()).isEqualTo(new AttachmentGrant.UploadPlan(2, 10));
+        ArgumentCaptor<AttachmentGrantCreateRequestDTO> request = ArgumentCaptor.forClass(AttachmentGrantCreateRequestDTO.class);
+        verify(api).createAttachmentGrant(eq(TOKEN), request.capture());
+        assertThat(request.getValue().getFileName()).isEqualTo("diag.log");
+        assertThat(request.getValue().getExpectedSizeBytes()).isEqualTo(17L);
+        ArgumentCaptor<S3MultipartCompletionRequestDTO> complete = ArgumentCaptor.forClass(S3MultipartCompletionRequestDTO.class);
+        verify(api).completeS3Multipart(eq(TOKEN), eq(GRANT_ID), complete.capture());
+        assertThat(complete.getValue().getParts()).extracting("partNumber", "etag")
+            .containsExactly(org.assertj.core.groups.Tuple.tuple(1, "\"e1\""), org.assertj.core.groups.Tuple.tuple(2, "\"e2\""));
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void completeFollowsTheGrantsMode() {
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.COMPLETED));
+        when(api.completeAzureBlockUpload(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.AZURE_BLOCK,
+            AttachmentGrantStatus.COMPLETED));
+
+        gateway.complete(TOKEN, ConnectApiAttachmentsV2Gateway.toGrant(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN)), null);
+        gateway.complete(TOKEN, ConnectApiAttachmentsV2Gateway.toGrant(grantDto(AttachmentUploadMode.AZURE_BLOCK,
+            AttachmentGrantStatus.OPEN)), null);
+
+        verify(api).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api).completeAzureBlockUpload(TOKEN, GRANT_ID);
+        assertThatThrownBy(() -> gateway.complete(TOKEN, ConnectApiAttachmentsV2Gateway.toGrant(
+            grantDto(AttachmentUploadMode.GCS_RESUMABLE, AttachmentGrantStatus.OPEN)), null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code())
+                .isEqualTo(AttachmentV2Exception.UNSUPPORTED_UPLOAD_MODE));
     }
 
     @Test
     void anUploadFailureAbandonsTheGrantAndNeverCompletes() {
-        when(api.createGrant(eq(TOKEN), any(), anyString())).thenReturn(grant(GRANT_A));
-        AttachmentV2Exception rejected = new AttachmentV2Exception("part 1 was rejected", 403, AttachmentV2Exception.UPLOAD_REJECTED);
-        when(executor.execute(any(), eq(file), any())).thenThrow(rejected);
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        AttachmentV2Exception failure = new AttachmentV2Exception("part 1: link expired", 0,
+            AttachmentV2Exception.LINK_NOT_REFRESHABLE);
+        when(coordinator.upload(any(), eq(file), any(), any())).thenThrow(failure);
 
-        assertThatThrownBy(() -> gateway.send(TOKEN, file, "text/plain", null, false, null)).isSameAs(rejected);
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null)).isSameAs(failure);
 
-        verify(api).abandon(TOKEN, GRANT_A);
-        verify(api, never()).complete(any(), any(), any());
+        verify(api).abandonAttachmentGrant(TOKEN, GRANT_ID);
+        verify(api, never()).completeSingleUpload(anyString(), anyLong());
     }
 
     @Test
-    void anAbandonFailureRidesAsSuppressedOnTheUploadFailure() {
-        when(api.createGrant(eq(TOKEN), any(), anyString())).thenReturn(grant(GRANT_A));
-        when(executor.execute(any(), eq(file), any()))
-            .thenThrow(new AttachmentV2Exception("unreachable", 0, AttachmentV2Exception.UPLOAD_UNREACHABLE));
-        doThrow(new AttachmentV2Exception("abandon failed", 503, null)).when(api).abandon(TOKEN, GRANT_A);
+    void anAbandonFailureRidesAsSuppressedOnTheOriginalFailure() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        AttachmentV2Exception failure = new AttachmentV2Exception("rejected", 400, AttachmentV2Exception.UPLOAD_REJECTED);
+        when(coordinator.upload(any(), eq(file), any(), any())).thenThrow(failure);
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenThrow(apiError(500));
 
-        assertThatThrownBy(() -> gateway.send(TOKEN, file, "text/plain", null, false, null))
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null)).isSameAs(failure);
+
+        assertThat(failure.getSuppressed()).hasSize(1);
+        assertThat(((AttachmentV2Exception) failure.getSuppressed()[0]).status()).isEqualTo(500);
+    }
+
+    @Test
+    void aCompleteMismatchAbandonsTheGrant() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenThrow(apiError(422));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.ABANDONED));
+
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
             .isInstanceOf(AttachmentV2Exception.class)
-            .hasMessage("unreachable")
-            .satisfies(e -> assertThat(e.getSuppressed()).hasSize(1)
-                .allSatisfy(s -> assertThat(s.getMessage()).isEqualTo("abandon failed")));
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.UPLOAD_MISMATCH));
+
+        verify(api).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api).abandonAttachmentGrant(TOKEN, GRANT_ID);
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
     }
 
     @Test
-    void aGrantExpiredOnCompleteRegrantsExactlyOnce() {
-        when(api.createGrant(eq(TOKEN), any(), anyString())).thenReturn(grant(GRANT_A), grant(GRANT_B));
-        when(executor.execute(any(), eq(file), any())).thenReturn(new UploadReceipts("single", 17, List.of()));
-        when(api.complete(eq(TOKEN), eq(GRANT_A), any()))
-            .thenThrow(new AttachmentV2Exception("expired", 409, AttachmentV2Exception.GRANT_EXPIRED));
-        when(api.complete(eq(TOKEN), eq(GRANT_B), any())).thenReturn(outcome(GRANT_B, "DELIVERED"));
+    void aTerminalGrantOnCompleteIsNotAbandoned() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenThrow(apiError(409));
 
-        AttachmentCompleteResult result = gateway.send(TOKEN, file, "text/plain", null, false, null);
-
-        assertThat(result.grantId()).isEqualTo(GRANT_B);
-        verify(api, times(2)).createGrant(eq(TOKEN), any(), anyString());
-        verify(executor, times(2)).execute(any(), eq(file), any());
-    }
-
-    @Test
-    void aSecondGrantExpiredIsNotRetriedAgain() {
-        when(api.createGrant(eq(TOKEN), any(), anyString())).thenReturn(grant(GRANT_A), grant(GRANT_B));
-        when(executor.execute(any(), eq(file), any())).thenReturn(new UploadReceipts("single", 17, List.of()));
-        when(api.complete(eq(TOKEN), any(), any()))
-            .thenThrow(new AttachmentV2Exception("expired", 409, AttachmentV2Exception.GRANT_EXPIRED));
-
-        assertThatThrownBy(() -> gateway.send(TOKEN, file, "text/plain", null, false, null))
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
             .isInstanceOf(AttachmentV2Exception.class)
-            .satisfies(e -> assertThat(((AttachmentV2Exception) e).isProblem(AttachmentV2Exception.GRANT_EXPIRED)).isTrue());
-        verify(api, times(2)).createGrant(eq(TOKEN), any(), anyString());
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.GRANT_TERMINAL));
+
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
     }
 
     @Test
-    void completeIsRetriedOnTransientFailureBecauseItIsIdempotent() {
-        when(api.createGrant(eq(TOKEN), any(), anyString())).thenReturn(grant(GRANT_A));
-        when(executor.execute(any(), eq(file), any())).thenReturn(new UploadReceipts("single", 17, List.of()));
-        when(api.complete(eq(TOKEN), eq(GRANT_A), any()))
-            .thenThrow(new AttachmentV2Exception("gateway", 502, null))
-            .thenThrow(new AttachmentV2Exception("down", 0, AttachmentV2Exception.CONNECTIVITY))
-            .thenReturn(outcome(GRANT_A, "FAILED"));
+    void aTerminalGrantDuringTheUploadIsNotAbandonedEither() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        AttachmentV2Exception expired = new AttachmentV2Exception("sign single upload link failed: HTTP 409", 409,
+            AttachmentV2Exception.GRANT_TERMINAL);
+        when(coordinator.upload(any(), eq(file), any(), any())).thenThrow(expired);
 
-        AttachmentCompleteResult result = gateway.send(TOKEN, file, "text/plain", null, false, null);
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null)).isSameAs(expired);
 
-        assertThat(result.status()).isEqualTo("FAILED");
-        verify(api, times(3)).complete(eq(TOKEN), eq(GRANT_A), any());
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
     }
 
     @Test
-    void aFourHundredOnCompleteIsNotRetried() {
-        when(api.createGrant(eq(TOKEN), any(), anyString())).thenReturn(grant(GRANT_A));
-        when(executor.execute(any(), eq(file), any())).thenReturn(new UploadReceipts("single", 17, List.of()));
-        when(api.complete(eq(TOKEN), eq(GRANT_A), any()))
-            .thenThrow(new AttachmentV2Exception("size mismatch", 422, AttachmentV2Exception.SIZE_MISMATCH));
+    void aMissingRequiredFieldIsNamedNotDereferenced() {
+        AttachmentGrantDTO noId = grantDto(AttachmentUploadMode.SINGLE, AttachmentGrantStatus.OPEN).grantId(null);
+        when(api.getAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(noId);
+        when(api.signSingleUploadUrl(TOKEN, GRANT_ID)).thenReturn(new com.tsanet.api.generated.model.SingleUploadUrlDTO()
+            .expiresAt(OffsetDateTime.parse("2026-10-01T12:30:00Z")));
 
-        assertThatThrownBy(() -> gateway.send(TOKEN, file, "text/plain", null, false, null))
-            .isInstanceOf(AttachmentV2Exception.class);
-        verify(api, times(1)).complete(eq(TOKEN), eq(GRANT_A), any());
+        assertThatThrownBy(() -> gateway.getGrant(TOKEN, GRANT_ID))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .hasMessageContaining("grantId");
+        assertThatThrownBy(() -> gateway.singleUploadLink(TOKEN, GRANT_ID))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .hasMessageContaining("url");
+    }
+
+    @Test
+    void aGrantWithNoModeIsRefusedAsUnsupportedBeforeAnyCall() {
+        AttachmentGrant noMode = new AttachmentGrant(GRANT_ID, AttachmentGrant.Status.OPEN, "diag.log", 17, null, null,
+            null, null);
+
+        assertThatThrownBy(() -> gateway.upload(TOKEN, noMode, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code())
+                .isEqualTo(AttachmentV2Exception.UNSUPPORTED_UPLOAD_MODE));
+        verifyNoInteractions(api, coordinator);
+    }
+
+    @Test
+    void aLostCompleteResponseIsRetriedAndTheAlreadyCompletedGrantIsSuccess() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")))
+            .thenReturn(grantDto(AttachmentUploadMode.SINGLE, AttachmentGrantStatus.COMPLETED));
+
+        AttachmentGrant result = gateway.send(TOKEN, file, null);
+
+        assertThat(result.completed()).isTrue();
+        verify(api, times(2)).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void aCompleteWhoseAnswersWereAllLostButLandedIsADelivery() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenThrow(apiError(409));
+        when(api.getAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.COMPLETED));
+
+        AttachmentGrant result = gateway.send(TOKEN, file, null);
+
+        assertThat(result.completed()).isTrue();
+        verify(api, times(3)).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api).getAttachmentGrant(TOKEN, GRANT_ID);
+    }
+
+    @Test
+    void aLostCompleteOnAGrantThatDidNotCompleteStaysAFailure() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenThrow(apiError(409));
+        when(api.getAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.EXPIRED));
+
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.code()).isEqualTo(AttachmentV2Exception.CONNECTIVITY);
+                assertThat(ex.getSuppressed()).hasSize(1);
+                assertThat(((AttachmentV2Exception) ex.getSuppressed()[0]).code())
+                    .isEqualTo(AttachmentV2Exception.GRANT_TERMINAL);
+            });
+    }
+
+    @Test
+    void aCompleteThatLandedIsADeliveryEvenWhenTheAbandonAnswerIsLostToo() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")));
+        when(api.getAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.COMPLETED));
+
+        AttachmentGrant result = gateway.send(TOKEN, file, null);
+
+        assertThat(result.completed()).isTrue();
+        verify(api).getAttachmentGrant(TOKEN, GRANT_ID);
+    }
+
+    @Test
+    void anAbandonThatAnsweredSettlesItAndTheGrantIsNotReadBack() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenThrow(apiError(502));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.ABANDONED));
+
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.PROVIDER_ERROR);
+                assertThat(e.getSuppressed()).isEmpty();
+            });
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void whenAbandonAndTheReadBackBothFailThePrimaryCarriesBoth() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        ConnectApiException lost = ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenThrow(lost);
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenThrow(lost);
+        when(api.getAttachmentGrant(TOKEN, GRANT_ID)).thenThrow(lost);
+
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.CONNECTIVITY);
+                assertThat(e.getSuppressed()).hasSize(2);
+            });
+    }
+
+    @Test
+    void anInterruptDuringTheCompleteBackoffStopsWithNoMoreCalls() {
+        ConnectApiAttachmentsV2Gateway backingOff = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofMillis(50));
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
+        });
+        try {
+            assertThatThrownBy(() -> backingOff.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void anInterruptDuringTheLastCompleteKeepsItsCodeAndTheFlag() {
+        ConnectApiAttachmentsV2Gateway backingOff = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofMillis(1));
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        ConnectApiException lost = ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(lost)
+            .thenThrow(lost)
+            .thenAnswer(invocation -> {
+                Thread.currentThread().interrupt();
+                throw apiError(502);
+            });
+        try {
+            assertThatThrownBy(() -> backingOff.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.PROVIDER_ERROR));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api, times(3)).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void anInterruptThatArrivesDuringAbandonStopsTheReadBack() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID))
+            .thenThrow(ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out")));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
+        });
+        try {
+            assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(e.getSuppressed()).hasSize(1));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void oneUnreadableGrantFailsTheWholePage() {
+        when(api.listAttachmentGrants(TOKEN, 0, 20)).thenReturn(new com.tsanet.api.generated.model.AttachmentGrantPageDTO()
+            .content(List.of(grantDto(AttachmentUploadMode.SINGLE, AttachmentGrantStatus.COMPLETED),
+                grantDto(AttachmentUploadMode.SINGLE, AttachmentGrantStatus.OPEN).grantId(null)))
+            .totalElements(2L).totalPages(1).size(20).number(0));
+
+        assertThatThrownBy(() -> gateway.listGrants(TOKEN, 0, 20))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .hasMessageContaining("grantId");
+    }
+
+    @Test
+    void anInterruptedUploadIsNotAbandonedOverTheNetwork() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        AttachmentV2Exception interrupted = new AttachmentV2Exception("interrupted while uploading part 1", 0,
+            AttachmentV2Exception.INTERRUPTED);
+        when(coordinator.upload(any(), eq(file), any(), any())).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw interrupted;
+        });
+        try {
+            assertThatThrownBy(() -> gateway.send(TOKEN, file, null)).isSameAs(interrupted);
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void aProviderErrorOnCompleteIsRetriedThenAbandonedWhenItPersists() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenThrow(apiError(502));
+        when(api.abandonAttachmentGrant(TOKEN, GRANT_ID)).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.ABANDONED));
+
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.PROVIDER_ERROR));
+
+        verify(api, times(3)).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api).abandonAttachmentGrant(TOKEN, GRANT_ID);
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void aBadRequestOnCompleteIsNotRetried() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.S3_MULTIPART,
+            AttachmentGrantStatus.OPEN));
+        when(coordinator.upload(any(), eq(file), any(), any())).thenReturn(s3Receipts());
+        when(api.completeS3Multipart(eq(TOKEN), eq(GRANT_ID), any())).thenThrow(apiError(400));
+
+        assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INVALID_REQUEST));
+
+        verify(api, times(1)).completeS3Multipart(eq(TOKEN), eq(GRANT_ID), any());
+    }
+
+    @Test
+    void linkCallsTakeBetweenOneAndAThousandNumbers() {
+        List<Integer> tooMany = IntStream.rangeClosed(1, 1001).boxed().toList();
+
+        assertThatThrownBy(() -> gateway.s3PartLinks(TOKEN, GRANT_ID, tooMany)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> gateway.azureBlockLinks(TOKEN, GRANT_ID, List.of())).isInstanceOf(IllegalArgumentException.class);
+        verifyNoInteractions(api);
     }
 
     @Test
     void everyCallRequiresALogin() {
-        ConnectApiAttachmentsV2Gateway loggedOut =
-            new ConnectApiAttachmentsV2Gateway(api, new ConnectApiSessionStore(), executor, java.time.Duration.ZERO);
+        ConnectApiAttachmentsV2Gateway loggedOut = new ConnectApiAttachmentsV2Gateway(api, new ConnectApiSessionStore(),
+            coordinator, Duration.ZERO);
 
-        assertThatThrownBy(() -> loggedOut.grant(TOKEN, new AttachmentGrantRequest("a", "b", 1, null, null)))
-            .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> loggedOut.send(TOKEN, file, null, null, false, null))
-            .isInstanceOf(IllegalStateException.class);
-        assertThatThrownBy(() -> loggedOut.abandon(TOKEN, GRANT_A)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> loggedOut.createGrant(TOKEN, "a", 1)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> loggedOut.send(TOKEN, file, null)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> loggedOut.abandon(TOKEN, GRANT_ID)).isInstanceOf(IllegalStateException.class);
+        verifyNoInteractions(api);
     }
 
     @Test
     void sendRejectsAMissingFileBeforeGranting() {
-        assertThatThrownBy(() -> gateway.send(TOKEN, tmp.resolve("missing.bin"), null, null, false, null))
+        assertThatThrownBy(() -> gateway.send(TOKEN, tmp.resolve("missing.bin"), null))
             .isInstanceOf(IllegalArgumentException.class);
-        verify(api, never()).createGrant(any(), any(), any());
+        verifyNoInteractions(api);
+    }
+
+    // ---------- the receiver allowlist (tsanetgit/Connect_SDK#92) ----------
+
+    private static final long ALLOWED = 101L;
+    private static final long NOT_ALLOWED = 202L;
+
+    private final List<String> caseLookups = new java.util.ArrayList<>();
+
+    /** A case this account sent, whose receiving company is {@code receivingCompany} (null: not said). */
+    private ConnectApiAttachmentsV2Gateway allowlisted(java.util.Set<Long> allowed, Long receivingCompany) {
+        return allowlistedReading(allowed, java.util.Optional.of(
+            new ConnectApiAttachmentsV2Gateway.CaseSide(false, receivingCompany)));
+    }
+
+    private ConnectApiAttachmentsV2Gateway allowlistedReading(java.util.Set<Long> allowed,
+                                                              java.util.Optional<ConnectApiAttachmentsV2Gateway.CaseSide> side) {
+        return new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), coordinator,
+            Duration.ZERO, allowed, caseToken -> {
+                caseLookups.add(caseToken);
+                return side;
+            });
+    }
+
+    @Test
+    void aReceiverOffTheAllowlistIsRefusedBeforeAnyGrantRequest() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(java.util.Set.of(ALLOWED), NOT_ALLOWED);
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 17))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.RECEIVER_NOT_ALLOWED));
+        verifyNoInteractions(api);
+    }
+
+    @Test
+    void sendIsRefusedTheSameWayAndUploadsNothing() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(java.util.Set.of(ALLOWED), NOT_ALLOWED);
+
+        assertThatThrownBy(() -> guarded.send(TOKEN, file, null))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.RECEIVER_NOT_ALLOWED));
+        verifyNoInteractions(api, coordinator);
+    }
+
+    @Test
+    void aReceiverOnTheAllowlistGetsItsGrant() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(java.util.Set.of(ALLOWED), ALLOWED);
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+
+        assertThat(guarded.createGrant(TOKEN, "diag.log", 17).grantId()).isEqualTo(GRANT_ID);
+        assertThat(caseLookups).containsExactly(TOKEN);
+    }
+
+    @Test
+    void anEmptyAllowlistIsUnrestrictedAndNeverReadsTheCase() {
+        ConnectApiAttachmentsV2Gateway open = allowlisted(java.util.Set.of(), NOT_ALLOWED);
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+
+        assertThat(open.createGrant(TOKEN, "diag.log", 17).grantId()).isEqualTo(GRANT_ID);
+        assertThat(caseLookups).isEmpty();
+    }
+
+    @Test
+    void aCaseWithNoReceivingCompanyFailsClosedAsAPrecondition() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(java.util.Set.of(ALLOWED), null);
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 17))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.CLIENT_PRECONDITION));
+        verifyNoInteractions(api);
+    }
+
+    @Test
+    void anAnswerWithNoCaseFailsClosedAsAPrecondition() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlistedReading(java.util.Set.of(ALLOWED), java.util.Optional.empty());
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 17))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.CLIENT_PRECONDITION));
+        verifyNoInteractions(api);
+    }
+
+    @Test
+    void aCaseThisAccountReceivesIsLeftToTheServersSenderCheck() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+
+        for (Long receiver : new Long[] {NOT_ALLOWED, null}) {
+            ConnectApiAttachmentsV2Gateway guarded = allowlistedReading(java.util.Set.of(ALLOWED),
+                java.util.Optional.of(new ConnectApiAttachmentsV2Gateway.CaseSide(true, receiver)));
+
+            assertThat(guarded.createGrant(TOKEN, "diag.log", 17).grantId()).as("receiver %s", receiver)
+                .isEqualTo(GRANT_ID);
+        }
+        verify(api, times(2)).createAttachmentGrant(eq(TOKEN), any());
+    }
+
+    @Test
+    void theCaseLookupReadsTheDirectionAsThisAccountSeesIt() {
+        com.tsanet.api.generated.api.CollaborationRequestsApi cases =
+            org.mockito.Mockito.mock(com.tsanet.api.generated.api.CollaborationRequestsApi.class);
+        var lookup = ConnectApiAttachmentsV2Gateway.receivingCompanyFrom(cases);
+
+        when(cases.getCollaborationRequestByToken("in", false)).thenReturn(new CollaborationRequestStatusDTO()
+            .direction(CollaborationRequestDirection.INBOUND).receiveCompanyId(ALLOWED));
+        when(cases.getCollaborationRequestByToken("out", false)).thenReturn(new CollaborationRequestStatusDTO()
+            .direction(CollaborationRequestDirection.OUTBOUND).receiveCompanyId(NOT_ALLOWED));
+        when(cases.getCollaborationRequestByToken("unsaid", false)).thenReturn(new CollaborationRequestStatusDTO()
+            .receiveCompanyId(NOT_ALLOWED));
+
+        assertThat(lookup.apply("in")).contains(new ConnectApiAttachmentsV2Gateway.CaseSide(true, ALLOWED));
+        assertThat(lookup.apply("out")).contains(new ConnectApiAttachmentsV2Gateway.CaseSide(false, NOT_ALLOWED));
+        assertThat(lookup.apply("unsaid")).as("no direction is checked like a case this account sent")
+            .contains(new ConnectApiAttachmentsV2Gateway.CaseSide(false, NOT_ALLOWED));
+        assertThat(lookup.apply("none")).isEmpty();
+    }
+
+    @Test
+    void aCaseLookupThatFailsKeepsItsOwnCodeAndRequestsNoGrant() {
+        ConnectApiAttachmentsV2Gateway guarded = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ZERO, java.util.Set.of(ALLOWED),
+            caseToken -> {
+                throw apiError(404);
+            });
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 17))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.NOT_FOUND));
+        verifyNoInteractions(api);
     }
 }

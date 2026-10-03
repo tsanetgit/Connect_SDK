@@ -1,56 +1,97 @@
 package com.tsanet.api.facade;
 
-import com.tsanet.api.attachments.v2.AttachmentCompleteRequest;
-import com.tsanet.api.attachments.v2.AttachmentCompleteResult;
 import com.tsanet.api.attachments.v2.AttachmentGrant;
-import com.tsanet.api.attachments.v2.AttachmentGrantRequest;
+import com.tsanet.api.attachments.v2.AttachmentGrantPage;
+import com.tsanet.api.attachments.v2.UploadLink;
 import com.tsanet.api.attachments.v2.UploadProgressListener;
 import com.tsanet.api.attachments.v2.UploadReceipts;
 import java.nio.file.Path;
-import java.util.UUID;
+import java.util.List;
 
 /**
- * The sender's side of the V2 attachment contract (tsanetgit/Connect-API-Code#147): the
- * direct delivery path where the file goes straight into the partner's store and nothing
- * passes through the Connect API. The four calls are exposed individually for clients that
- * drive the flow themselves; {@link #send} runs the whole flow.
+ * The sender's side of V2 attachment delivery: the file goes straight into the receiving
+ * company's storage and nothing passes through the Connect API. Only the case's submitting
+ * company can create a grant, and its receiver is always the case's receiving company.
  *
- * <p>Every method reports the platform's recorded outcome, never this client's own
- * evidence: an upload that sent every byte is still whatever {@code complete} says it is.
+ * <p>Each Connect API call is exposed on its own, one method per operation, for clients that
+ * drive the flow themselves; {@link #upload} runs the upload for any supported mode, and
+ * {@link #send} runs the whole flow. Every method returns the platform's recorded grant, never
+ * this client's own reading: an upload that sent every byte is still whatever complete says.
+ *
+ * <p>Failures are {@link com.tsanet.api.attachments.v2.AttachmentV2Exception}, whose
+ * {@code code()} names what happened.
  */
 public interface AttachmentsV2Facade {
 
-    /** Ask the platform for permission and upload instructions for one file on this case. */
-    AttachmentGrant grant(String caseToken, AttachmentGrantRequest request);
-
     /**
-     * Execute the grant's upload block verbatim against the file. Streams from disk one part
-     * at a time; retries individual parts within the retry budget; never announces anything.
+     * Create a grant for one file. The receiver's storage decides the grant's mode and plan. With
+     * a receiver allowlist configured, a case this account sent whose receiving company isn't on it
+     * is refused with {@code attachment/receiver-not-allowed} before any grant request, the same
+     * code as the server's own allowlist refusal. A case this account receives isn't checked: the
+     * server refuses a grant from anyone but the sender with {@code attachment/forbidden}.
      */
-    UploadReceipts upload(AttachmentGrant grant, Path file, UploadProgressListener listener);
+    AttachmentGrant createGrant(String caseToken, String fileName, long expectedSizeBytes);
 
-    /** Report the upload finished; the platform seals it, verifies arrival and records the outcome. */
-    AttachmentCompleteResult complete(String caseToken, UUID grantId, AttachmentCompleteRequest request);
-
-    /** Abandon a grant; any open upload session is aborted and nothing becomes visible. */
-    void abandon(String caseToken, UUID grantId);
+    AttachmentGrant getGrant(String caseToken, long grantId);
 
     /**
-     * Grant, upload, complete. Abandons the grant on any upload failure and rethrows; on a
-     * complete-time {@code attachment/grant-expired} it re-grants exactly once and uploads
-     * again. {@code withSha256} adds a streaming digest pass before the grant so the platform
-     * can verify content where the target supports it.
+     * One page of the case's grants; {@code page} counts from 0. A grant on the page that this
+     * client can't read, one missing a required field, fails the whole page rather than being
+     * left out.
+     */
+    AttachmentGrantPage listGrants(String caseToken, int page, int size);
+
+    /** The upload link for a {@code single} grant. Asking again signs a fresh one. */
+    UploadLink singleUploadLink(String caseToken, long grantId);
+
+    /** Links for the named parts of an {@code s3Multipart} grant, at most 1,000 per call. */
+    List<UploadLink> s3PartLinks(String caseToken, long grantId, List<Integer> partNumbers);
+
+    /** Links for the named blocks of an {@code azureBlock} grant, at most 1,000 per call. */
+    List<UploadLink> azureBlockLinks(String caseToken, long grantId, List<Integer> blockNumbers);
+
+    AttachmentGrant completeSingle(String caseToken, long grantId);
+
+    /** Complete an S3 multipart upload; the receipts must cover every part of the plan exactly once. */
+    AttachmentGrant completeS3Multipart(String caseToken, long grantId, List<UploadReceipts.PartReceipt> receipts);
+
+    AttachmentGrant completeAzureBlock(String caseToken, long grantId);
+
+    /** The complete call for the grant's mode, with the receipts it needs. */
+    AttachmentGrant complete(String caseToken, AttachmentGrant grant, UploadReceipts receipts);
+
+    /** Abandon a grant: no more links, no completion, nothing announced on the case. */
+    AttachmentGrant abandon(String caseToken, long grantId);
+
+    /**
+     * Upload {@code file} for {@code grant}. Requests links just before use, at most 1,000 at a
+     * time, refreshes a link that is about to expire or that the storage refused with 403,
+     * and retries each part within its own budget. Never completes or abandons.
+     */
+    UploadReceipts upload(String caseToken, AttachmentGrant grant, Path file, UploadProgressListener listener);
+
+    /**
+     * Create a grant, upload, complete. A failed upload or complete abandons the grant and
+     * rethrows, except a 409, where the grant is already terminal. That includes a 422 from
+     * complete, although the platform leaves that grant open for another upload: a caller who
+     * wants to upload again drives {@link #upload} and {@link #complete} itself. Complete is
+     * retried on a 5xx answer (a 502 is the documented one) or a lost response: completing an
+     * already-completed grant returns it unchanged.
      *
-     * @param contentType the file's media type; {@code application/octet-stream} when null or blank
-     * @param description optional text carried into the case note
-     * @param listener    progress callback, or null
+     * <p>When complete fails and abandon doesn't settle the grant, the grant is read once, and a
+     * grant that reads completed is returned as delivered. An interrupted thread makes no more
+     * calls: it doesn't start an abandon or a read, and an open grant expires on the platform.
+     * The code is usually {@code client/interrupted}, but an interrupt during a complete call
+     * that isn't retried (the last attempt, or a failure that isn't retryable) surfaces that
+     * call's own code; the interrupt flag is set either way. So after the upload,
+     * {@code client/connectivity}, any failure with the interrupt flag set, an
+     * {@code attachment/api-error} for an answer this client couldn't read (a client built
+     * against an older spec than the server runs), or a {@code client/precondition} for an answer
+     * this client couldn't use (empty, or missing a field it needs) doesn't prove the file wasn't
+     * delivered: read the grant before sending it again.
+     *
+     * @param listener progress callback, or null
+     * @return the completed grant
      */
-    AttachmentCompleteResult send(
-        String caseToken,
-        Path file,
-        String contentType,
-        String description,
-        boolean withSha256,
-        UploadProgressListener listener
-    );
+    AttachmentGrant send(String caseToken, Path file, UploadProgressListener listener);
 }
