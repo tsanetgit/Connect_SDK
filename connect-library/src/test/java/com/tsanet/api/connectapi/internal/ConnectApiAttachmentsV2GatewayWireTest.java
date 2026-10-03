@@ -216,6 +216,140 @@ class ConnectApiAttachmentsV2GatewayWireTest {
         });
     }
 
+    // PROVISIONAL(tsanetgit/Connect-API-Code#183): the spec doesn't document createAttachmentGrant's
+    // 403 problem types, so this base URL and the types the tests pass (attachment-receiver-not-allowed,
+    // access-denied) are what the server's ProblemDetailFactory sends today. Once the spec documents
+    // them, these become the documented values.
+    private static String forbidden(String type) {
+        return "{" + (type == null ? "" : "\"type\":\"https://api.tsanet.org/errors/" + type + "\",")
+            + "\"title\":\"Forbidden\",\"status\":403,\"detail\":\"why\"}";
+    }
+
+    @Test
+    void theServersAllowlistRefusalOnCreateIsReceiverNotAllowed() {
+        server.expect(requestTo(GRANTS)).andExpect(method(HttpMethod.POST))
+            .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(forbidden("attachment-receiver-not-allowed")));
+
+        assertThatThrownBy(() -> gateway.createGrant(TOKEN, "diag.log", 12))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.code()).isEqualTo(AttachmentV2Exception.RECEIVER_NOT_ALLOWED);
+                assertThat(ex.status()).isEqualTo(403);
+                assertThat(ex.getCause()).isInstanceOf(ConnectApiException.class);
+            });
+    }
+
+    @Test
+    void theAllowlistTypeIsMatchedByItsLastSegmentNotItsHost() {
+        java.util.Map<String, String> expected = new java.util.LinkedHashMap<>();
+        expected.put("https://errors.example.test/attachment-receiver-not-allowed", AttachmentV2Exception.RECEIVER_NOT_ALLOWED);
+        expected.put("https://api.tsanet.org/errors/not-attachment-receiver-not-allowed", AttachmentV2Exception.FORBIDDEN);
+        expected.put("https://api.tsanet.org/errors/attachment-receiver-not-allowed/v2", AttachmentV2Exception.FORBIDDEN);
+        expected.forEach((type, code) -> {
+            server.reset();
+            server.expect(requestTo(GRANTS)).andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                    .body("{\"type\":\"" + type + "\",\"title\":\"Forbidden\",\"status\":403,\"detail\":\"why\"}"));
+
+            assertThatThrownBy(() -> gateway.createGrant(TOKEN, "diag.log", 12))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).as("type %s", type).isEqualTo(code));
+        });
+    }
+
+    @Test
+    void anyOtherForbiddenOnCreateStaysForbidden() {
+        for (String type : new String[] {"access-denied", null}) {
+            server.reset();
+            server.expect(requestTo(GRANTS)).andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                    .body(forbidden(type)));
+
+            assertThatThrownBy(() -> gateway.createGrant(TOKEN, "diag.log", 12))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).as("type %s", type)
+                    .isEqualTo(AttachmentV2Exception.FORBIDDEN));
+        }
+    }
+
+    private static final String CASE = BASE + "/v1/collaboration-requests/" + TOKEN + "?includeRemovedNotes=false";
+
+    /** The gateway as the runtime builds it with an allowlist: the real case lookup, on the same client. */
+    private ConnectApiAttachmentsV2Gateway allowlisted(long allowed) {
+        RestTemplate restTemplate = ConnectApiRestTemplates.create();
+        server = MockRestServiceServer.bindTo(restTemplate).build();
+        ApiClient apiClient = new ApiClient(restTemplate);
+        apiClient.setBasePath(BASE);
+        apiClient.setBearerToken(() -> "bearer-123");
+        return new ConnectApiAttachmentsV2Gateway(new AttachmentGrantsApi(apiClient),
+            GatewayTestSupport.authenticatedSessionStore(), java.util.Set.of(allowed),
+            ConnectApiAttachmentsV2Gateway.receivingCompanyFrom(new com.tsanet.api.generated.api.CollaborationRequestsApi(apiClient)));
+    }
+
+    @Test
+    void theRealCaseLookupRefusesAReceiverOffTheListWithNoGrantRequest() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(101L);
+        server.expect(requestTo(CASE)).andExpect(method(HttpMethod.GET))
+            .andRespond(withStatus(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"id\":77,\"token\":\"" + TOKEN + "\",\"receiveCompanyId\":202,\"submitCompanyId\":101}"));
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 12))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.RECEIVER_NOT_ALLOWED));
+        server.verify();
+    }
+
+    @Test
+    void aCaseThisAccountReceivesGoesToTheServerAndGetsItsForbidden() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(101L);
+        server.expect(requestTo(CASE)).andExpect(method(HttpMethod.GET))
+            .andRespond(withStatus(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"id\":77,\"token\":\"" + TOKEN + "\",\"receiveCompanyId\":202,\"submitCompanyId\":303,"
+                    + "\"direction\":\"INBOUND\"}"));
+        server.expect(requestTo(GRANTS)).andExpect(method(HttpMethod.POST))
+            .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(forbidden("access-denied")));
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 12))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                assertThat(ex.code()).isEqualTo(AttachmentV2Exception.FORBIDDEN);
+                assertThat(ex.status()).isEqualTo(403);
+            });
+        server.verify();
+    }
+
+    @Test
+    void aFailedCaseLookupKeepsItsCodeAndDoesNotQuoteTheToken() {
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(101L);
+        server.expect(requestTo(CASE)).andExpect(method(HttpMethod.GET))
+            .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body("{\"title\":\"Not Found\",\"status\":404,\"detail\":\"no case at /v1/collaboration-requests/"
+                    + TOKEN + "\",\"instance\":\"/v1/collaboration-requests/" + TOKEN + "\"}"));
+
+        assertThatThrownBy(() -> guarded.createGrant(TOKEN, "diag.log", 12))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> {
+                assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.NOT_FOUND);
+                assertThat(e.getMessage()).doesNotContain(TOKEN);
+            });
+        server.verify();
+    }
+
+    @Test
+    void theAllowlistTypeOnAnyOtherCallStaysForbidden() {
+        server.expect(requestTo(GRANT + "/single/complete"))
+            .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                .body(forbidden("attachment-receiver-not-allowed")));
+
+        assertThatThrownBy(() -> gateway.completeSingle(TOKEN, GRANT_ID))
+            .isInstanceOf(AttachmentV2Exception.class)
+            .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.FORBIDDEN));
+    }
+
     @Test
     void anErrorBodyThatEchoesTheRequestPathDoesNotLeakTheCaseToken() {
         server.expect(requestTo(GRANT + "/abandon"))

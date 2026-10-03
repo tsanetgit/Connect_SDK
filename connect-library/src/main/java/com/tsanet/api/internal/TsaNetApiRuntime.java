@@ -173,7 +173,9 @@ public final class TsaNetApiRuntime {
 
         ConnectApiAttachmentsV2Gateway attachmentsV2Gateway = new ConnectApiAttachmentsV2Gateway(
             new AttachmentGrantsApi(apiClient),
-            sessionStore
+            sessionStore,
+            configuration.allowedReceiverCompanyIds(),
+            ConnectApiAttachmentsV2Gateway.receivingCompanyFrom(collaborationRequestsApi)
         );
 
         return new DefaultTsaNetApiSession(

@@ -79,12 +79,30 @@ How the SDK uploads:
 - Each part gets three attempts, shared by every kind of retry: a `403` refresh, and the same
   link again after an I/O failure, a `429` or a `5xx`.
 
+**Receiver allowlist.** An account can list the companies it may deliver to:
+`allowedReceiverCompanyIds` on `ApplicationUserAccount` (`withAllowedReceiverCompanyIds`) or
+`TsaNetApiConfiguration`, and `allowed-receiver-company-ids` in the console's account
+configuration. With a list set, `createGrant` (and so `send`) reads the case's receiving
+company first and refuses one that isn't on it with `attachment/receiver-not-allowed`, before
+any grant is requested. A case the account receives (it reads `INBOUND`) isn't checked: only
+the sender can create a grant, so the platform refuses it with `attachment/forbidden`, as it
+would with no list. A case that doesn't say who its receiving company is fails closed with
+`client/precondition`; a case read that fails keeps that failure's own code (for example
+`attachment/not-found`). No list (the default) is unrestricted, and the case isn't read. This
+is a second check: the platform keeps its own sender allowlist and refuses grant creation
+with a `403`, which the SDK reports with the same code. Both checks run when a grant is
+created. The calls that take a grant you already have (`upload`, `singleUploadLink`,
+`s3PartLinks`, `azureBlockLinks` and the `complete` calls) don't read the list, so the SDK
+doesn't check an upload to an existing grant, including one created by another account,
+against this account's list.
+
 `AttachmentV2Exception.code()` says what failed:
 
 | Code | Cause |
 |---|---|
 | `attachment/invalid-request` | 400: a link call named a part or block number outside the plan, or S3 receipts don't cover it |
-| `attachment/forbidden` | 403: the caller's company isn't the case's sender, or the receiver isn't on the sender's allowlist |
+| `attachment/forbidden` | 403: the caller's company isn't the case's sender, or any other refusal not named below |
+| `attachment/receiver-not-allowed` | the case's receiving company isn't allowed: either this account's receiver allowlist refused it before any grant request, or the server's sender allowlist refused grant creation with a `403`. Either way no grant exists and nothing was uploaded |
 | `attachment/not-found` | 404: no such case or grant, a receiver that has registered no storage configuration (on create), or a link or complete call that doesn't match the grant's mode |
 | `attachment/grant-terminal` | 409: the grant is completed, abandoned or expired, so it can't take this call |
 | `attachment/upload-mismatch` | 422: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
@@ -135,6 +153,17 @@ uploads as 140 parts of 5 MiB.
 A `404` means the case wasn't found, or the receiving company hasn't registered a storage
 configuration for V2 delivery; the `detail` says which ("Receiver has not registered a
 storage configuration"). Until the receiver registers one, there is nothing to retry.
+
+<!-- PROVISIONAL(tsanetgit/Connect-API-Code#183): the two problem types below are what the server sends today, not documented values. Once the spec documents createAttachmentGrant's 403 types, name the documented ones and drop "the spec doesn't document them yet". -->
+
+A `403` on create is either a caller that isn't the case's sender (problem type
+`https://api.tsanet.org/errors/access-denied`) or a receiver that isn't on the sender's
+allowlist (`https://api.tsanet.org/errors/attachment-receiver-not-allowed`). The platform
+sends these types; the spec doesn't document them yet (`tsanetgit/Connect-API-Code#183`). To
+check a receiver yourself before creating a grant, read the case
+(`GET /v1/collaboration-requests/{token}`). If its `direction` is `INBOUND`, you received the
+case and only its sender can create a grant, so there is nothing to check. Otherwise compare
+its `receiveCompanyId` with your own list, refusing when it's missing.
 
 A `502` means the receiver's storage provider failed and no grant was created: retry later.
 

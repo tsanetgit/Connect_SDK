@@ -1,6 +1,7 @@
 package com.tsanet.demo.web;
 
 import com.tsanet.api.attachments.v2.AttachmentGrant;
+import com.tsanet.api.attachments.v2.AttachmentV2Exception;
 import com.tsanet.api.attachments.v2.UploadProgress;
 import com.tsanet.api.connectapi.dto.AttachmentConfigDto;
 import com.tsanet.api.connectapi.dto.AttachmentForwardResultDto;
@@ -101,7 +102,8 @@ public class AttachmentsController {
                     progress -> uploads.computeIfPresent(uploadId, (k, v) -> v.progressed(progress)));
                 uploads.computeIfPresent(uploadId, (k, v) -> v.finished(outcome));
             } catch (RuntimeException e) {
-                uploads.computeIfPresent(uploadId, (k, v) -> v.failed(e.getMessage()));
+                String failure = e instanceof AttachmentV2Exception v2 ? v2.code() + ": " + e.getMessage() : e.getMessage();
+                uploads.computeIfPresent(uploadId, (k, v) -> v.failed(failure));
             } finally {
                 try {
                     Files.deleteIfExists(temp);

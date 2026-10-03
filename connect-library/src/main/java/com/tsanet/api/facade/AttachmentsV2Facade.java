@@ -23,7 +23,13 @@ import java.util.List;
  */
 public interface AttachmentsV2Facade {
 
-    /** Create a grant for one file. The receiver's storage decides the grant's mode and plan. */
+    /**
+     * Create a grant for one file. The receiver's storage decides the grant's mode and plan. With
+     * a receiver allowlist configured, a case this account sent whose receiving company isn't on it
+     * is refused with {@code attachment/receiver-not-allowed} before any grant request, the same
+     * code as the server's own allowlist refusal. A case this account receives isn't checked: the
+     * server refuses a grant from anyone but the sender with {@code attachment/forbidden}.
+     */
     AttachmentGrant createGrant(String caseToken, String fileName, long expectedSizeBytes);
 
     AttachmentGrant getGrant(String caseToken, long grantId);
