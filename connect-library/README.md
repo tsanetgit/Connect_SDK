@@ -297,8 +297,9 @@ Case responses include approval and other comment-like activity on a collaborati
 ### Direct delivery (V2) — `session.attachmentsV2()`
 
 The sender's side of V2 attachment delivery: the file goes straight into the receiving
-company's storage and nothing passes through the Connect API. Generated from the Attachment
-Grants operations in the Connect OpenAPI spec, which marks them `x-stability-level: alpha`.
+company's storage and nothing passes through the Connect API. A hand-written client over the
+API and data classes generated from the Attachment Grants operations in the Connect OpenAPI
+spec, which marks them `x-stability-level: alpha`.
 The member-facing walkthrough, including the calls without the SDK, is
 [`docs/attachments-v2-client.md`](../docs/attachments-v2-client.md).
 
