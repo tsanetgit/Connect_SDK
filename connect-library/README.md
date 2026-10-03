@@ -304,7 +304,7 @@ The member-facing walkthrough, including the calls without the SDK, is
 
 | Method | Description |
 |--------|-------------|
-| `send(caseToken, file, listener)` | Create a grant, upload, complete. Abandons the grant and throws `AttachmentV2Exception` if the upload or the complete fails (except on a `409`, where the grant is already terminal); retries complete on a `5xx` or a lost response. |
+| `send(caseToken, file, listener)` | Create a grant, upload, complete. Retries complete on a `5xx` or a lost response. A failed upload or complete abandons the grant and throws `AttachmentV2Exception`, except on a `409`, where the grant is already terminal. If abandon doesn't settle a failed complete, the grant is read once, and a grant that reads completed is returned as delivered. An interrupted thread makes no more calls, so it doesn't abandon. Some failures after the upload don't prove the file wasn't delivered (the guide lists them): read the grant before sending again. |
 | `createGrant(caseToken, fileName, expectedSizeBytes)` | Create a grant. The receiver's storage decides its mode and plan. |
 | `getGrant(caseToken, grantId)`, `listGrants(caseToken, page, size)` | Read one grant, or a page of the case's grants. |
 | `singleUploadLink`, `s3PartLinks`, `azureBlockLinks` | Upload links for the grant's mode, at most 1,000 numbers per call. |
