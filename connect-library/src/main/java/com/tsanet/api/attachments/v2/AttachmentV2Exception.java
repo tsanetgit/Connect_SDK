@@ -1,8 +1,9 @@
 package com.tsanet.api.attachments.v2;
 
 /**
- * Any failure on the V2 attachment path: an error answer from the Connect API, a rejected or
- * failed upload request, or a client-side precondition. The message is value-free by
+ * Any failure on the V2 attachment path, or in a receiver's storage setup
+ * ({@link com.tsanet.api.facade.AttachmentStorageFacade}): an error answer from the Connect API, a
+ * rejected or failed upload request, or a client-side precondition. The message is value-free by
  * construction: it carries the operation, the HTTP status and the platform's own title and
  * detail, never a signed URL, a header value or a token.
  *
@@ -19,7 +20,10 @@ package com.tsanet.api.attachments.v2;
  */
 public class AttachmentV2Exception extends RuntimeException {
 
-    /** 400: a link call named a part or block number outside the plan, or S3 receipts don't cover it. */
+    /**
+     * 400: a link call named a part or block number outside the plan, or S3 receipts don't cover it;
+     * or a storage configuration the platform won't register, including a method it hasn't enabled.
+     */
     public static final String INVALID_REQUEST = "attachment/invalid-request";
     /** 403: the caller's company isn't the case's sender, or any other refusal not named below. */
     public static final String FORBIDDEN = "attachment/forbidden";
@@ -31,7 +35,7 @@ public class AttachmentV2Exception extends RuntimeException {
     public static final String RECEIVER_NOT_ALLOWED = "attachment/receiver-not-allowed";
     /**
      * 404: no such case or grant, a receiver that has registered no storage configuration (on
-     * create), or a link or complete call that doesn't match the grant's mode.
+     * create, or on a storage test), or a link or complete call that doesn't match the grant's mode.
      */
     public static final String NOT_FOUND = "attachment/not-found";
     /** 409: the grant is completed, abandoned or expired, so it can't take this call. */

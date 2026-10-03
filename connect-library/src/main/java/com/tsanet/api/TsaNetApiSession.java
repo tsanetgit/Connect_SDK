@@ -1,5 +1,6 @@
 package com.tsanet.api;
 
+import com.tsanet.api.facade.AttachmentStorageFacade;
 import com.tsanet.api.facade.AttachmentsFacade;
 import com.tsanet.api.facade.AttachmentsV2Facade;
 import com.tsanet.api.facade.AuthFacade;
@@ -29,4 +30,7 @@ public interface TsaNetApiSession {
 
     /** The V2 direct-delivery attachment client (tsanetgit/Connect-API-Code#147). */
     AttachmentsV2Facade attachmentsV2();
+
+    /** The receiver's side of V2: where files sent to this account's company land. */
+    AttachmentStorageFacade attachmentStorage();
 }

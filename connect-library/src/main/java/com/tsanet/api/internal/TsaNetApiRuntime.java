@@ -5,6 +5,7 @@ import com.tsanet.api.TsaNetApiConfiguration;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiRestTemplates;
+import com.tsanet.api.connectapi.internal.ConnectApiAttachmentStorageGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsV2Gateway;
 import com.tsanet.api.connectapi.internal.ConnectApiAuthGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiCollaborationGateway;
@@ -16,6 +17,7 @@ import com.tsanet.api.connectapi.internal.ConnectApiSessionStore;
 import com.tsanet.api.connectapi.internal.ConnectApiUserGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiWebhooksGateway;
 import com.tsanet.api.generated.api.AttachmentGrantsApi;
+import com.tsanet.api.generated.api.AttachmentStorageConfigApi;
 import com.tsanet.api.generated.api.CaseAttachmentsApi;
 import com.tsanet.api.generated.api.CaseNotesApi;
 import com.tsanet.api.generated.api.CaseResponsesApi;
@@ -177,6 +179,8 @@ public final class TsaNetApiRuntime {
             configuration.allowedReceiverCompanyIds(),
             ConnectApiAttachmentsV2Gateway.receivingCompanyFrom(collaborationRequestsApi)
         );
+        ConnectApiAttachmentStorageGateway attachmentStorageGateway =
+            new ConnectApiAttachmentStorageGateway(new AttachmentStorageConfigApi(apiClient), sessionStore);
 
         return new DefaultTsaNetApiSession(
             configuration,
@@ -192,6 +196,7 @@ public final class TsaNetApiRuntime {
             partnersGateway,
             attachmentsGateway,
             attachmentsV2Gateway,
+            attachmentStorageGateway,
             collaborationRequestStorageService,
             collaborationRequestFormStorageService,
             caseNoteStorageService,
