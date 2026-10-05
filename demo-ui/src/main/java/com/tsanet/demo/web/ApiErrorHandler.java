@@ -45,9 +45,11 @@ public class ApiErrorHandler {
     }
 
     /**
-     * The status demo-ui answers for a failed Connect API call, the one rule for every call: the
-     * platform's own status passes through, and a call that couldn't reach it, or failed without a
-     * platform status (under 400), is a 502.
+     * The status demo-ui answers for a Connect API failure the SDK has classified (a
+     * {@link ConnectApiException}, or a V2 {@code AttachmentV2Exception}): the platform's own status
+     * passes through, and a call that couldn't reach it, or failed without a platform status
+     * (under 400), is a 502. An unclassified {@link RestClientResponseException} keeps its own 502
+     * below.
      */
     static HttpStatusCode upstreamStatus(boolean unreachable, int status) {
         return unreachable || status < 400 ? HttpStatus.BAD_GATEWAY : HttpStatusCode.valueOf(status);

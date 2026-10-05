@@ -185,9 +185,9 @@ public class SettingsController {
 
     /**
      * The failure keeps its code in front of the message, as the V2 delivery screens show it. The
-     * status is {@link ApiErrorHandler#upstreamStatus}, the rule for every other Connect API call: a
-     * failure with no platform status ({@code status()} 0: unreachable, or an answer this client
-     * couldn't use) is a 502.
+     * status is {@link ApiErrorHandler#upstreamStatus}, the rule for the SDK's other classified
+     * failures: a failure without a platform status (under 400; in practice 0, when the platform
+     * was unreachable or its answer unusable) is a 502.
      */
     private static <T> T storageCall(Supplier<T> call) {
         try {
