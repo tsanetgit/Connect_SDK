@@ -20,11 +20,14 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 @ExtendWith(OutputCaptureExtension.class)
 class ConnectFacadePropertiesTest {
 
-    private static List<ConnectFacadeProperties.ApplicationUserAccountConfig> accounts(Map<String, String> properties) {
+    private static ConnectFacadeProperties properties(Map<String, String> properties) {
         return new Binder(new MapConfigurationPropertySource(properties))
             .bind("tsanet", ConnectFacadeProperties.class)
-            .get()
-            .accounts();
+            .get();
+    }
+
+    private static List<ConnectFacadeProperties.ApplicationUserAccountConfig> accounts(Map<String, String> properties) {
+        return properties(properties).accounts();
     }
 
     @Test
@@ -56,12 +59,21 @@ class ConnectFacadePropertiesTest {
 
     @Test
     void anAccountWithoutAReceiverAllowlistIsNamedAtStartup(CapturedOutput output) {
-        ConnectFacadeConfiguration.logUnrestrictedAccounts(ApplicationUserAccountRegistry.of(List.of(
-            ApplicationUserAccount.passwordAccount("open", "target/open.db", "open@example.test", "pw"),
-            ApplicationUserAccount.passwordAccount("listed", "target/listed.db", "listed@example.test", "pw")
-                .withAllowedReceiverCompanyIds(List.of(101L))
-        )));
+        // Through the bean method Spring calls at startup, so the test fails if the bean stops logging.
+        ApplicationUserAccountRegistry registry = new ConnectFacadeConfiguration().applicationUserAccountRegistry(
+            properties(Map.ofEntries(
+                Map.entry("tsanet.accounts[0].id", "open"),
+                Map.entry("tsanet.accounts[0].sqlite-path", "target/open.db"),
+                Map.entry("tsanet.accounts[0].username", "open@example.test"),
+                Map.entry("tsanet.accounts[0].password", "pw"),
+                Map.entry("tsanet.accounts[1].id", "listed"),
+                Map.entry("tsanet.accounts[1].sqlite-path", "target/listed.db"),
+                Map.entry("tsanet.accounts[1].username", "listed@example.test"),
+                Map.entry("tsanet.accounts[1].password", "pw"),
+                Map.entry("tsanet.accounts[1].allowed-receiver-company-ids", "101")
+            )));
 
+        assertThat(registry.all()).extracting(ApplicationUserAccount::id).containsExactlyInAnyOrder("open", "listed");
         assertThat(output.getOut()).contains("Account open has no V2 receiver allowlist")
             .doesNotContain("Account listed");
     }
