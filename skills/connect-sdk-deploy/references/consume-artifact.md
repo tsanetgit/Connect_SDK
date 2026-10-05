@@ -247,11 +247,14 @@ Watch the release notes on each release.
   - New, not breaking: the V2 direct-delivery attachment client (`attachmentsV2()`, built
     against a draft contract with no live endpoint yet) and the published
     `com.tsanet:attachment-receiver` at the same version (see Coordinates).
-- **3.0.0** is a major because the V2 attachment client (`attachmentsV2()`) is rebuilt on
-  the grant model in the Connect OpenAPI spec and its public types change incompatibly. V1
-  and every other facade are unchanged.
-  - Generation: the V2 API and its DTOs are generated from the spec, so the build needs a
-    Connect-API-Code spec branch that has the Attachment Grants operations.
+- **3.0.0** is a major for three reasons; the runtime line (Spring Boot 4.1, Jackson 3,
+  JDK 21) is unchanged from 2.0.0. The V2 attachment client (`attachmentsV2()`) is rebuilt
+  on the grant model in the Connect OpenAPI spec and its public types change incompatibly;
+  `TsaNetApiSession` gains `attachmentStorage()`; and `ApplicationUserAccount` and
+  `TsaNetApiConfiguration` gain a record component. V1 and the other facades are unchanged.
+  - Generation: the V2 APIs and their DTOs are generated from the spec, so the build needs a
+    Connect-API-Code spec branch that has the Attachment Grants and Attachment Storage
+    Config operations.
   - Facade: one method per Connect API call (`createGrant`, `getGrant`, `listGrants`,
     `singleUploadLink`, `s3PartLinks`, `azureBlockLinks`, `completeSingle`,
     `completeS3Multipart`, `completeAzureBlock`, `abandon`), plus `complete` for the grant's
@@ -268,4 +271,49 @@ Watch the release notes on each release.
     `is(code)`, with codes chosen by HTTP status (`attachment/upload-mismatch` for `422`,
     `attachment/provider-error` for `502`, `attachment/grant-terminal` for `409`,
     `attachment/invalid-request` for `400`, and others).
+  - Two of the new codes aren't chosen by HTTP status. `client/interrupted` ends the call
+    when an interrupt arrives during an upload `PUT`, an upload retry's wait or complete's
+    retry wait; the interrupt is restored and `status()` is 0. 2.0.0 reported those as
+    `client/upload-unreachable` during an upload and as `client/connectivity` during
+    complete; both codes remain, for transport failures. `attachment/receiver-not-allowed`
+    is the receiver allowlist's refusal (below): `status()` is 0 when the client refuses
+    before any request, and `403` when the platform does (through a session the library
+    builds; see below).
+  - Removed codes, and what a caller sees instead:
+    - `attachment/grant-expired`: `attachment/grant-terminal` (`409`, the grant is abandoned
+      or expired).
+    - `attachment/grant-already-completed`: no error. Completing a completed grant returns
+      it unchanged.
+    - `attachment/upload-not-found` and `attachment/size-mismatch`:
+      `attachment/upload-mismatch` (`422`, an object or part is missing or its size is wrong).
+    - `attachment/checksum-mismatch`: nothing. The grant takes no SHA-256.
+    - `attachment/receiver-not-configured`: `attachment/not-found` on create (`404`, which
+      also means no such case).
+    - `attachment/size-exceeds-receiver-limit`: nothing per receiver. The spec caps
+      `expectedSizeBytes` at 5,000,000,000,000, and create answers a bad request with `400`,
+      `attachment/invalid-request`.
   - `send` no longer re-grants when a grant expires before complete.
+  - Receiver allowlist: `ApplicationUserAccount` and `TsaNetApiConfiguration` gain a
+    `Set<Long> allowedReceiverCompanyIds` component, the companies the account may deliver
+    V2 attachments to. A `null` or empty set means unrestricted; a set containing `null` is
+    refused at construction. The 2.0.0 constructors, `of`, `forAccount` and the
+    `ApplicationUserAccountConfigMapper` factories compile unchanged and leave it empty.
+    Set it with `ApplicationUserAccount.withAllowedReceiverCompanyIds` or either record's
+    canonical constructor. A record pattern over either type has one more component, so a
+    2.0.0 `case ApplicationUserAccount(var id, var path, var auth)` stops compiling.
+    `equals` and `hashCode` now include the list, so records that differ only in it aren't
+    equal; records built with the 2.0.0 constructors all carry the empty set and compare as
+    before. The console's own configuration binds `allowed-receiver-company-ids`, on an
+    account entry beside `sqlite-path`, and passes it to `withAllowedReceiverCompanyIds`;
+    the mapper doesn't read it, so another app passes its list the same way. With a list set,
+    `createGrant` (and so `send`) refuses a case whose receiving company isn't on it with
+    `attachment/receiver-not-allowed`, before any grant is requested. The platform's own
+    sender allowlist answers `403`, which a session the library builds reports as the same
+    code; a gateway built over a plain `RestTemplate`, without the library's error handler,
+    reports it as `attachment/forbidden`. Details:
+    `docs/attachments-v2-client.md`.
+  - `TsaNetApiSession` gained `attachmentStorage()`, the receiving side of V2:
+    `AttachmentStorageFacade` gets, registers and tests the company's S3 or Azure Blob
+    storage, with the types `StorageConfig`, `StorageTarget` and `StorageTestResult`.
+    Callers are unaffected; an implementer or decorator of `TsaNetApiSession` must add it.
+    Details: "Receiver storage (V2)" in `connect-library/README.md`.
