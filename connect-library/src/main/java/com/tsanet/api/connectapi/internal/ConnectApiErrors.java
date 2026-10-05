@@ -33,7 +33,9 @@ final class ConnectApiErrors {
      * {@link ConnectApiException#isProblem} matches it. One decision for both error shapes
      * {@link #call} maps: the library's {@link ConnectApiException}, and a plain RestTemplate's
      * {@link HttpStatusCodeException}. For the second, the unscrubbed body goes through the
-     * library's own parser for its type alone; nothing else from it is kept or quoted.
+     * library's own parser (which logs nothing) for its type alone, and nothing from it reaches a
+     * message. The exception itself stays attached as the cause, as {@link #call} already
+     * attaches it.
      */
     static boolean isProblem(Throwable cause, String typeSuffix) {
         if (cause instanceof ConnectApiException e) {

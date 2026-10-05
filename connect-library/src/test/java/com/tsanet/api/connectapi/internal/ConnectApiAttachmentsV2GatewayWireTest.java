@@ -417,9 +417,9 @@ class ConnectApiAttachmentsV2GatewayWireTest {
                 .satisfies(e -> {
                     AttachmentV2Exception ex = (AttachmentV2Exception) e;
                     assertThat(ex.code()).as("body %s", body).isEqualTo(code);
-                    assertThat(ex.status()).isEqualTo(403);
-                    assertThat(ex.getMessage()).doesNotContain(TOKEN).doesNotContain("Forbidden for");
-                    assertThat(ex.getSuppressed()).isEmpty();
+                    assertThat(ex.status()).as("body %s", body).isEqualTo(403);
+                    assertThat(ex.getMessage()).as("body %s", body).doesNotContain(TOKEN).doesNotContain("Forbidden for");
+                    assertThat(ex.getSuppressed()).as("body %s", body).isEmpty();
                 });
         });
     }
