@@ -106,6 +106,7 @@ session.webhooks();
 session.partners();
 session.attachments();
 session.attachmentsV2();
+session.attachmentStorage();
 ```
 
 Unless noted, remote operations require a prior successful `authenticate()` or `login()`. Unauthenticated calls throw `IllegalStateException: Not logged in`.
@@ -324,6 +325,31 @@ AttachmentGrant grant = session.attachmentsV2().send(
 The returned grant is the platform's record: `grant.completed()` is true once the platform
 has completed it. Failures carry a `code()`, for example `attachment/upload-mismatch` when
 the platform finds the upload doesn't match the grant.
+
+### Receiver storage (V2) — `session.attachmentStorage()`
+
+The receiving side of V2: where files sent to this account's company land. Every call applies
+to the authenticated account's own company. No secret is sent or stored: an S3 bucket is
+reached through a role TSANet assumes, and an Azure Blob container is named by its tenant,
+storage account and container. The operations are tagged **Attachment Storage Config** in the
+Connect OpenAPI spec, which marks them `x-stability-level: alpha`.
+
+| Method | Description |
+|--------|-------------|
+| `get()` | The company's registered configuration, or empty when none is registered. |
+| `register(target)` | Register a `StorageTarget.S3(bucket, region, roleArn, prefix)` or `StorageTarget.AzureBlob(container, tenantId, storageAccountName, prefix)`, replacing whatever was registered, of any kind. It starts untested. For S3, give the returned `externalId()` to the AWS account's admin for the role's trust policy (`sts:ExternalId`). A configuration the platform won't accept is `attachment/invalid-request`. |
+| `test()` | Ask the platform to check it can use the registered storage. A failed check is a result (`verified()` false, with the platform's `detail()`), not an exception. With nothing registered it's `attachment/not-found`. |
+
+```java
+StorageConfig config = session.attachmentStorage().register(new StorageTarget.S3(
+    "acme-tsanet-inbound", "us-east-1", "arn:aws:iam::123456789012:role/tsanet-writer", null));
+log.info("Add ExternalId {} to the role's trust policy", config.externalId());
+
+StorageTestResult result = session.attachmentStorage().test();
+```
+
+Today any API user of a company can change its storage (`tsanetgit/Connect-API-Code#170`
+proposes an admin-scoped path). `register` follows the platform when that lands.
 
 ---
 

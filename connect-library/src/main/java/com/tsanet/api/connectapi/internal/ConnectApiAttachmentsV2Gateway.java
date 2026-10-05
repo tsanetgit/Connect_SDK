@@ -35,9 +35,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import org.springframework.web.client.HttpStatusCodeException;
-import org.springframework.web.client.ResourceAccessException;
-import org.springframework.web.client.RestClientException;
 
 /**
  * {@link AttachmentsV2Facade} over the generated {@link AttachmentGrantsApi} and the
@@ -428,50 +425,8 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         return failure instanceof AttachmentV2Exception e && e.is(AttachmentV2Exception.GRANT_TERMINAL);
     }
 
-    private <T> T call(String operation, Supplier<T> request) {
-        try {
-            return request.get();
-        } catch (ConnectApiException e) {
-            throw translate(operation, e);
-        } catch (HttpStatusCodeException e) {
-            // Only a RestTemplate without the library's error handler answers this way. Its body
-            // is unscrubbed and can echo the request path, which carries the case token: keep
-            // the status, not the words.
-            int status = e.getStatusCode().value();
-            throw new AttachmentV2Exception(operation + " failed: HTTP " + status, status, codeFor(status), e);
-        } catch (ResourceAccessException e) {
-            // Spring's message can carry the expanded request URL, and these paths carry the
-            // case token: name the failure by its type only.
-            throw new AttachmentV2Exception(operation + " failed: " + e.getClass().getSimpleName(), 0,
-                AttachmentV2Exception.CONNECTIVITY, e);
-        } catch (RestClientException e) {
-            // An answer arrived and could not be read, for example a value the generated model
-            // doesn't know. Not a connectivity failure, so not retried.
-            throw new AttachmentV2Exception(operation + " failed: could not read the answer ("
-                + e.getClass().getSimpleName() + ")", 0, AttachmentV2Exception.API_ERROR, e);
-        }
-    }
-
-    /** The runtime's client already classified the answer; keep its words and map its status to a code. */
-    static AttachmentV2Exception translate(String operation, ConnectApiException e) {
-        if (e.kind() == ConnectApiException.Kind.CONNECTIVITY) {
-            return new AttachmentV2Exception(operation + " failed: " + e.getMessage(), 0,
-                AttachmentV2Exception.CONNECTIVITY, e);
-        }
-        return new AttachmentV2Exception(operation + " failed: " + e.getMessage(), e.status(), codeFor(e.status()), e);
-    }
-
-    /** The code for an error status, as the spec documents each one for these endpoints. */
-    private static String codeFor(int status) {
-        return switch (status) {
-            case 400 -> AttachmentV2Exception.INVALID_REQUEST;
-            case 403 -> AttachmentV2Exception.FORBIDDEN;
-            case 404 -> AttachmentV2Exception.NOT_FOUND;
-            case 409 -> AttachmentV2Exception.GRANT_TERMINAL;
-            case 422 -> AttachmentV2Exception.UPLOAD_MISMATCH;
-            case 502 -> AttachmentV2Exception.PROVIDER_ERROR;
-            default -> AttachmentV2Exception.API_ERROR;
-        };
+    private static <T> T call(String operation, Supplier<T> request) {
+        return ConnectApiErrors.call(operation, request);
     }
 
     static AttachmentGrant toGrant(AttachmentGrantDTO dto) {
@@ -542,12 +497,8 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
             block.getHeaders(), block.getSizeBytes(), block.getExpiresAt());
     }
 
-    /** A field the spec requires; its absence is named, never its value. */
     private static <T> T required(T value, String field) {
-        if (value == null) {
-            throw new AttachmentV2Exception("the answer has no " + field, 0, AttachmentV2Exception.CLIENT_PRECONDITION);
-        }
-        return value;
+        return ConnectApiErrors.required(value, field);
     }
 
     private static long orZero(Long value) {
@@ -559,8 +510,7 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     }
 
     private static AttachmentV2Exception emptyAnswer(String operation) {
-        return new AttachmentV2Exception(operation + " returned no usable answer", 0,
-            AttachmentV2Exception.CLIENT_PRECONDITION);
+        return ConnectApiErrors.emptyAnswer(operation);
     }
 
     private static void requireNumbers(List<Integer> numbers) {
