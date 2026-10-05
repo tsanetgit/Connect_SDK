@@ -365,6 +365,78 @@ class ConnectApiAttachmentsV2GatewayTest {
     }
 
     @Test
+    void anInterruptedCompleteBackoffKeepsTheFailureItWasRetrying() {
+        ConnectApiAttachmentsV2Gateway backingOff = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofMillis(50));
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw apiError(502);
+        });
+        try {
+            assertThatThrownBy(() -> backingOff.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    assertThat(e.getSuppressed()).singleElement()
+                        .satisfies(s -> assertThat(((AttachmentV2Exception) s).code())
+                            .isEqualTo(AttachmentV2Exception.PROVIDER_ERROR));
+                });
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api).completeSingleUpload(TOKEN, GRANT_ID);
+    }
+
+    @Test
+    void anInterruptWithAZeroCompleteBackoffSendsNoSecondComplete() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
+        });
+        try {
+            assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    assertThat(e.getSuppressed()).singleElement()
+                        .satisfies(s -> assertThat(((AttachmentV2Exception) s).code())
+                            .isEqualTo(AttachmentV2Exception.CONNECTIVITY));
+                });
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void anInterruptAfterTheUploadSendsNoComplete() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(coordinator.upload(any(), eq(file), any(), any())).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            return new UploadReceipts(AttachmentGrant.UploadMode.SINGLE, 17, List.of());
+        });
+        try {
+            assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api, never()).completeSingleUpload(anyString(), anyLong());
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
     void anInterruptDuringTheLastCompleteKeepsItsCodeAndTheFlag() {
         ConnectApiAttachmentsV2Gateway backingOff = new ConnectApiAttachmentsV2Gateway(api,
             GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofMillis(1));

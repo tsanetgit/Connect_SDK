@@ -2,6 +2,7 @@ package com.tsanet.api.connectapi.internal;
 
 import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.attachments.v2.AttachmentV2Exception;
+import java.time.Duration;
 import java.util.function.Supplier;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
@@ -64,6 +65,41 @@ final class ConnectApiErrors {
             throw new AttachmentV2Exception("the answer has no " + field, 0, AttachmentV2Exception.CLIENT_PRECONDITION);
         }
         return value;
+    }
+
+    /**
+     * The one interrupt rule for the V2 upload and complete calls: an interrupted thread sends
+     * nothing more. Called before every outbound call and every retry wait, whatever the wait's
+     * length. The interrupt stays set; {@code trigger}, the failure a retry was answering, if any,
+     * is kept as suppressed.
+     */
+    static void requireNotInterrupted(String what, Throwable trigger) {
+        if (Thread.currentThread().isInterrupted()) {
+            throw interrupted(what, null, trigger);
+        }
+    }
+
+    /** Waits before a retry; an interrupt before or during the wait stops the call, as {@link #requireNotInterrupted} does. */
+    static void pause(Duration duration, String what, Throwable trigger) {
+        requireNotInterrupted(what, trigger);
+        if (duration.isZero() || duration.isNegative()) {
+            return;
+        }
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw interrupted(what, e, trigger);
+        }
+    }
+
+    private static AttachmentV2Exception interrupted(String what, InterruptedException cause, Throwable trigger) {
+        AttachmentV2Exception e = new AttachmentV2Exception("interrupted " + what, 0, AttachmentV2Exception.INTERRUPTED,
+            cause);
+        if (trigger != null) {
+            e.addSuppressed(trigger);
+        }
+        return e;
     }
 
     /** A 2xx with no body where the spec promises one. */

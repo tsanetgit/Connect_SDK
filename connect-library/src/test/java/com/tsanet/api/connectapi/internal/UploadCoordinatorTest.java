@@ -443,6 +443,56 @@ class UploadCoordinatorTest {
     }
 
     @Test
+    void anInterruptBeforeA403RefreshAsksForNoFreshLink() throws IOException {
+        transport.answer(1, 403);
+        transport.onPut = () -> Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> coordinator.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(links.calls).hasSize(1);
+        assertThat(transport.puts).hasSize(1);
+    }
+
+    @Test
+    void anInterruptWithAZeroBackoffSendsNoSecondPut() throws IOException {
+        transport.answer(1, 500);
+        transport.onPut = () -> Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> coordinator.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(transport.puts).hasSize(1);
+    }
+
+    @Test
+    void anInterruptedRetryKeepsTheFailureItWasRetrying() throws IOException {
+        IOException reset = new IOException("connection reset");
+        transport.answer(1, reset);
+        transport.onPut = () -> Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> coordinator.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    assertThat(e.getSuppressed()).containsExactly(reset);
+                });
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(transport.puts).hasSize(1);
+    }
+
+    @Test
     void aLinkWithoutAUrlCannotBeBuilt() {
         assertThatThrownBy(() -> new UploadLink(1, null, Map.of(), null, null))
             .isInstanceOf(NullPointerException.class)
