@@ -6,6 +6,7 @@ import com.tsanet.api.attachments.v2.AttachmentV2Exception;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -24,9 +25,12 @@ import org.junit.jupiter.api.Test;
  */
 class AttachmentsV2GuideSyncTest {
 
-    private static final Path FACADE = Path.of("src/main/java/com/tsanet/api/facade/AttachmentsV2Facade.java");
-    private static final Path EXCEPTION = Path.of("src/main/java/com/tsanet/api/attachments/v2/AttachmentV2Exception.java");
-    private static final Path GUIDE = Path.of("../docs/attachments-v2-client.md");
+    // Resolved from the module, not the working directory, so the test also runs from the repository root, or from
+    // an IDE that compiles into the module's target directory, as a Maven import does.
+    private static final Path MODULE = moduleRoot();
+    private static final Path FACADE = MODULE.resolve("src/main/java/com/tsanet/api/facade/AttachmentsV2Facade.java");
+    private static final Path EXCEPTION = MODULE.resolve("src/main/java/com/tsanet/api/attachments/v2/AttachmentV2Exception.java");
+    private static final Path GUIDE = MODULE.resolve("../docs/attachments-v2-client.md").normalize();
     private static final String OPEN = "<!-- sync: AttachmentsV2Facade.send.";
     private static final String CLOSE = "<!-- /sync -->";
     private static final String TABLE_HEADER = "| Code | Cause |";
@@ -61,7 +65,7 @@ class AttachmentsV2GuideSyncTest {
         for (String code : codes) {
             String cause = table.get(code);
             String javadoc = constantJavadoc(code);
-            String expected = Character.toLowerCase(javadoc.charAt(0)) + javadoc.substring(1).replaceFirst("\\.$", "");
+            String expected = startLowercase(javadoc).replaceFirst("\\.$", "");
             assertThat(cause)
                 .as("the %s row in %s must equal the javadoc of its constant in %s", code, GUIDE, EXCEPTION)
                 .isEqualTo(expected);
@@ -162,8 +166,33 @@ class AttachmentsV2GuideSyncTest {
             .toList();
     }
 
+    /** The directory holding this module's pom.xml, found by walking up from where this class was compiled to. */
+    private static Path moduleRoot() {
+        try {
+            Path dir = Path.of(AttachmentsV2GuideSyncTest.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            while (dir != null && !Files.exists(dir.resolve("pom.xml"))) {
+                dir = dir.getParent();
+            }
+            assertThat(dir).as("a pom.xml above %s's compiled class", AttachmentsV2GuideSyncTest.class).isNotNull();
+            return dir;
+        } catch (URISyntaxException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** A row starts lowercase, unless the javadoc's second character is a capital, as in an acronym such as API. */
+    private static String startLowercase(String javadoc) {
+        if (javadoc.length() > 1 && Character.isUpperCase(javadoc.charAt(1))) {
+            return javadoc;
+        }
+        return Character.toLowerCase(javadoc.charAt(0)) + javadoc.substring(1);
+    }
+
+    /** Javadoc renders a labeled {@code {@link Target label}} as its label, so the guide carries only the label. */
     private static String javadocText(String text) {
-        return normalize(text.replaceAll("\\{@code ([^}]*)}", "`$1`").replaceAll("\\{@link #?([^}]*)}", "`$1`"));
+        return normalize(text.replaceAll("\\{@code ([^}]*)}", "`$1`")
+            .replaceAll("\\{@link #?[^\\s(}]+(?:\\([^)]*\\))?\\s+([^}]+)}", "`$1`")
+            .replaceAll("\\{@link #?([^}]*)}", "`$1`"));
     }
 
     private static String normalize(String text) {
