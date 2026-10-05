@@ -391,6 +391,40 @@ class ConnectApiAttachmentsV2GatewayWireTest {
     }
 
     @Test
+    void aPlainRestTemplateReadsTheAllowlistTypeButNeverQuotesTheBody() {
+        // The body echoes the request path, case token included, as an unscrubbed error page can.
+        String echo = "\"title\":\"Forbidden\",\"status\":403,\"detail\":\"/v2/collaboration-requests/" + TOKEN + "\"}";
+        java.util.Map<String, String> expected = new java.util.LinkedHashMap<>();
+        expected.put("{\"type\":\"https://api.tsanet.org/errors/attachment-receiver-not-allowed\"," + echo,
+            AttachmentV2Exception.RECEIVER_NOT_ALLOWED);
+        expected.put("{\"type\":\"https://api.tsanet.org/errors/access-denied\"," + echo, AttachmentV2Exception.FORBIDDEN);
+        expected.put("{" + echo, AttachmentV2Exception.FORBIDDEN);
+        expected.put("<html>403 Forbidden for /v2/collaboration-requests/" + TOKEN + "</html>",
+            AttachmentV2Exception.FORBIDDEN);
+        expected.forEach((body, code) -> {
+            RestTemplate plain = new RestTemplate();
+            MockRestServiceServer plainServer = MockRestServiceServer.bindTo(plain).build();
+            ApiClient plainClient = new ApiClient(plain);
+            plainClient.setBasePath(BASE);
+            plainClient.setBearerToken(() -> "bearer-123");
+            ConnectApiAttachmentsV2Gateway plainGateway = new ConnectApiAttachmentsV2Gateway(
+                new AttachmentGrantsApi(plainClient), GatewayTestSupport.authenticatedSessionStore());
+            plainServer.expect(requestTo(GRANTS)).andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(body));
+
+            assertThatThrownBy(() -> plainGateway.createGrant(TOKEN, "diag.log", 12))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                    assertThat(ex.code()).as("body %s", body).isEqualTo(code);
+                    assertThat(ex.status()).isEqualTo(403);
+                    assertThat(ex.getMessage()).doesNotContain(TOKEN).doesNotContain("Forbidden for");
+                    assertThat(ex.getSuppressed()).isEmpty();
+                });
+        });
+    }
+
+    @Test
     void anAnswerTheClientCannotReadIsAnApiErrorNotConnectivity() {
         server.expect(requestTo(GRANT + "/single/complete"))
             .andRespond(withStatus(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON)

@@ -22,7 +22,27 @@ import org.springframework.web.client.RestClientException;
  */
 final class ConnectApiErrors {
 
+    /** The library's own problem-body parser, used here only to read a problem's type. */
+    private static final ConnectApiResponseErrorHandler PROBLEM_BODIES = new ConnectApiResponseErrorHandler();
+
     private ConnectApiErrors() {
+    }
+
+    /**
+     * Whether the answer behind {@code cause} names the problem type {@code typeSuffix}, matched as
+     * {@link ConnectApiException#isProblem} matches it. One decision for both error shapes
+     * {@link #call} maps: the library's {@link ConnectApiException}, and a plain RestTemplate's
+     * {@link HttpStatusCodeException}. For the second, the unscrubbed body goes through the
+     * library's own parser for its type alone; nothing else from it is kept or quoted.
+     */
+    static boolean isProblem(Throwable cause, String typeSuffix) {
+        if (cause instanceof ConnectApiException e) {
+            return e.isProblem(typeSuffix);
+        }
+        if (cause instanceof HttpStatusCodeException e) {
+            return PROBLEM_BODIES.classify(e.getStatusCode().value(), e.getResponseBodyAsString()).isProblem(typeSuffix);
+        }
+        return false;
     }
 
     static <T> T call(String operation, Supplier<T> request) {

@@ -56,7 +56,7 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     // PROVISIONAL(tsanetgit/Connect-API-Code#183): the spec doesn't document this problem type;
     // the server's ProblemDetailFactory sends it for an allowlist refusal. Once the spec documents
     // createAttachmentGrant's 403 types, this becomes the documented value. Matched as the type's
-    // last segment (ConnectApiException.isProblem), so the URL's host doesn't matter.
+    // last segment (ConnectApiErrors.isProblem), so the URL's host doesn't matter.
     private static final String RECEIVER_NOT_ALLOWED_TYPE = "attachment-receiver-not-allowed";
 
     private final AttachmentGrantsApi api;
@@ -186,11 +186,14 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         }
     }
 
-    /** Grant creation only: the server's allowlist refusal reads the same as this client's. */
+    /**
+     * Grant creation only: the server's allowlist refusal reads the same as this client's, whether
+     * the answer came through the library's error handler or a plain RestTemplate.
+     */
     private static AttachmentV2Exception receiverNotAllowedOr(AttachmentV2Exception e) {
-        if (e.status() == 403 && e.getCause() instanceof ConnectApiException cause
-            && cause.isProblem(RECEIVER_NOT_ALLOWED_TYPE)) {
-            return new AttachmentV2Exception(e.getMessage(), 403, AttachmentV2Exception.RECEIVER_NOT_ALLOWED, cause);
+        if (e.status() == 403 && ConnectApiErrors.isProblem(e.getCause(), RECEIVER_NOT_ALLOWED_TYPE)) {
+            return new AttachmentV2Exception(e.getMessage(), 403, AttachmentV2Exception.RECEIVER_NOT_ALLOWED,
+                e.getCause());
         }
         return e;
     }
