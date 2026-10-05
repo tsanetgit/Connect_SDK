@@ -1,7 +1,8 @@
 name: verify
 
-# Full-reactor build and test on every PR and on main. Until this workflow
-# existed the repo's only PR check was the security audit, so Java compile and
+# Full-reactor build and test on every PR into main or develop, and on every
+# push to either. Until this workflow existed the repo's only PR check was the
+# security audit, so Java compile and
 # test breakage could reach main unseen; the receipts lived on whichever
 # machine last ran `mvn install`. This is the clean-machine counterpart.
 #
@@ -10,12 +11,12 @@ name: verify
 # every module, including ones never published, must build and pass its tests.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   push:
-    branches: [main]
+    branches: [main, develop]
 
 # A superseded push to the same PR doesn't need its old run to finish. Pushes
-# to main get a per-commit group instead: a shared group would let a newer
+# (to main or develop) get a per-commit group instead: a shared group would let a newer
 # push cancel a PENDING older one, leaving that commit with no verify result.
 concurrency:
   group: verify-${{ github.event_name == 'push' && github.sha || github.ref }}
@@ -52,12 +53,26 @@ jobs:
           persist-credentials: false
 
       # The spec BRANCH matters: the generated symbols depend on which
-      # specification the sibling provides (see the README's build notes), and
-      # this repo builds against beta.
+      # specification the sibling provides (see the README's build notes).
+      # main builds against beta, the released platform's spec; develop builds
+      # against develop, where unreleased API work lands first. A PR builds
+      # against its base branch's spec (base_ref), a push against its own
+      # branch's (ref_name; base_ref is empty on push). A develop-to-main PR
+      # therefore builds against beta, and stays red until beta catches up.
+      - name: Choose the spec branch
+        id: spec
+        env:
+          BRANCH: ${{ github.base_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [ "$BRANCH" = "develop" ]; then REF=develop; else REF=beta; fi
+          echo "Building $BRANCH against Connect-API-Code $REF"
+          echo "ref=$REF" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
         with:
           repository: tsanetgit/Connect-API-Code
-          ref: beta
+          ref: ${{ steps.spec.outputs.ref }}
           token: ${{ secrets.CONNECT_API_CODE_TOKEN }}
           path: Connect-API-Code
           persist-credentials: false
