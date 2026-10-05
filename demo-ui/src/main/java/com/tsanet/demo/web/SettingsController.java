@@ -193,7 +193,8 @@ public class SettingsController {
         try {
             return call.get();
         } catch (AttachmentV2Exception e) {
-            HttpStatusCode status = e.status() >= 400 ? HttpStatusCode.valueOf(e.status()) : HttpStatus.BAD_GATEWAY;
+            HttpStatusCode status = e.is(AttachmentV2Exception.CONNECTIVITY) || e.status() < 400
+                ? HttpStatus.BAD_GATEWAY : HttpStatusCode.valueOf(e.status());
             throw new ResponseStatusException(status, e.code() + ": " + e.getMessage());
         }
     }

@@ -187,6 +187,8 @@ class ReceiverStorageSettingsTest {
         expected.put(new AttachmentV2Exception("get storage config failed: HTTP 409", 409, AttachmentV2Exception.GRANT_TERMINAL), 409);
         expected.put(new AttachmentV2Exception("get storage config failed: HTTP 500", 500, AttachmentV2Exception.API_ERROR), 500);
         expected.put(new AttachmentV2Exception("get storage config failed: HTTP 502", 502, AttachmentV2Exception.PROVIDER_ERROR), 502);
+        // A status with no HttpStatus constant still passes through.
+        expected.put(new AttachmentV2Exception("get storage config failed: HTTP 499", 499, AttachmentV2Exception.API_ERROR), 499);
         // No platform status: unreachable, or an answer this client couldn't use.
         expected.put(new AttachmentV2Exception("get storage config failed: ResourceAccessException", 0,
             AttachmentV2Exception.CONNECTIVITY), 502);
