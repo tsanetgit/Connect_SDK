@@ -4,6 +4,7 @@ import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.CaseNoteValidation;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
+import com.tsanet.api.facade.CaseNotesFacade;
 import java.util.List;
 import java.util.Locale;
 import java.util.Scanner;
@@ -41,6 +42,7 @@ public class CollaborationRequestNoteAddExecutor {
         String description = resolveDescription(args, scanner);
         String summary = CliArgs.summary(args).orElseGet(() -> deriveSummary(description));
         String priority = resolvePriority(args);
+        String type = resolveType(args);
 
         CaseNoteValidation.ValidationResult validation = CaseNoteValidation.validate(summary, description);
         if (!validation.valid()) {
@@ -53,7 +55,8 @@ public class CollaborationRequestNoteAddExecutor {
                 request.token(),
                 summary,
                 description,
-                priority
+                priority,
+                type
             );
             System.out.println(
                 EntityPrinter.info(
@@ -61,6 +64,7 @@ public class CollaborationRequestNoteAddExecutor {
                     "Note created: id=" + created.id()
                         + " summary=" + created.summary()
                         + " priority=" + created.priority()
+                        + " type=" + (created.type() != null ? created.type() : "")
                 )
             );
 
@@ -97,6 +101,15 @@ public class CollaborationRequestNoteAddExecutor {
             throw new IllegalArgumentException("Priority must be one of: LOW, MEDIUM, HIGH");
         }
         return priority;
+    }
+
+    /** The optional {@code --type}, one of the library's creatable types, or null for the server's default. */
+    static String resolveType(String[] args) {
+        String type = CliArgs.noteType(args).map(value -> value.toUpperCase(Locale.ROOT)).orElse(null);
+        if (type != null && !CaseNotesFacade.CREATABLE_NOTE_TYPES.contains(type)) {
+            throw new IllegalArgumentException("Type must be one of: " + String.join(", ", CaseNotesFacade.CREATABLE_NOTE_TYPES));
+        }
+        return type;
     }
 
     static String deriveSummary(String description) {

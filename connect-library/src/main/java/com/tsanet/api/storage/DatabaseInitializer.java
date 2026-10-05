@@ -36,7 +36,10 @@ public final class DatabaseInitializer {
             token TEXT NOT NULL UNIQUE,
             created_at TEXT,
             updated_at TEXT,
-            fetched_at TEXT NOT NULL
+            fetched_at TEXT NOT NULL,
+            type TEXT,
+            company_id INTEGER,
+            direction TEXT
         )
         """;
 
@@ -154,6 +157,9 @@ public final class DatabaseInitializer {
         jdbcTemplate.execute(COLLABORATION_REQUEST_TABLE);
         ensureColumn(jdbcTemplate, "collaboration_request", "test_case", "INTEGER");
         jdbcTemplate.execute(CASE_NOTE_TABLE);
+        ensureColumn(jdbcTemplate, "case_note", "type", "TEXT");
+        ensureColumn(jdbcTemplate, "case_note", "company_id", "INTEGER");
+        ensureColumn(jdbcTemplate, "case_note", "direction", "TEXT");
         jdbcTemplate.execute(CASE_RESPONSE_TABLE);
         jdbcTemplate.execute(USER_CONTEXT_TABLE);
         jdbcTemplate.execute(WEBHOOK_SUBSCRIPTION_TABLE);
