@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -163,12 +164,14 @@ public class SettingsController {
         if (body == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A receiver storage configuration is required");
         }
-        String prefix = isBlank(body.prefix()) ? null : body.prefix().strip();
+        // Every field is stripped, so a padded value isn't stored as sent. Blank once stripped is missing.
+        String prefix = stripped(body.prefix());
         try {
             return switch (body.method() == null ? "" : body.method()) {
-                case "s3" -> new StorageTarget.S3(body.bucket(), body.region(), body.roleArn(), prefix);
-                case "azureBlob" -> new StorageTarget.AzureBlob(body.container(), body.tenantId(),
-                    body.storageAccountName(), prefix);
+                case "s3" -> new StorageTarget.S3(stripped(body.bucket()), stripped(body.region()),
+                    stripped(body.roleArn()), prefix);
+                case "azureBlob" -> new StorageTarget.AzureBlob(stripped(body.container()), stripped(body.tenantId()),
+                    stripped(body.storageAccountName()), prefix);
                 default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "method must be s3 or azureBlob");
             };
         } catch (IllegalArgumentException e) {
@@ -176,15 +179,21 @@ public class SettingsController {
         }
     }
 
-    /** The platform's refusal keeps its code in front of the message, as the V2 delivery screens show it. */
+    private static String stripped(String value) {
+        return isBlank(value) ? null : value.strip();
+    }
+
+    /**
+     * The failure keeps its code in front of the message, as the V2 delivery screens show it. The
+     * status follows {@link ApiErrorHandler}'s rule for every other Connect API call: the
+     * platform's own status passes through, and a failure with none (unreachable, or an answer
+     * this client couldn't use, {@code status()} 0) is a 502.
+     */
     private static <T> T storageCall(Supplier<T> call) {
         try {
             return call.get();
         } catch (AttachmentV2Exception e) {
-            HttpStatus status = e.is(AttachmentV2Exception.INVALID_REQUEST) ? HttpStatus.BAD_REQUEST
-                : e.is(AttachmentV2Exception.FORBIDDEN) ? HttpStatus.FORBIDDEN
-                : e.is(AttachmentV2Exception.NOT_FOUND) ? HttpStatus.NOT_FOUND
-                : HttpStatus.BAD_GATEWAY;
+            HttpStatusCode status = e.status() >= 400 ? HttpStatusCode.valueOf(e.status()) : HttpStatus.BAD_GATEWAY;
             throw new ResponseStatusException(status, e.code() + ": " + e.getMessage());
         }
     }
