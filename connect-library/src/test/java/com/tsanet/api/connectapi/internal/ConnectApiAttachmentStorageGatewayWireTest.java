@@ -198,6 +198,8 @@ class ConnectApiAttachmentStorageGatewayWireTest {
             });
     }
 
+    // PROVISIONAL(tsanetgit/Connect-API-Code#182): pins the gateway's refusal of a GCS configuration,
+    // which can't exist while the platform refuses to register GCS. Once GCS is on, this reads one.
     @Test
     void aGcsConfigurationIsOneThisClientDoesntRead() {
         server.expect(requestTo(CONFIG)).andRespond(withSuccess("{\"method\":\"gcs\",\"gcs\":{},"
