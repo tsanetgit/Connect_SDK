@@ -185,13 +185,15 @@ class UploadCoordinator {
                        LinkSource source, java.util.function.LongConsumer onBytes) {
         UploadLink link = first;
         boolean fresh = firstIsFresh;
+        // The failure the current attempt is retrying, kept as suppressed if an interrupt stops it.
+        Throwable retrying = null;
         for (int attempt = 1; ; attempt++) {
             if (!fresh && expiresWithinMargin(link)) {
-                link = refresh(region, link, source);
+                link = refresh(region, link, source, retrying);
             }
             fresh = false;
             requireFits(region, link);
-            ConnectApiErrors.requireNotInterrupted("before uploading part " + region.number(), null);
+            ConnectApiErrors.requireNotInterrupted("before uploading part " + region.number(), retrying);
             UploadTransport.PutResult result;
             try {
                 result = transport.put(link, file, region.offset(), region.length(), onBytes);
@@ -202,10 +204,11 @@ class UploadCoordinator {
                         AttachmentV2Exception.UPLOAD_UNREACHABLE, e);
                 }
                 ConnectApiErrors.pause(backoff(attempt, Optional.empty()), "while retrying part " + region.number(), e);
+                retrying = e;
                 continue;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw ConnectApiErrors.interrupted("while uploading part " + region.number(), e, null);
+                throw ConnectApiErrors.interrupted("while uploading part " + region.number(), e, retrying);
             }
             int status = result.status();
             if (status / 100 == 2) {
@@ -220,11 +223,13 @@ class UploadCoordinator {
                 throw rejected(region, status, attempt);
             }
             if (status == 403) {
-                link = refresh(region, link, source);
+                retrying = rejected(region, status, attempt);
+                link = refresh(region, link, source, retrying);
                 fresh = true;
             } else if (status == 429 || status / 100 == 5) {
+                retrying = rejected(region, status, attempt);
                 ConnectApiErrors.pause(backoff(attempt, result.retryAfter()), "while retrying part " + region.number(),
-                    rejected(region, status, attempt));
+                    retrying);
             } else {
                 throw rejected(region, status, attempt);
             }
@@ -232,8 +237,8 @@ class UploadCoordinator {
     }
 
     /** Ask for {@code region}'s link again; the same link back is an error only once it has expired. */
-    private UploadLink refresh(Region region, UploadLink current, LinkSource source) {
-        ConnectApiErrors.requireNotInterrupted("before asking again for the link for part " + region.number(), null);
+    private UploadLink refresh(Region region, UploadLink current, LinkSource source, Throwable retrying) {
+        ConnectApiErrors.requireNotInterrupted("before asking again for the link for part " + region.number(), retrying);
         List<UploadLink> links = source.links(List.of(region.number()));
         if (links == null || links.size() != 1 || links.get(0).number() != region.number()) {
             throw precondition("asked for a fresh link for number " + region.number() + " and did not get exactly one");

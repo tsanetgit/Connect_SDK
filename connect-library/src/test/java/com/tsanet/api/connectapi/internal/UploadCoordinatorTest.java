@@ -449,7 +449,11 @@ class UploadCoordinatorTest {
         try {
             assertThatThrownBy(() -> coordinator.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
                 .isInstanceOf(AttachmentV2Exception.class)
-                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    assertThat(e.getSuppressed()).singleElement()
+                        .satisfies(s -> assertThat(((AttachmentV2Exception) s).status()).isEqualTo(403));
+                });
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
             Thread.interrupted();
@@ -481,6 +485,25 @@ class UploadCoordinatorTest {
     }
 
     @Test
+    void anInterruptDuringARetriedPutKeepsTheFailureTheRetryWasAnswering() throws IOException {
+        transport.answer(1, 500, new InterruptedException());
+        try {
+            assertThatThrownBy(() -> coordinator.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    assertThat(e.getCause()).isInstanceOf(InterruptedException.class);
+                    assertThat(e.getSuppressed()).singleElement()
+                        .satisfies(s -> assertThat(((AttachmentV2Exception) s).status()).isEqualTo(500));
+                });
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(transport.puts).hasSize(2);
+    }
+
+    @Test
     void anInterruptedRetryKeepsTheFailureItWasRetrying() throws IOException {
         IOException reset = new IOException("connection reset");
         transport.answer(1, reset);
@@ -504,7 +527,8 @@ class UploadCoordinatorTest {
         UploadCoordinator slow = new UploadCoordinator(transport, clock, Duration.ofSeconds(60), Duration.ofSeconds(2));
         transport.answer(1, 503);
         Thread caller = Thread.currentThread();
-        transport.onPut = () -> Thread.ofPlatform().start(() -> {
+        Thread[] interrupter = new Thread[1];
+        transport.onPut = () -> interrupter[0] = Thread.ofPlatform().start(() -> {
             try {
                 Thread.sleep(100);
             } catch (InterruptedException ignored) {
@@ -524,6 +548,11 @@ class UploadCoordinatorTest {
                 });
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
+            // Clear the flag before joining (join throws on an interrupted thread), stop the helper
+            // and clear again, so a stray interrupt can't reach the next test on this thread.
+            Thread.interrupted();
+            interrupter[0].interrupt();
+            interrupter[0].join();
             Thread.interrupted();
         }
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));

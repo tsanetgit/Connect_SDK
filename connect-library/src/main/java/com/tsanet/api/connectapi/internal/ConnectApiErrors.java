@@ -11,7 +11,7 @@ import org.springframework.web.client.RestClientException;
 /**
  * One copy of how a V2 attachment call's failure becomes an {@link AttachmentV2Exception}, for
  * the gateways over the generated V2 APIs ({@link ConnectApiAttachmentsV2Gateway} and
- * {@link ConnectApiAttachmentStorageGateway}). Every message is value-free: it names the
+ * {@link ConnectApiAttachmentStorageGateway}) and the upload loop ({@link UploadCoordinator}). Every message is value-free: it names the
  * operation and the status, never a request URL, which can carry a case token.
  *
  * <p>An answer that arrives without a field the spec requires is {@code client/precondition},
@@ -69,9 +69,11 @@ final class ConnectApiErrors {
 
     /**
      * The one interrupt rule for the V2 upload and complete calls: an interrupted thread sends
-     * nothing more. Called before every outbound call and every retry wait, whatever the wait's
-     * length. The interrupt stays set; {@code trigger}, the failure a retry was answering, if any,
-     * is kept as suppressed.
+     * nothing more. Called before every link call, upload {@code PUT} and complete attempt, and
+     * before every retry wait, whatever the wait's length. The interrupt stays set;
+     * {@code trigger}, the failure a retry was answering, if any, is kept as suppressed. The
+     * best-effort calls after a failure (abandon, and the read-back after a failed complete) don't
+     * throw: on an interrupted thread they are skipped, and the original failure stands.
      */
     static void requireNotInterrupted(String what, Throwable trigger) {
         if (Thread.currentThread().isInterrupted()) {

@@ -90,6 +90,14 @@ class ConnectApiAttachmentsV2GatewayTest {
         return new ConnectApiException(ConnectApiException.Kind.OTHER, status, null, null, "HTTP " + status, null, null);
     }
 
+    private static void joinQuietly(Thread thread) {
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private static UploadReceipts s3Receipts() {
         return new UploadReceipts(AttachmentGrant.UploadMode.S3_MULTIPART, 17, List.of(
             new UploadReceipts.PartReceipt(1, "\"e1\""), new UploadReceipts.PartReceipt(2, "\"e2\"")));
@@ -397,8 +405,9 @@ class ConnectApiAttachmentsV2GatewayTest {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
         Thread caller = Thread.currentThread();
+        Thread[] interrupter = new Thread[1];
         when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
-            Thread.ofPlatform().start(() -> {
+            interrupter[0] = Thread.ofPlatform().start(() -> {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException ignored) {
@@ -421,6 +430,11 @@ class ConnectApiAttachmentsV2GatewayTest {
                 });
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
+            // Clear the flag before joining (join throws on an interrupted thread), stop the helper
+            // and clear again, so a stray interrupt can't reach the next test on this thread.
+            Thread.interrupted();
+            interrupter[0].interrupt();
+            joinQuietly(interrupter[0]);
             Thread.interrupted();
         }
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));
