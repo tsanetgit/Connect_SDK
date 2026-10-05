@@ -93,7 +93,8 @@ final class ConnectApiErrors {
         }
     }
 
-    private static AttachmentV2Exception interrupted(String what, InterruptedException cause, Throwable trigger) {
+    /** {@code client/interrupted}, with the interrupt as cause and {@code trigger}, if any, as suppressed. */
+    static AttachmentV2Exception interrupted(String what, InterruptedException cause, Throwable trigger) {
         AttachmentV2Exception e = new AttachmentV2Exception("interrupted " + what, 0, AttachmentV2Exception.INTERRUPTED,
             cause);
         if (trigger != null) {

@@ -391,6 +391,44 @@ class ConnectApiAttachmentsV2GatewayTest {
     }
 
     @Test
+    void anInterruptDuringARealCompleteBackoffStopsTheWaitAndKeepsBothCauses() {
+        ConnectApiAttachmentsV2Gateway slow = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofSeconds(2));
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        Thread caller = Thread.currentThread();
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
+            Thread.ofPlatform().start(() -> {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ignored) {
+                    return;
+                }
+                caller.interrupt();
+            });
+            throw apiError(502);
+        });
+        long start = System.nanoTime();
+        try {
+            assertThatThrownBy(() -> slow.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    assertThat(e.getCause()).isInstanceOf(InterruptedException.class);
+                    assertThat(e.getSuppressed()).singleElement()
+                        .satisfies(s -> assertThat(((AttachmentV2Exception) s).code())
+                            .isEqualTo(AttachmentV2Exception.PROVIDER_ERROR));
+                });
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));
+        verify(api).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
     void anInterruptWithAZeroCompleteBackoffSendsNoSecondComplete() {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));

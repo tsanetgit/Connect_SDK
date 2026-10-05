@@ -465,7 +465,14 @@ class UploadCoordinatorTest {
         try {
             assertThatThrownBy(() -> coordinator.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
                 .isInstanceOf(AttachmentV2Exception.class)
-                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    // The 500 it was retrying, though a status isn't an exception.
+                    assertThat(e.getSuppressed()).singleElement().satisfies(s -> {
+                        assertThat(((AttachmentV2Exception) s).code()).isEqualTo(AttachmentV2Exception.UPLOAD_REJECTED);
+                        assertThat(((AttachmentV2Exception) s).status()).isEqualTo(500);
+                    });
+                });
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
             Thread.interrupted();
@@ -489,6 +496,37 @@ class UploadCoordinatorTest {
         } finally {
             Thread.interrupted();
         }
+        assertThat(transport.puts).hasSize(1);
+    }
+
+    @Test
+    void anInterruptDuringARealBackoffStopsTheWaitAndKeepsBothCauses() throws Exception {
+        UploadCoordinator slow = new UploadCoordinator(transport, clock, Duration.ofSeconds(60), Duration.ofSeconds(2));
+        transport.answer(1, 503);
+        Thread caller = Thread.currentThread();
+        transport.onPut = () -> Thread.ofPlatform().start(() -> {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException ignored) {
+                return;
+            }
+            caller.interrupt();
+        });
+        long start = System.nanoTime();
+        try {
+            assertThatThrownBy(() -> slow.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    assertThat(e.getCause()).isInstanceOf(InterruptedException.class);
+                    assertThat(e.getSuppressed()).singleElement()
+                        .satisfies(s -> assertThat(((AttachmentV2Exception) s).status()).isEqualTo(503));
+                });
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));
         assertThat(transport.puts).hasSize(1);
     }
 

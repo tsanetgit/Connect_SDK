@@ -205,8 +205,7 @@ class UploadCoordinator {
                 continue;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw new AttachmentV2Exception("interrupted while uploading part " + region.number(), 0,
-                    AttachmentV2Exception.INTERRUPTED, e);
+                throw ConnectApiErrors.interrupted("while uploading part " + region.number(), e, null);
             }
             int status = result.status();
             if (status / 100 == 2) {
@@ -225,7 +224,7 @@ class UploadCoordinator {
                 fresh = true;
             } else if (status == 429 || status / 100 == 5) {
                 ConnectApiErrors.pause(backoff(attempt, result.retryAfter()), "while retrying part " + region.number(),
-                    null);
+                    rejected(region, status, attempt));
             } else {
                 throw rejected(region, status, attempt);
             }
