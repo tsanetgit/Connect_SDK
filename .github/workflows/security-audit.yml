@@ -19,7 +19,7 @@ name: security-audit
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 # Least privilege: the audit only reads the checked-out tree.

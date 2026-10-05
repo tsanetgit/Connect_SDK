@@ -46,6 +46,29 @@ jobs:
         with:
           path: Connect_SDK
           persist-credentials: false
+          # Full history, so the next step can check the commit is on main's line.
+          fetch-depth: 0
+
+      # Publish only what's on main. A release can be cut from any branch or
+      # commit, and a manual run can start on any ref, but develop builds
+      # against Connect-API-Code develop while this job builds against beta:
+      # anything not on main would ship code built against the wrong spec.
+      # First-parent, not ancestry: after a merge-commit promotion every
+      # develop commit is an ancestor of main, but only main's own line is
+      # what main was.
+      - name: Require a commit on main
+        working-directory: Connect_SDK
+        run: |
+          set -euo pipefail
+          # The list goes to a file before grep reads it. In a pipe, grep stops
+          # at its first match (GNU grep also does when its output is
+          # /dev/null), rev-list then dies of SIGPIPE, and pipefail would read
+          # that as "not on main".
+          git rev-list --first-parent origin/main > "$RUNNER_TEMP/main-line"
+          if ! grep -qxF "$(git rev-parse HEAD)" "$RUNNER_TEMP/main-line"; then
+            echo "::error::$(git rev-parse --short HEAD) is not on main. Releases are cut from main; develop reaches main through its promotion PR first."
+            exit 1
+          fi
 
       - uses: actions/checkout@v4
         with:

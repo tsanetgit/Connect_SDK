@@ -21,7 +21,7 @@ Keep your real values in a local, untracked file (e.g. `docs/RUNBOOK.local.md`) 
 ## One-time prerequisites
 
 - JDK 21 (a keg-only Homebrew `openjdk@21` needs the `JAVA_HOME` pin below)
-- Sibling spec repo at `<REPO_ROOT>/Connect-API-Code` with the **`beta` branch** checked out (the `develop` branch breaks the build — V2 webhook APIs)
+- Sibling spec repo at `<REPO_ROOT>/Connect-API-Code` on the branch that matches this repo's: **`beta`** for `main` (what the hosted demo deploys), `develop` for `develop`
 - ngrok installed and authenticated (only needed for sharing a public URL)
 - AWS CLI configured with a deploy profile (only needed for hosted deploys)
 
@@ -35,7 +35,7 @@ mvn -q -pl connect-library -am install -DskipTests
 mvn -q -pl demo-ui -am package -DskipTests
 ```
 
-If the build fails with `cannot find symbol ... WebhooksApi`, the sibling spec repo is on the wrong branch:
+If the build fails with `cannot find symbol ...`, the sibling spec repo is probably on the wrong branch. Check out the one that matches this repo's branch, `beta` for `main`:
 
 ```bash
 cd <REPO_ROOT>/Connect-API-Code && git checkout beta

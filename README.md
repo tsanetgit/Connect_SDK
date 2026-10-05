@@ -20,14 +20,27 @@ A clone of this repository alone does not build.
 The working steps, in order:
 
 1. Clone `tsanetgit/Connect-API-Code` beside this repository (the directory must be
-   named `Connect-API-Code`) and check out the `beta` branch. The generated symbols
-   depend on which specification the sibling provides, so the branch matters.
-2. In this repository, check out `main` (see the branch notes below).
+   named `Connect-API-Code`) and check out the branch that matches yours: `beta` for
+   `main`, `develop` for `develop`. The generated symbols depend on which
+   specification the sibling provides, so the branch matters.
+2. In this repository, check out `main`, or `develop` for unreleased work (see the
+   branch notes below).
 3. `mvn install` from the root, or `mvn -pl connect-library -am install` for the
    library alone. JDK 21.
 
 ## Branch notes: what builds today
 
+- **`main` and `develop`.** `main` is what works against the released platform: it
+  builds against Connect-API-Code `beta`, and releases are cut from it. `develop` is
+  where work that needs unreleased API changes lands first: it builds against
+  Connect-API-Code `develop`. Feature PRs target `develop`. `develop` reaches `main`
+  through one promotion PR once `beta` carries what it needs; that PR builds against
+  `beta`, so it stays red until then. A fix that lands on `main` alone is merged back
+  into `develop`. Issues close on the promotion to `main`, not on the merge into
+  `develop`, because GitHub closes issues only on merges into the default branch.
+  `develop` is created from `main` once this branch setup is on `main`, so it carries
+  the same workflows. `main` already builds against Connect-API-Code `develop` (the
+  daily `spec-develop` run, green 2026-10-02 to 2026-10-05).
 - **`main` builds.** `tsanetgit/Connect_SDK#44` merged the `oauth` branch on
   2026-08-11 (commit `66f44fe`). `main` builds against the sibling `beta`
   specification and passes the full suite (verified 2026-08-11: `mvn install`,
