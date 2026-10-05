@@ -433,8 +433,10 @@ class ConnectApiAttachmentsV2GatewayTest {
             // Clear the flag before joining (join throws on an interrupted thread), stop the helper
             // and clear again, so a stray interrupt can't reach the next test on this thread.
             Thread.interrupted();
-            interrupter[0].interrupt();
-            joinQuietly(interrupter[0]);
+            if (interrupter[0] != null) {
+                interrupter[0].interrupt();
+                joinQuietly(interrupter[0]);
+            }
             Thread.interrupted();
         }
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));

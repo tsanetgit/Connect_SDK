@@ -551,8 +551,10 @@ class UploadCoordinatorTest {
             // Clear the flag before joining (join throws on an interrupted thread), stop the helper
             // and clear again, so a stray interrupt can't reach the next test on this thread.
             Thread.interrupted();
-            interrupter[0].interrupt();
-            interrupter[0].join();
+            if (interrupter[0] != null) {
+                interrupter[0].interrupt();
+                interrupter[0].join();
+            }
             Thread.interrupted();
         }
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));

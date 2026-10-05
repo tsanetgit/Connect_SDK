@@ -69,8 +69,10 @@ final class ConnectApiErrors {
 
     /**
      * The one interrupt rule for the V2 upload and complete calls: an interrupted thread sends
-     * nothing more. Called before every link call, upload {@code PUT} and complete attempt, and
-     * before every retry wait, whatever the wait's length. The interrupt stays set;
+     * nothing more. Called before every link call and upload {@code PUT} the upload loop makes,
+     * before every complete attempt in {@code send}, and before every retry wait on those paths,
+     * whatever the wait's length. A facade call made directly (a link call or a complete) is one
+     * request and isn't checked. The interrupt stays set;
      * {@code trigger}, the failure a retry was answering, if any, is kept as suppressed. The
      * best-effort calls after a failure (abandon, and the read-back after a failed complete) don't
      * throw: on an interrupted thread they are skipped, and the original failure stands.
