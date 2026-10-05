@@ -24,6 +24,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -390,6 +391,8 @@ class ConnectApiAttachmentsV2GatewayWireTest {
             });
     }
 
+    // PROVISIONAL(tsanetgit/Connect-API-Code#183): like forbidden() above, these problem types and their
+    // base URL are what the server's ProblemDetailFactory sends today, not values the spec documents.
     @Test
     void aPlainRestTemplateReadsTheAllowlistTypeButNeverQuotesTheBody() {
         // The body echoes the request path, case token included, as an unscrubbed error page can.
@@ -420,6 +423,7 @@ class ConnectApiAttachmentsV2GatewayWireTest {
                     assertThat(ex.status()).as("body %s", body).isEqualTo(403);
                     assertThat(ex.getMessage()).as("body %s", body).doesNotContain(TOKEN).doesNotContain("Forbidden for");
                     assertThat(ex.getSuppressed()).as("body %s", body).isEmpty();
+                    assertThat(ex.getCause()).as("body %s", body).isInstanceOf(HttpStatusCodeException.class);
                 });
         });
     }
