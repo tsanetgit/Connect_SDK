@@ -4,6 +4,7 @@ import com.tsanet.api.ConnectApiException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -30,7 +31,7 @@ public class ApiErrorHandler {
      */
     @ExceptionHandler(ConnectApiException.class)
     public ResponseEntity<Map<String, String>> handleConnectApi(ConnectApiException e) {
-        int status = e.kind() == ConnectApiException.Kind.CONNECTIVITY || e.status() < 400 ? 502 : e.status();
+        HttpStatusCode status = upstreamStatus(e.kind() == ConnectApiException.Kind.CONNECTIVITY, e.status());
         Map<String, String> body = new LinkedHashMap<>();
         body.put("error", e.title() != null ? e.title() : e.getMessage());
         if (e.detail() != null) {
@@ -41,6 +42,15 @@ public class ApiErrorHandler {
         }
         body.put("kind", e.kind().name());
         return ResponseEntity.status(status).body(body);
+    }
+
+    /**
+     * The status demo-ui answers for a failed Connect API call, the one rule for every call: the
+     * platform's own status passes through, and a call that couldn't reach it, or failed without a
+     * platform status (under 400), is a 502.
+     */
+    static HttpStatusCode upstreamStatus(boolean unreachable, int status) {
+        return unreachable || status < 400 ? HttpStatus.BAD_GATEWAY : HttpStatusCode.valueOf(status);
     }
 
     @ExceptionHandler(RestClientResponseException.class)

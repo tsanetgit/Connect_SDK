@@ -185,16 +185,15 @@ public class SettingsController {
 
     /**
      * The failure keeps its code in front of the message, as the V2 delivery screens show it. The
-     * status follows {@link ApiErrorHandler}'s rule for every other Connect API call: the
-     * platform's own status passes through, and a failure with none (unreachable, or an answer
-     * this client couldn't use, {@code status()} 0) is a 502.
+     * status is {@link ApiErrorHandler#upstreamStatus}, the rule for every other Connect API call: a
+     * failure with no platform status ({@code status()} 0: unreachable, or an answer this client
+     * couldn't use) is a 502.
      */
     private static <T> T storageCall(Supplier<T> call) {
         try {
             return call.get();
         } catch (AttachmentV2Exception e) {
-            HttpStatusCode status = e.is(AttachmentV2Exception.CONNECTIVITY) || e.status() < 400
-                ? HttpStatus.BAD_GATEWAY : HttpStatusCode.valueOf(e.status());
+            HttpStatusCode status = ApiErrorHandler.upstreamStatus(e.is(AttachmentV2Exception.CONNECTIVITY), e.status());
             throw new ResponseStatusException(status, e.code() + ": " + e.getMessage());
         }
     }
