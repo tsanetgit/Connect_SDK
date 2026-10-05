@@ -27,7 +27,8 @@ class SessionGuardTest {
             Map.of("beta", new DemoProperties.EnvironmentDef("Beta", "http://localhost:9", null, null)),
             "beta",
             dataDir.toString(),
-            true  // the tests point at a local http mock that is never contacted
+            true,  // the tests point at a local http mock that is never contacted
+            null
         ));
         guard = new SessionGuard(environments);
     }
@@ -50,6 +51,26 @@ class SessionGuardTest {
             .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
                 assertThat(e.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
                 assertThat(e.getReason()).contains("OAuth mode unavailable");
+            });
+    }
+
+    @Test
+    void aNamedEnvironmentUsesItsOwnCredentialsNotTheActiveOnes() {
+        EnvironmentService two = new EnvironmentService(new DemoProperties(
+            Map.of(
+                "beta", new DemoProperties.EnvironmentDef("Beta", "http://localhost:9", null, null),
+                "dev", new DemoProperties.EnvironmentDef("Dev", "http://localhost:9", null, null)),
+            "beta",
+            dataDir.toString(),
+            true,  // never contacted: dev has no credentials, so no session is built
+            null
+        ));
+        two.credentialsFor("beta").save("user@example.com", "pw");
+
+        assertThatThrownBy(() -> new SessionGuard(two).session("dev"))
+            .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                assertThat(e.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
+                assertThat(e.getReason()).startsWith("Dev credentials not configured");
             });
     }
 }

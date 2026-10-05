@@ -45,6 +45,7 @@ var requests = session.collaborationRequests().listRequests();
 | `sqlitePath` | `String` | Path to the SQLite database file (required) |
 | `username` | `String` | Optional default username for `loginWithConfiguredCredentials()` |
 | `password` | `String` | Optional default password for `loginWithConfiguredCredentials()` |
+| `allowedReceiverCompanyIds` | `Set<Long>` | Optional V2 receiver allowlist: the companies this account may deliver attachments to; empty means unrestricted. On the canonical constructor and on `ApplicationUserAccount`; `of` and `forAccount` leave it empty. See `docs/attachments-v2-client.md`. |
 
 ## Session factory (isolated caches)
 
@@ -105,6 +106,7 @@ session.webhooks();
 session.partners();
 session.attachments();
 session.attachmentsV2();
+session.attachmentStorage();
 ```
 
 Unless noted, remote operations require a prior successful `authenticate()` or `login()`. Unauthenticated calls throw `IllegalStateException: Not logged in`.
@@ -168,6 +170,9 @@ tsanet:
   accounts:
     - id: production
       sqlite-path: "${user.home}/.tsanet/production.db"
+      # Optional V2 receiver allowlist (empty or absent = unrestricted). The console app binds it to
+      # ApplicationUserAccount.withAllowedReceiverCompanyIds; another app passes it the same way.
+      allowed-receiver-company-ids: [1001, 1002]
       auth:
         type: client-credentials
         tenant-id: "..."
@@ -298,36 +303,59 @@ Case responses include approval and other comment-like activity on a collaborati
 
 ### Direct delivery (V2) — `session.attachmentsV2()`
 
-The sender's side of the V2 attachment contract: the file goes straight into the partner's
-store and nothing passes through the Connect API. Built against the draft contract in
-`tsanetgit/Connect-API-Code#147`; the platform endpoint is not live yet, and the request and
-result types here will be replaced by generated ones when the contract lands in the spec.
-The member-facing walkthrough, including the three calls without the SDK, is
+The sender's side of V2 attachment delivery: the file goes straight into the receiving
+company's storage and nothing passes through the Connect API. A hand-written client over the
+API and data classes generated from the Attachment Grants operations in the Connect OpenAPI
+spec, which marks them `x-stability-level: alpha`.
+The member-facing walkthrough, including the calls without the SDK, is
 [`docs/attachments-v2-client.md`](../docs/attachments-v2-client.md).
 
 | Method | Description |
 |--------|-------------|
-| `send(caseToken, file, contentType, description, withSha256, listener)` | Grant, upload, complete. Abandons the grant and throws `AttachmentV2Exception` on any upload failure; on a complete-time `attachment/grant-expired` it re-grants once and uploads again. |
-| `grant(caseToken, request)` | Ask the platform for permission and upload instructions for one file. |
-| `upload(grant, file, listener)` | Execute the grant's upload block verbatim (single, multipart, resumable or relay), streaming from disk one part at a time. |
-| `complete(caseToken, grantId, request)` | Report the upload finished; the platform seals it, verifies arrival and records the outcome. |
-| `abandon(caseToken, grantId)` | Abandon a grant; any open upload session is aborted and nothing becomes visible. |
+| `send(caseToken, file, listener)` | Create a grant, upload, complete. Retries complete on a `5xx` or a lost response. A failed upload or complete abandons the grant and throws `AttachmentV2Exception`, except on a `409`, where the grant is already terminal. If abandon doesn't settle a failed complete, the grant is read once, and a grant that reads completed is returned as delivered. An interrupted thread makes no more calls, so it doesn't abandon. Some failures after the upload don't prove the file wasn't delivered (the guide lists them): read the grant before sending again. |
+| `createGrant(caseToken, fileName, expectedSizeBytes)` | Create a grant. The receiver's storage decides its mode and plan. |
+| `getGrant(caseToken, grantId)`, `listGrants(caseToken, page, size)` | Read one grant, or a page of the case's grants. |
+| `singleUploadLink`, `s3PartLinks`, `azureBlockLinks` | Upload links for the grant's mode, at most 1,000 numbers per call. |
+| `upload(caseToken, grant, file, listener)` | Upload the file for any supported mode: links requested just before use, refreshed within 60 seconds of expiry or after a `403`, three attempts per part. Never completes or abandons. |
+| `complete(caseToken, grant, receipts)` | The complete call for the grant's mode (`completeSingle`, `completeS3Multipart`, `completeAzureBlock`). |
+| `abandon(caseToken, grantId)` | No more links, no completion, nothing announced on the case. |
 
 ```java
-AttachmentCompleteResult outcome = session.attachmentsV2().send(
+AttachmentGrant grant = session.attachmentsV2().send(
     caseToken,
     Path.of("diag.tar.gz"),
-    "application/gzip",
-    "Diagnostics from the failing node",   // optional, goes into the case note
-    true,                                  // compute and send a SHA-256
-    progress -> log.info("{} {}/{} parts, {} of {} bytes", progress.mode(),
+    progress -> log.info("{} {}/{} parts, {} of {} bytes", progress.mode().value(),
         progress.partsDone(), progress.partsTotal(), progress.bytesSent(), progress.bytesTotal()));
 ```
 
-`outcome.status()` is the platform's word, never the client's: `DELIVERED` (verified),
-`DELIVERED_UNVERIFIED` (sender-reported, the case note says so), `FAILED` or `EXPIRED`
-(nothing was announced to the partner). A client that sent every byte still reports whatever
-this says.
+The returned grant is the platform's record: `grant.completed()` is true once the platform
+has completed it. Failures carry a `code()`, for example `attachment/upload-mismatch` when
+the platform finds the upload doesn't match the grant.
+
+### Receiver storage (V2) — `session.attachmentStorage()`
+
+The receiving side of V2: where files sent to this account's company land. Every call applies
+to the authenticated account's own company. No secret is sent or stored: an S3 bucket is
+reached through a role TSANet assumes, and an Azure Blob container is named by its tenant,
+storage account and container. The operations are tagged **Attachment Storage Config** in the
+Connect OpenAPI spec, which marks them `x-stability-level: alpha`.
+
+| Method | Description |
+|--------|-------------|
+| `get()` | The company's registered configuration, or empty when none is registered. |
+| `register(target)` | Register a `StorageTarget.S3(bucket, region, roleArn, prefix)` or `StorageTarget.AzureBlob(container, tenantId, storageAccountName, prefix)`, replacing whatever was registered, of any kind. It starts untested. For S3, give the returned `externalId()` to the AWS account's admin for the role's trust policy (`sts:ExternalId`). A configuration the platform won't accept is `attachment/invalid-request`. |
+| `test()` | Ask the platform to check it can use the registered storage. A failed check is a result (`verified()` false, with the platform's `detail()`), not an exception. With nothing registered it's `attachment/not-found`. |
+
+```java
+StorageConfig config = session.attachmentStorage().register(new StorageTarget.S3(
+    "acme-tsanet-inbound", "us-east-1", "arn:aws:iam::123456789012:role/tsanet-writer", null));
+log.info("Add ExternalId {} to the role's trust policy", config.externalId());
+
+StorageTestResult result = session.attachmentStorage().test();
+```
+
+Today any API user of a company can change its storage (`tsanetgit/Connect-API-Code#170`
+proposes an admin-scoped path). `register` follows the platform when that lands.
 
 ---
 
@@ -454,10 +482,10 @@ add-attachment --token abc-case-token-xyz --description "Screenshot" --file ./sc
 stored-attachments --id 123
 ```
 
-Deliver one file on the direct path (V2, draft contract; see the facade section above):
+Deliver one file on the direct path (V2; see the facade section above):
 
 ```text
-deliver-attachment --id 123 --file ./diag.tar.gz --description "Diagnostics from the failing node" --sha256
+deliver-attachment --id 123 --file ./diag.tar.gz
 ```
 
 Analyze and set HTTPS transport configuration:

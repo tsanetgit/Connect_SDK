@@ -48,6 +48,34 @@ so BETA and DEV data never mix. Credentials are never committed, logged, or
 returned by the API — `GET /api/settings` reports only the username.
 **Clear** wipes that environment's file.
 
+### V2 receiver storage
+
+Each environment's card also shows that environment's **V2 receiver storage**:
+where files sent to the signed-in company land on the direct path. It reads the
+platform's record through that environment's own credentials, so it appears
+once the card has credentials saved.
+
+- **What it shows:** the registered AWS S3 bucket (region, role, prefix) or
+  Azure Blob container (storage account, tenant, prefix), and the last test's
+  result and time. For S3 it also shows the **external ID** TSANet generated:
+  give it to the AWS account's admin to add as the `sts:ExternalId` condition
+  on the role's trust policy.
+- **Test** asks the platform to check it can use the storage. A failed test
+  shows the platform's reason.
+- **Registering** (choose AWS S3 or Azure Blob, fill in the fields, **Save
+  Storage**) replaces the company's whole configuration and resets its test
+  result. It's **off by default**: the platform lets any API user of a company
+  repoint its storage (`tsanetgit/Connect-API-Code#170`), so a hosted demo
+  shouldn't make that one click away. Start the demo with
+  `TSANET_DEMO_RECEIVER_STORAGE_EDITABLE=true` (or
+  `tsanet.demo.receiver-storage-editable=true`) to turn it on. When it's off,
+  the demo's register endpoint refuses with a 403, not just a hidden button.
+
+The storage calls need the V2 endpoints and tables on the environment's
+platform (`tsanetgit/Connect-API-Code#184`). Until an environment has them,
+its card may read "No storage registered", because a missing endpoint also
+answers 404, and Save or Test shows the platform's error.
+
 When the app is deployed with the Basic-auth gate enabled
 (`TSANET_DEMO_AUTH_PASSWORD` set), the browser prompts for the gate
 credentials before the page loads — that gate protects the demo itself and is
@@ -124,11 +152,10 @@ Opens from the Dashboard or after creating a case.
   when the partner supports it, the upload form forwards files to the case.
   *(Unverified against live BETA.)*
 - **Direct delivery (V2)** — *Deliver directly (V2)* sends one file straight into
-  the partner's store, with live progress (mode, parts, bytes), and shows the
-  platform's recorded outcome: DELIVERED, DELIVERED_UNVERIFIED, FAILED or EXPIRED.
-  Built against the draft grant/complete contract in `tsanetgit/Connect-API-Code#147`;
-  the platform endpoint is not live yet, so on BETA today the grant step fails
-  because the endpoint does not exist there.
+  the partner's store, with live progress (mode, parts, bytes), and shows the grant
+  as the platform recorded it (completed, or the failure). Only the case's submitting
+  company can deliver. It needs an environment that serves the Attachment Grants
+  endpoints; where they aren't deployed, the grant step fails.
 
 Engineer emails in action forms must be on your member company's registered
 domain — the API rejects others (business rule, not a demo bug).

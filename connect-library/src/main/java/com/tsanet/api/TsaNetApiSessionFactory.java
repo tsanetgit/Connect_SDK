@@ -36,13 +36,17 @@ public final class TsaNetApiSessionFactory {
     }
 
     public TsaNetApiSession openSessionForApplicationUser(ApplicationUserAccount account) {
-        TsaNetApiConfiguration configuration = TsaNetApiConfiguration.forAccount(
+        return TsaNetApi.initialize(configurationFor(account));
+    }
+
+    TsaNetApiConfiguration configurationFor(ApplicationUserAccount account) {
+        return new TsaNetApiConfiguration(
             connectionSettings.apiBaseUrl(),
             account.sqlitePath(),
             account.id(),
-            account.auth()
+            account.auth(),
+            account.allowedReceiverCompanyIds()
         );
-        return TsaNetApi.initialize(configuration);
     }
 
     public String sessionLabelForAccount(String username) {

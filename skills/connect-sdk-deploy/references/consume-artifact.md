@@ -247,3 +247,25 @@ Watch the release notes on each release.
   - New, not breaking: the V2 direct-delivery attachment client (`attachmentsV2()`, built
     against a draft contract with no live endpoint yet) and the published
     `com.tsanet:attachment-receiver` at the same version (see Coordinates).
+- **3.0.0** is a major because the V2 attachment client (`attachmentsV2()`) is rebuilt on
+  the grant model in the Connect OpenAPI spec and its public types change incompatibly. V1
+  and every other facade are unchanged.
+  - Generation: the V2 API and its DTOs are generated from the spec, so the build needs a
+    Connect-API-Code spec branch that has the Attachment Grants operations.
+  - Facade: one method per Connect API call (`createGrant`, `getGrant`, `listGrants`,
+    `singleUploadLink`, `s3PartLinks`, `azureBlockLinks`, `completeSingle`,
+    `completeS3Multipart`, `completeAzureBlock`, `abandon`), plus `complete` for the grant's
+    mode, `upload(caseToken, grant, file, listener)` and `send(caseToken, file, listener)`,
+    which returns the completed `AttachmentGrant`. Removed: `grant`, the old `upload` and
+    `complete` signatures, and the six-argument `send`.
+  - Types: `AttachmentGrant` is the server's grant (a `long` grant id, `Status`,
+    `UploadMode`, `UploadPlan`); new `UploadLink` and `AttachmentGrantPage`;
+    `UploadReceipts` and `UploadProgress` carry an `UploadMode`. Removed:
+    `AttachmentGrantRequest`, `AttachmentCompleteRequest` and `AttachmentCompleteResult`.
+    The grant takes no content type, SHA-256 or description, and there is no
+    `DELIVERED` / note-id outcome: read the grant that complete returns.
+  - `AttachmentV2Exception`: `problemType()` and `isProblem` are replaced by `code()` and
+    `is(code)`, with codes chosen by HTTP status (`attachment/upload-mismatch` for `422`,
+    `attachment/provider-error` for `502`, `attachment/grant-terminal` for `409`,
+    `attachment/invalid-request` for `400`, and others).
+  - `send` no longer re-grants when a grant expires before complete.
