@@ -423,6 +423,10 @@ class ConnectApiAttachmentsV2GatewayWireTest {
         expected.put("{" + echo, AttachmentV2Exception.FORBIDDEN);
         expected.put("<html>403 Forbidden for /v2/collaboration-requests/" + TOKEN + "</html>",
             AttachmentV2Exception.FORBIDDEN);
+        expected.put("", AttachmentV2Exception.FORBIDDEN);
+        // Matched by the type's last segment, so the host doesn't matter on this path either.
+        expected.put("{\"type\":\"https://errors.example.test/attachment-receiver-not-allowed\"," + echo,
+            AttachmentV2Exception.RECEIVER_NOT_ALLOWED);
         expected.forEach((body, code) -> {
             RestTemplate plain = new RestTemplate();
             MockRestServiceServer plainServer = MockRestServiceServer.bindTo(plain).build();
@@ -444,6 +448,7 @@ class ConnectApiAttachmentsV2GatewayWireTest {
                     assertThat(ex.getSuppressed()).as("body %s", body).isEmpty();
                     assertThat(ex.getCause()).as("body %s", body).isInstanceOf(HttpStatusCodeException.class);
                 });
+            plainServer.verify();
         });
     }
 
