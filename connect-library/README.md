@@ -199,7 +199,7 @@ RFC 7807 problem details and the documented status codes instead of its legacy
 
 | Member | Meaning |
 |--------|---------|
-| `kind()` | `PROBLEM` (an RFC 7807 body), `LEGACY` (the `{"message"}` body), `CONNECTIVITY` (the API could not be reached), `OTHER` (a non-2xx with no recognizable body). |
+| `kind()` | `PROBLEM` (an RFC 7807 body), `LEGACY` (the `{"message"}` body), `CONNECTIVITY` (the API could not be reached, or its answer was lost), `OTHER` (a non-2xx with no recognizable body). |
 | `status()` | The status the API asserted: a problem body's own `status` when it carries one, otherwise the wire status; `0` for `CONNECTIVITY`. |
 | `type()`, `title()`, `detail()`, `instance()` | The problem-details fields, or null where the answer had none. For `CONNECTIVITY`, `detail()` is the failure's class name only. |
 | `isProblem(typeSuffix)` | `true` when `type()` ends with the given suffix, e.g. `isProblem("case-update-error")`. |
@@ -304,15 +304,21 @@ Case responses include approval and other comment-like activity on a collaborati
 ### Direct delivery (V2) — `session.attachmentsV2()`
 
 The sender's side of V2 attachment delivery: the file goes straight into the receiving
-company's storage and nothing passes through the Connect API. A hand-written client over the
-API and data classes generated from the Attachment Grants operations in the Connect OpenAPI
-spec, which marks them `x-stability-level: alpha`.
+company's storage and nothing passes through the Connect API. The Connect OpenAPI spec marks
+these operations `x-stability-level: alpha`.
+
+<!-- sync: v2-client-intro -->
+`AttachmentsV2Facade`, in `connect-library`, is a hand-written client over the
+`AttachmentGrantsApi` and data classes generated from the Attachment Grants operations in the
+Connect OpenAPI spec.
+<!-- /sync: v2-client-intro -->
+
 The member-facing walkthrough, including the calls without the SDK, is
 [`docs/attachments-v2-client.md`](../docs/attachments-v2-client.md).
 
 | Method | Description |
 |--------|-------------|
-| `send(caseToken, file, listener)` | Create a grant, upload, complete. Retries complete on a `5xx` or a lost response. A failed upload or complete abandons the grant and throws `AttachmentV2Exception`, except on a `409`, where the grant is already terminal. If abandon doesn't settle a failed complete, the grant is read once, and a grant that reads completed is returned as delivered. An interrupted thread makes no more calls, so it doesn't abandon. Some failures after the upload don't prove the file wasn't delivered (the guide lists them): read the grant before sending again. |
+| `send(caseToken, file, listener)` | Create a grant, upload and complete in one call, and return the completed grant. Its retries, its recovery after a failed complete, when it abandons the grant and how an interrupt stops it are in `send()`'s javadoc, which the guide's [With the SDK](../docs/attachments-v2-client.md#with-the-sdk) section carries word for word. |
 | `createGrant(caseToken, fileName, expectedSizeBytes)` | Create a grant. The receiver's storage decides its mode and plan. |
 | `getGrant(caseToken, grantId)`, `listGrants(caseToken, page, size)` | Read one grant, or a page of the case's grants. |
 | `singleUploadLink`, `s3PartLinks`, `azureBlockLinks` | Upload links for the grant's mode, at most 1,000 numbers per call. |
@@ -334,6 +340,8 @@ the platform finds the upload doesn't match the grant.
 
 ### Receiver storage (V2) — `session.attachmentStorage()`
 
+<!-- PROVISIONAL(tsanetgit/Connect-API-Code#170): the platform answers 404 both for no storage configuration and for one it doesn't show through these endpoints (today a MongoDB one); #170's 2026-10-05 comment asks the read to tell them apart. Once it does, this says which. -->
+
 The receiving side of V2: where files sent to this account's company land. Every call applies
 to the authenticated account's own company. No secret is sent or stored: an S3 bucket is
 reached through a role TSANet assumes, and an Azure Blob container is named by its tenant,
@@ -342,9 +350,9 @@ Connect OpenAPI spec, which marks them `x-stability-level: alpha`.
 
 | Method | Description |
 |--------|-------------|
-| `get()` | The company's registered configuration, or empty when none is registered. |
+| `get()` | The company's registered configuration, or empty when the platform answers `404`: for example, when nothing is registered, or when the company has a configuration this endpoint doesn't show (today, a MongoDB one; `tsanetgit/Connect-API-Code#170`), which `register` replaces. |
 | `register(target)` | Register a `StorageTarget.S3(bucket, region, roleArn, prefix)` or `StorageTarget.AzureBlob(container, tenantId, storageAccountName, prefix)`, replacing whatever was registered, of any kind. It starts untested. For S3, give the returned `externalId()` to the AWS account's admin for the role's trust policy (`sts:ExternalId`). A configuration the platform won't accept is `attachment/invalid-request`. |
-| `test()` | Ask the platform to check it can use the registered storage. A failed check is a result (`verified()` false, with the platform's `detail()`), not an exception. With nothing registered it's `attachment/not-found`. |
+| `test()` | Ask the platform to check it can use the registered storage. A failed check is a result (`verified()` false, with the platform's `detail()`), not an exception. With nothing registered, or a configuration this endpoint doesn't show (today, a MongoDB one), it's `attachment/not-found`. |
 
 ```java
 StorageConfig config = session.attachmentStorage().register(new StorageTarget.S3(

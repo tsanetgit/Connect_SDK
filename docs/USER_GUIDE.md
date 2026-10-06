@@ -71,10 +71,15 @@ once the card has credentials saved.
   `tsanet.demo.receiver-storage-editable=true`) to turn it on. When it's off,
   the demo's register endpoint refuses with a 403, not just a hidden button.
 
+<!-- PROVISIONAL(tsanetgit/Connect-API-Code#170): the platform answers 404 both for no storage configuration and for one it doesn't show through these endpoints (today a MongoDB one); #170's 2026-10-05 comment asks the read to tell them apart. Once it does, this says which. -->
+
 The storage calls need the V2 endpoints and tables on the environment's
 platform (`tsanetgit/Connect-API-Code#184`). Until an environment has them,
-its card may read "No storage registered", because a missing endpoint also
-answers 404, and Save or Test shows the platform's error.
+its card may read "No storage shown", because a missing endpoint also
+answers 404, and Save or Test shows the platform's error. The card reads the
+same for a company whose configuration the platform doesn't show through
+these endpoints (today, a MongoDB one; `tsanetgit/Connect-API-Code#170`), and
+Save replaces it.
 
 When the app is deployed with the Basic-auth gate enabled
 (`TSANET_DEMO_AUTH_PASSWORD` set), the browser prompts for the gate

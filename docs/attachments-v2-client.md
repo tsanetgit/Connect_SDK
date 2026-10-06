@@ -3,9 +3,14 @@
 This page is for a member implementing the sender's side of V2 attachment delivery, with or
 without the Connect SDK. The contract is the Connect OpenAPI spec: the operations tagged
 **Attachment Grants**, under `/v2/collaboration-requests/{token}/attachments/grants`. The spec
-marks them `x-stability-level: alpha`, so they can still change. The SDK's
-`AttachmentsV2Facade` in `connect-library` is the reference implementation of everything below:
-a hand-written client over the `AttachmentGrantsApi` and data classes generated from that spec.
+marks them `x-stability-level: alpha`, so they can still change. The SDK's client is the
+reference implementation of everything below.
+
+<!-- sync: v2-client-intro -->
+`AttachmentsV2Facade`, in `connect-library`, is a hand-written client over the
+`AttachmentGrantsApi` and data classes generated from the Attachment Grants operations in the
+Connect OpenAPI spec.
+<!-- /sync: v2-client-intro -->
 
 ## The idea in one paragraph
 
@@ -98,12 +103,14 @@ against this account's list.
 
 `AttachmentV2Exception.code()` says what failed:
 
+<!-- PROVISIONAL(tsanetgit/Connect-API-Code#170): the attachment/not-found row's "no storage configuration this endpoint shows (on a storage test)" covers a configuration the platform hides (today a MongoDB one). Once #170's 2026-10-05 ask lands and the two differ, the row says which. -->
+
 | Code | Cause |
 |---|---|
 | `attachment/invalid-request` | 400: a link call named a part or block number outside the plan, or S3 receipts don't cover it; or a storage configuration the platform won't register, including a method it hasn't enabled |
 | `attachment/forbidden` | 403: the caller's company isn't the case's sender, or any other refusal not named below |
 | `attachment/receiver-not-allowed` | the case's receiving company isn't allowed: either this account's receiver allowlist refused it before any grant request, or the server's sender allowlist refused grant creation with a `403`. Either way no grant exists and nothing was uploaded |
-| `attachment/not-found` | 404: no such case or grant, a receiver that has registered no storage configuration (on create, or on a storage test), or a link or complete call that doesn't match the grant's mode |
+| `attachment/not-found` | 404: no such case or grant, a receiver that has registered no storage configuration (on create), no storage configuration this endpoint shows (on a storage test), or a link or complete call that doesn't match the grant's mode |
 | `attachment/grant-terminal` | 409: the grant is completed, abandoned or expired, so it can't take this call |
 | `attachment/upload-mismatch` | 422: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
 | `attachment/provider-error` | 502: the receiver's storage provider failed; nothing changed, retry later |
@@ -111,7 +118,7 @@ against this account's list.
 | `client/upload-rejected` | the storage answered an upload `PUT` with a status this client doesn't retry, or kept failing |
 | `client/upload-unreachable` | an upload `PUT` could not reach the storage after the retry budget |
 | `client/link-not-refreshable` | a link is past its expiry and asking again returned the same link, so the upload can't go on |
-| `client/unsupported-upload-mode` | the grant's mode is not one this client uploads (`gcsResumable`) |
+| `client/unsupported-upload-mode` | the grant has no mode, or one this client doesn't upload (`gcsResumable`) |
 | `client/precondition` | a client-side precondition failed: the file is empty, unreadable or not the size the grant expects; the grant's plan is missing or doesn't fit the file; a link doesn't fit the plan or isn't a usable request; or an answer is empty or missing a field this client needs |
 | `client/connectivity` | the Connect API could not be reached, or its answer was lost |
 | `client/interrupted` | the calling thread was interrupted; the interrupt is restored and nothing more is sent |
@@ -227,9 +234,12 @@ A company receives V2 files only once it has registered its storage. The calls a
 **Attachment Storage Config** in the spec and apply to the caller's own company. No secret is
 sent or stored.
 
+<!-- PROVISIONAL(tsanetgit/Connect-API-Code#170): the platform answers 404 both for no storage configuration and for one it doesn't show through these endpoints (today a MongoDB one); #170's 2026-10-05 comment asks the read to tell them apart. Once it does, this says which. -->
+
 - `GET /v2/attachments/storage-config` returns the configuration and its last test
   (`lastVerificationStatus`: `never_tested`, `passed` or `failed`, and `lastVerifiedAt`), or
-  `404` when none is registered.
+  `404`: for example, when none is registered, or when the company has a configuration this
+  endpoint doesn't show (today, a MongoDB one; `tsanetgit/Connect-API-Code#170`).
 - `PUT /v2/attachments/storage-config` replaces the whole configuration and resets its test:
   - `{"method": "s3", "s3": {"bucket", "region", "roleArn", "prefix"}}`. The answer adds
     `externalId`, generated by TSANet: add it as the `sts:ExternalId` condition on the role's
@@ -239,7 +249,7 @@ sent or stored.
   - `prefix` is optional. `gcs` is refused with a `400` until the platform enables it.
 - `POST /v2/attachments/storage-config/test` checks the registered storage and records the
   result. A failed check is a `200` with `verified: false` and a `detail`; with nothing
-  registered it's a `404`.
+  registered, or a configuration this endpoint doesn't show (today, a MongoDB one), it's a `404`.
 
 With the SDK, these are `session.attachmentStorage()`'s `get()`, `register(target)` and
 `test()`.

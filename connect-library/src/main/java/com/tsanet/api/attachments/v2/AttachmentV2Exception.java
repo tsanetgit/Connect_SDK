@@ -33,9 +33,13 @@ public class AttachmentV2Exception extends RuntimeException {
      * creation with a {@code 403}. Either way no grant exists and nothing was uploaded.
      */
     public static final String RECEIVER_NOT_ALLOWED = "attachment/receiver-not-allowed";
+    // PROVISIONAL(tsanetgit/Connect-API-Code#170): on a storage test the platform answers 404 both for
+    // no configuration and for one it doesn't show (today a MongoDB one). Once #170's 2026-10-05 ask
+    // lands and the two differ, this says which.
     /**
      * 404: no such case or grant, a receiver that has registered no storage configuration (on
-     * create, or on a storage test), or a link or complete call that doesn't match the grant's mode.
+     * create), no storage configuration this endpoint shows (on a storage test), or a link or
+     * complete call that doesn't match the grant's mode.
      */
     public static final String NOT_FOUND = "attachment/not-found";
     /** 409: the grant is completed, abandoned or expired, so it can't take this call. */
@@ -54,8 +58,9 @@ public class AttachmentV2Exception extends RuntimeException {
     /** A link is past its expiry and asking again returned the same link, so the upload can't go on. */
     public static final String LINK_NOT_REFRESHABLE = "client/link-not-refreshable";
     // PROVISIONAL(tsanetgit/Connect-API-Code#182): gcsResumable is named because it is the one mode
-    // this client refuses. Once GCS is on, the client uploads it and this javadoc names no mode.
-    /** The grant's mode is not one this client uploads ({@code gcsResumable}). */
+    // this client refuses. Once GCS is on, the client uploads it and this javadoc names only a
+    // missing mode.
+    /** The grant has no mode, or one this client doesn't upload ({@code gcsResumable}). */
     public static final String UNSUPPORTED_UPLOAD_MODE = "client/unsupported-upload-mode";
     /**
      * A client-side precondition failed: the file is empty, unreadable or not the size the grant

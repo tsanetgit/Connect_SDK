@@ -118,7 +118,8 @@ public class SettingsController {
 
     /**
      * The V2 receiver storage of the company signed in to {@code env}, through that environment's
-     * own session; {@code config} is null when none is registered.
+     * own session; {@code config} is null when the platform shows none (see
+     * {@link com.tsanet.api.facade.AttachmentStorageFacade#get()}).
      */
     @GetMapping("/api/settings/{env}/receiver-storage")
     public ReceiverStorageStatus getReceiverStorage(@PathVariable String env) {
@@ -206,7 +207,7 @@ public class SettingsController {
                                       String tenantId, String storageAccountName, String prefix) {
     }
 
-    /** {@code editable} says whether this demo lets Settings register; {@code config} is null when none is registered. */
+    /** {@code editable} says whether this demo lets Settings register; {@code config} is null when the platform shows none. */
     public record ReceiverStorageStatus(boolean editable, ReceiverStorageView config) {
     }
 

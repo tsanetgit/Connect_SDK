@@ -18,7 +18,7 @@ import org.springframework.web.client.RestClientException;
  * named by the field and never by its value.
  *
  * <p>The code follows the HTTP status. A gateway that reads a status as an outcome rather than
- * a failure (the storage config's {@code 404} means "none registered") catches the code after
+ * a failure (the storage config's {@code 404} reads as "none shown") catches the code after
  * this mapping; nothing here special-cases one endpoint.
  */
 final class ConnectApiErrors {
