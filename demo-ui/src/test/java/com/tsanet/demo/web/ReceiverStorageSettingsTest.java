@@ -223,15 +223,20 @@ class ReceiverStorageSettingsTest {
                 .content("{\"method\":\"azureBlob\",\"container\":\" inbound\",\"tenantId\":\"tenant-1 \","
                     + "\"storageAccountName\":\" acmestore \",\"prefix\":\"   \"}"))
             .andExpect(status().isOk());
+        // The method is stripped too.
+        mvc.perform(put("/api/settings/dev/receiver-storage").contentType(MediaType.APPLICATION_JSON)
+                .content(S3_BODY.replace("\"method\":\"s3\"", "\"method\":\" s3 \"")
+                    .replace("\"prefix\":\"  \"", "\"prefix\":\"inbound\"")))
+            .andExpect(status().isOk());
         // Blank once stripped is missing, not an empty value sent on.
         mvc.perform(put("/api/settings/dev/receiver-storage").contentType(MediaType.APPLICATION_JSON)
                 .content(S3_BODY.replace("\"us-east-1\"", "\" \\t \"")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.error").value("region must not be blank"));
 
-        verify(storage).register(s3);
+        verify(storage, times(2)).register(s3);
         verify(storage).register(blob);
-        verify(storage, times(2)).register(any());
+        verify(storage, times(3)).register(any());
     }
 
     @Test

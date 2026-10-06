@@ -165,10 +165,12 @@ public class SettingsController {
         if (body == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A receiver storage configuration is required");
         }
-        // Every field is stripped, so a padded value isn't stored as sent. Blank once stripped is missing.
+        // Every field is stripped, the method too, so a padded value isn't stored as sent. Blank once
+        // stripped is missing.
+        String method = stripped(body.method());
         String prefix = stripped(body.prefix());
         try {
-            return switch (body.method() == null ? "" : body.method()) {
+            return switch (method == null ? "" : method) {
                 case "s3" -> new StorageTarget.S3(stripped(body.bucket()), stripped(body.region()),
                     stripped(body.roleArn()), prefix);
                 case "azureBlob" -> new StorageTarget.AzureBlob(stripped(body.container()), stripped(body.tenantId()),
