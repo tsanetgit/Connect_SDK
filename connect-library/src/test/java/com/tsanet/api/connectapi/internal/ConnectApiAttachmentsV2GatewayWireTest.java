@@ -24,6 +24,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -388,6 +389,43 @@ class ConnectApiAttachmentsV2GatewayWireTest {
                 assertThat(ex.status()).isEqualTo(409);
                 assertThat(ex.getMessage()).doesNotContain(TOKEN);
             });
+    }
+
+    // PROVISIONAL(tsanetgit/Connect-API-Code#183): like forbidden() above, these problem types and their
+    // base URL are what the server's ProblemDetailFactory sends today, not values the spec documents.
+    @Test
+    void aPlainRestTemplateReadsTheAllowlistTypeButNeverQuotesTheBody() {
+        // The body echoes the request path, case token included, as an unscrubbed error page can.
+        String echo = "\"title\":\"Forbidden\",\"status\":403,\"detail\":\"/v2/collaboration-requests/" + TOKEN + "\"}";
+        java.util.Map<String, String> expected = new java.util.LinkedHashMap<>();
+        expected.put("{\"type\":\"https://api.tsanet.org/errors/attachment-receiver-not-allowed\"," + echo,
+            AttachmentV2Exception.RECEIVER_NOT_ALLOWED);
+        expected.put("{\"type\":\"https://api.tsanet.org/errors/access-denied\"," + echo, AttachmentV2Exception.FORBIDDEN);
+        expected.put("{" + echo, AttachmentV2Exception.FORBIDDEN);
+        expected.put("<html>403 Forbidden for /v2/collaboration-requests/" + TOKEN + "</html>",
+            AttachmentV2Exception.FORBIDDEN);
+        expected.forEach((body, code) -> {
+            RestTemplate plain = new RestTemplate();
+            MockRestServiceServer plainServer = MockRestServiceServer.bindTo(plain).build();
+            ApiClient plainClient = new ApiClient(plain);
+            plainClient.setBasePath(BASE);
+            plainClient.setBearerToken(() -> "bearer-123");
+            ConnectApiAttachmentsV2Gateway plainGateway = new ConnectApiAttachmentsV2Gateway(
+                new AttachmentGrantsApi(plainClient), GatewayTestSupport.authenticatedSessionStore());
+            plainServer.expect(requestTo(GRANTS)).andExpect(method(HttpMethod.POST))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(body));
+
+            assertThatThrownBy(() -> plainGateway.createGrant(TOKEN, "diag.log", 12))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    AttachmentV2Exception ex = (AttachmentV2Exception) e;
+                    assertThat(ex.code()).as("body %s", body).isEqualTo(code);
+                    assertThat(ex.status()).as("body %s", body).isEqualTo(403);
+                    assertThat(ex.getMessage()).as("body %s", body).doesNotContain(TOKEN).doesNotContain("Forbidden for");
+                    assertThat(ex.getSuppressed()).as("body %s", body).isEmpty();
+                    assertThat(ex.getCause()).as("body %s", body).isInstanceOf(HttpStatusCodeException.class);
+                });
+        });
     }
 
     @Test
