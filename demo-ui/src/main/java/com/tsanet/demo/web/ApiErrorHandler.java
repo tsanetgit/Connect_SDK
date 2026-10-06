@@ -26,8 +26,9 @@ public class ApiErrorHandler {
     }
 
     /**
-     * The SDK's classified answer: the upstream status passes through (502 when the API could
-     * not be reached), and the page gets the API's own title and detail plus the problem type.
+     * The SDK's classified answer: the status is {@link #upstreamStatus} (the upstream error status
+     * passes through; 502 when the API could not be reached or the status isn't one), and the page
+     * gets the API's own title and detail plus the problem type.
      */
     @ExceptionHandler(ConnectApiException.class)
     public ResponseEntity<Map<String, String>> handleConnectApi(ConnectApiException e) {

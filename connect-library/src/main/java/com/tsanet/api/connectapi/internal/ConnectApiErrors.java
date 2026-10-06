@@ -95,7 +95,8 @@ final class ConnectApiErrors {
      * every link call and upload {@code PUT} the upload loop makes; before every complete attempt
      * in {@code send}; and before every retry wait on those paths, whatever the wait's length. A
      * facade call made directly (a link call, a grant or a complete) isn't checked: it's one
-     * request, or two for a grant with a receiver allowlist set (the case read, then the grant).
+     * request, or up to two for a grant with a receiver allowlist set (the case read, then the
+     * grant unless the receiver is refused).
      * The interrupt stays set; {@code trigger}, the failure a retry was answering, if any, is kept
      * as suppressed. The best-effort calls after a failure (abandon, and the read-back after a
      * failed complete) don't throw: on an interrupted thread they are skipped, and the original
