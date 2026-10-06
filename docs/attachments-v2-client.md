@@ -232,6 +232,8 @@ A company receives V2 files only once it has registered its storage. The calls a
 **Attachment Storage Config** in the spec and apply to the caller's own company. No secret is
 sent or stored.
 
+<!-- PROVISIONAL(tsanetgit/Connect-API-Code#170): the platform answers 404 both for no storage configuration and for one it doesn't show through these endpoints (today a MongoDB one); #170's 2026-10-05 comment asks the read to tell them apart. Once it does, this says which. -->
+
 - `GET /v2/attachments/storage-config` returns the configuration and its last test
   (`lastVerificationStatus`: `never_tested`, `passed` or `failed`, and `lastVerifiedAt`), or
   `404` when none is registered, or when the company has a configuration this endpoint doesn't

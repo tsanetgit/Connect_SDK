@@ -207,8 +207,9 @@ async function loadReceiverStorage(box, resultText) {
 
 function receiverStorageSummary(config) {
     if (!config) {
-        // The platform answers 404 both for none and for a configuration it doesn't show here (today a
-        // MongoDB one; tsanetgit/Connect-API-Code#170), so the card can't tell them apart.
+        // PROVISIONAL(tsanetgit/Connect-API-Code#170): the platform answers 404 both for none and for a
+        // configuration it doesn't show here (today a MongoDB one), so the card can't tell them apart.
+        // Once #170's 2026-10-05 ask lands, the card says which.
         return '<p>No storage shown. Either none is registered, so files can\'t be delivered to this '
             + 'company on the direct path yet, or the company has a configuration this page can\'t show '
             + '(today, a MongoDB one). Registering a configuration replaces either.</p>';

@@ -40,6 +40,7 @@ class AttachmentsV2GuideSyncTest {
     private static final String TABLE_HEADER = "| Code | Cause |";
     private static final Pattern TABLE_ROW = Pattern.compile("^\\| `([^`]+)` \\| (.*) \\|$");
     private static final Pattern NAMED_OPEN = Pattern.compile("^<!-- sync: ([a-z0-9-]+) -->$");
+    private static final Pattern ANY_SYNC_MARKER = Pattern.compile("<!--\\s*/?\\s*sync\\b", Pattern.CASE_INSENSITIVE);
 
     @Test
     void theGuideCarriesSendsJavadocWordForWord() throws IOException {
@@ -96,7 +97,8 @@ class AttachmentsV2GuideSyncTest {
         Map<String, String> blocks = new LinkedHashMap<>();
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i).trim();
-            if (!line.startsWith("<!-- sync:") || line.startsWith(OPEN)) {
+            // The javadoc block's own markers; anything else that looks like a sync marker must be a named open.
+            if (!ANY_SYNC_MARKER.matcher(line).find() || line.startsWith(OPEN) || line.equals(CLOSE)) {
                 continue;
             }
             Matcher open = NAMED_OPEN.matcher(line);

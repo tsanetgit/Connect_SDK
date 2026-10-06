@@ -340,6 +340,8 @@ the platform finds the upload doesn't match the grant.
 
 ### Receiver storage (V2) — `session.attachmentStorage()`
 
+<!-- PROVISIONAL(tsanetgit/Connect-API-Code#170): the platform answers 404 both for no storage configuration and for one it doesn't show through these endpoints (today a MongoDB one); #170's 2026-10-05 comment asks the read to tell them apart. Once it does, this says which. -->
+
 The receiving side of V2: where files sent to this account's company land. Every call applies
 to the authenticated account's own company. No secret is sent or stored: an S3 bucket is
 reached through a role TSANet assumes, and an Azure Blob container is named by its tenant,
