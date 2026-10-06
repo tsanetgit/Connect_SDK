@@ -3,6 +3,7 @@ package com.tsanet.demo.web;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.tsanet.api.ConnectApiException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
@@ -48,5 +49,26 @@ class ApiErrorHandlerTest {
         assertThat(response.getStatusCode().value()).isEqualTo(502);
         assertThat(response.getBody()).containsEntry("kind", "CONNECTIVITY")
             .containsEntry("detail", "ConnectException");
+    }
+
+    /** The one status rule: a real platform status passes through; anything else is a 502. */
+    @Test
+    void upstreamStatusPassesARealPlatformStatusAndMakesEverythingElseABadGateway() {
+        Map<Integer, Integer> expected = new LinkedHashMap<>();
+        expected.put(400, 400);
+        expected.put(401, 401);
+        expected.put(499, 499);
+        expected.put(500, 500);
+        expected.put(599, 599);
+        // No platform status: none at all, not an error, or not an HTTP status.
+        expected.put(-1, 502);
+        expected.put(0, 502);
+        expected.put(200, 502);
+        expected.put(600, 502);
+        expected.put(700, 502);
+        expected.put(1000, 502);
+        expected.forEach((status, answer) -> assertThat(ApiErrorHandler.upstreamStatus(false, status).value())
+            .as("status %s", status).isEqualTo(answer));
+        assertThat(ApiErrorHandler.upstreamStatus(true, 404).value()).as("unreachable").isEqualTo(502);
     }
 }
