@@ -350,7 +350,7 @@ Connect OpenAPI spec, which marks them `x-stability-level: alpha`.
 
 | Method | Description |
 |--------|-------------|
-| `get()` | The company's registered configuration, or empty when the platform answers `404`: nothing is registered, or the company has a configuration this endpoint doesn't show (today, a MongoDB one; `tsanetgit/Connect-API-Code#170`). `register` replaces either. |
+| `get()` | The company's registered configuration, or empty when the platform answers `404`: for example, when nothing is registered, or when the company has a configuration this endpoint doesn't show (today, a MongoDB one; `tsanetgit/Connect-API-Code#170`), which `register` replaces. |
 | `register(target)` | Register a `StorageTarget.S3(bucket, region, roleArn, prefix)` or `StorageTarget.AzureBlob(container, tenantId, storageAccountName, prefix)`, replacing whatever was registered, of any kind. It starts untested. For S3, give the returned `externalId()` to the AWS account's admin for the role's trust policy (`sts:ExternalId`). A configuration the platform won't accept is `attachment/invalid-request`. |
 | `test()` | Ask the platform to check it can use the registered storage. A failed check is a result (`verified()` false, with the platform's `detail()`), not an exception. With nothing registered, or a configuration this endpoint doesn't show (today, a MongoDB one), it's `attachment/not-found`. |
 

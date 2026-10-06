@@ -30,7 +30,8 @@ import org.springframework.web.client.RestTemplate;
  * The receiver storage calls through the generated {@link AttachmentStorageConfigApi}, the real
  * {@link ApiClient} and the library's own RestTemplate, against a mock server: the paths and JSON
  * on the wire are the spec's, the bearer rides along, {@code externalId} is read but never sent,
- * a {@code 404} on read is "none registered", and a failed test is a result.
+ * a {@code 404} on read is "none shown" (see {@code AttachmentStorageFacade.get()}), and a failed
+ * test is a result.
  */
 class ConnectApiAttachmentStorageGatewayWireTest {
 

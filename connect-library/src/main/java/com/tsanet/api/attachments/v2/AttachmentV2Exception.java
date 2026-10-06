@@ -33,6 +33,9 @@ public class AttachmentV2Exception extends RuntimeException {
      * creation with a {@code 403}. Either way no grant exists and nothing was uploaded.
      */
     public static final String RECEIVER_NOT_ALLOWED = "attachment/receiver-not-allowed";
+    // PROVISIONAL(tsanetgit/Connect-API-Code#170): on a storage test the platform answers 404 both for
+    // no configuration and for one it doesn't show (today a MongoDB one). Once #170's 2026-10-05 ask
+    // lands and the two differ, this says which.
     /**
      * 404: no such case or grant, a receiver that has registered no storage configuration (on
      * create), no storage configuration this endpoint shows (on a storage test), or a link or

@@ -23,9 +23,9 @@ public interface AttachmentStorageFacade {
     // #170's 2026-10-05 comment asks the read to tell the two apart; once it does, get() and test()
     // say which.
     /**
-     * The company's current configuration, or empty when the platform answers {@code 404}: nothing
-     * is registered, or the company has a configuration this endpoint doesn't show (today, a
-     * MongoDB one). {@link #register} replaces either.
+     * The company's current configuration, or empty when the platform answers {@code 404}: for
+     * example, when nothing is registered, or when the company has a configuration this endpoint
+     * doesn't show (today, a MongoDB one), which {@link #register} replaces.
      */
     Optional<StorageConfig> get();
 
