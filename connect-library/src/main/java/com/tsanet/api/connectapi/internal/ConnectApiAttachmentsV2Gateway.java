@@ -354,9 +354,15 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
             + " is not supported by this client", 0, AttachmentV2Exception.UNSUPPORTED_UPLOAD_MODE);
     }
 
-    /** Complete is safe to repeat: completing a completed grant returns it unchanged. */
+    /**
+     * Complete is safe to repeat: completing a completed grant returns it unchanged. An
+     * interrupted thread sends no complete, and an interrupt during a retry keeps the failure
+     * being retried as suppressed.
+     */
     private AttachmentGrant completeWithRetry(String caseToken, AttachmentGrant grant, UploadReceipts receipts) {
+        AttachmentV2Exception retrying = null;
         for (int attempt = 1; ; attempt++) {
+            ConnectApiErrors.requireNotInterrupted("before completing grant " + grant.grantId(), retrying);
             try {
                 return complete(caseToken, grant, receipts);
             } catch (AttachmentV2Exception e) {
@@ -364,7 +370,8 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
                 if (!retryable || attempt >= COMPLETE_ATTEMPTS) {
                     throw e;
                 }
-                pause(completeBackoff.multipliedBy(attempt));
+                ConnectApiErrors.pause(completeBackoff.multipliedBy(attempt), "while retrying complete", e);
+                retrying = e;
             }
         }
     }
@@ -539,19 +546,6 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         } catch (IOException e) {
             throw new AttachmentV2Exception("cannot read the file to send: " + e.getClass().getSimpleName(), 0,
                 AttachmentV2Exception.CLIENT_PRECONDITION, e);
-        }
-    }
-
-    private static void pause(Duration duration) {
-        if (duration.isZero() || duration.isNegative()) {
-            return;
-        }
-        try {
-            Thread.sleep(duration.toMillis());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AttachmentV2Exception("interrupted while retrying complete", 0,
-                AttachmentV2Exception.INTERRUPTED, e);
         }
     }
 }

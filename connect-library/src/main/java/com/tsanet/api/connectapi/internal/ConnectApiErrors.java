@@ -2,6 +2,7 @@ package com.tsanet.api.connectapi.internal;
 
 import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.attachments.v2.AttachmentV2Exception;
+import java.time.Duration;
 import java.util.function.Supplier;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.ResourceAccessException;
@@ -10,7 +11,7 @@ import org.springframework.web.client.RestClientException;
 /**
  * One copy of how a V2 attachment call's failure becomes an {@link AttachmentV2Exception}, for
  * the gateways over the generated V2 APIs ({@link ConnectApiAttachmentsV2Gateway} and
- * {@link ConnectApiAttachmentStorageGateway}). Every message is value-free: it names the
+ * {@link ConnectApiAttachmentStorageGateway}) and the upload loop ({@link UploadCoordinator}). Every message is value-free: it names the
  * operation and the status, never a request URL, which can carry a case token.
  *
  * <p>An answer that arrives without a field the spec requires is {@code client/precondition},
@@ -64,6 +65,46 @@ final class ConnectApiErrors {
             throw new AttachmentV2Exception("the answer has no " + field, 0, AttachmentV2Exception.CLIENT_PRECONDITION);
         }
         return value;
+    }
+
+    /**
+     * The one interrupt rule for the V2 upload and complete calls: an interrupted thread sends
+     * nothing more. Called before every link call and upload {@code PUT} the upload loop makes,
+     * before every complete attempt in {@code send}, and before every retry wait on those paths,
+     * whatever the wait's length. A facade call made directly (a link call or a complete) is one
+     * request and isn't checked. The interrupt stays set;
+     * {@code trigger}, the failure a retry was answering, if any, is kept as suppressed. The
+     * best-effort calls after a failure (abandon, and the read-back after a failed complete) don't
+     * throw: on an interrupted thread they are skipped, and the original failure stands.
+     */
+    static void requireNotInterrupted(String what, Throwable trigger) {
+        if (Thread.currentThread().isInterrupted()) {
+            throw interrupted(what, null, trigger);
+        }
+    }
+
+    /** Waits before a retry; an interrupt before or during the wait stops the call, as {@link #requireNotInterrupted} does. */
+    static void pause(Duration duration, String what, Throwable trigger) {
+        requireNotInterrupted(what, trigger);
+        if (duration.isZero() || duration.isNegative()) {
+            return;
+        }
+        try {
+            Thread.sleep(duration.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw interrupted(what, e, trigger);
+        }
+    }
+
+    /** {@code client/interrupted}, with the interrupt as cause and {@code trigger}, if any, as suppressed. */
+    static AttachmentV2Exception interrupted(String what, InterruptedException cause, Throwable trigger) {
+        AttachmentV2Exception e = new AttachmentV2Exception("interrupted " + what, 0, AttachmentV2Exception.INTERRUPTED,
+            cause);
+        if (trigger != null) {
+            e.addSuppressed(trigger);
+        }
+        return e;
     }
 
     /** A 2xx with no body where the spec promises one. */
