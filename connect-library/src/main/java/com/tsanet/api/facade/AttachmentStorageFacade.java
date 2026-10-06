@@ -18,7 +18,15 @@ import java.util.Optional;
  */
 public interface AttachmentStorageFacade {
 
-    /** The company's current configuration, or empty when none is registered. */
+    // PROVISIONAL(tsanetgit/Connect-API-Code#170): the platform answers 404 both for no configuration
+    // and for one it doesn't show through these endpoints (today a MongoDB one), on read and on test.
+    // #170's 2026-10-05 comment asks the read to tell the two apart; once it does, get() and test()
+    // say which.
+    /**
+     * The company's current configuration, or empty when the platform answers {@code 404}: nothing
+     * is registered, or the company has a configuration this endpoint doesn't show (today, a
+     * MongoDB one). {@link #register} replaces either.
+     */
     Optional<StorageConfig> get();
 
     /**
@@ -35,7 +43,8 @@ public interface AttachmentStorageFacade {
     /**
      * Ask the platform to check that it can use the registered storage. A failed check is a
      * result ({@link StorageTestResult#verified()} false, with the platform's reason), not an
-     * exception; the platform records it either way. With nothing registered, it's refused with
+     * exception; the platform records it either way. With nothing registered, or a configuration
+     * this endpoint doesn't show (today, a MongoDB one), it's refused with
      * {@code attachment/not-found}.
      */
     StorageTestResult test();

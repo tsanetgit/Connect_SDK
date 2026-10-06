@@ -24,7 +24,8 @@ import java.util.Optional;
  * {@link AttachmentStorageFacade} over the generated {@link AttachmentStorageConfigApi}. Generated
  * DTOs stay inside this class and are mapped field by field through their getters, so renaming a
  * field in the spec breaks this build. Errors map as {@link ConnectApiErrors} maps them; the one
- * status read as an outcome is the {@code 404} on {@link #get()}, which means none is registered.
+ * status read as an outcome is the {@code 404} on {@link #get()}: no configuration the platform
+ * shows here, as {@link AttachmentStorageFacade#get()} says.
  */
 public class ConnectApiAttachmentStorageGateway implements AttachmentStorageFacade {
 

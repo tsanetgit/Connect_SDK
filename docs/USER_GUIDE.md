@@ -73,8 +73,11 @@ once the card has credentials saved.
 
 The storage calls need the V2 endpoints and tables on the environment's
 platform (`tsanetgit/Connect-API-Code#184`). Until an environment has them,
-its card may read "No storage registered", because a missing endpoint also
-answers 404, and Save or Test shows the platform's error.
+its card may read "No storage shown", because a missing endpoint also
+answers 404, and Save or Test shows the platform's error. The card reads the
+same for a company whose configuration the platform doesn't show through
+these endpoints (today, a MongoDB one; `tsanetgit/Connect-API-Code#170`), and
+Save replaces it.
 
 When the app is deployed with the Basic-auth gate enabled
 (`TSANET_DEMO_AUTH_PASSWORD` set), the browser prompts for the gate
