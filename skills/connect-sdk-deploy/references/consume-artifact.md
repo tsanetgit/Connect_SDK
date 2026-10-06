@@ -271,14 +271,16 @@ Watch the release notes on each release.
     `is(code)`, with codes chosen by HTTP status (`attachment/upload-mismatch` for `422`,
     `attachment/provider-error` for `502`, `attachment/grant-terminal` for `409`,
     `attachment/invalid-request` for `400`, and others).
-  - Two of the new codes aren't chosen by HTTP status. `client/interrupted` ends the call
-    when an interrupt arrives during an upload `PUT`, an upload retry's wait or complete's
-    retry wait; the interrupt is restored and `status()` is 0. 2.0.0 reported those as
-    `client/upload-unreachable` during an upload and as `client/connectivity` during
-    complete; both codes remain, for transport failures. `attachment/receiver-not-allowed`
-    is the receiver allowlist's refusal (below): `status()` is 0 when the client refuses
-    before any request, and `403` when the platform does (through a session the library
-    builds; see below).
+  - Two of the new codes aren't chosen by HTTP status. An interrupted thread sends nothing
+    more in `send` and `upload`, whether the interrupt was already set when `send` started or
+    arrived during a link call, an upload `PUT`, a complete or a retry wait. The code is
+    usually `client/interrupted`, with `status()` 0, but an interrupt during a call that then
+    fails and isn't retried (a link call, or a complete on its last attempt or with a failure
+    that isn't retryable) surfaces that call's own code; the interrupt stays set either way.
+    2.0.0 reported an interrupt during an upload as `client/upload-unreachable` and during
+    complete as `client/connectivity`; both codes remain, for transport failures.
+    `attachment/receiver-not-allowed` is the receiver allowlist's refusal (below): `status()`
+    is 0 when the client refuses before any request, and `403` when the platform does.
   - Removed codes, and what a caller sees instead:
     - `attachment/grant-expired`: `attachment/grant-terminal` (`409`, the grant is abandoned
       or expired).
@@ -308,9 +310,7 @@ Watch the release notes on each release.
     the mapper doesn't read it, so another app passes its list the same way. With a list set,
     `createGrant` (and so `send`) refuses a case whose receiving company isn't on it with
     `attachment/receiver-not-allowed`, before any grant is requested. The platform's own
-    sender allowlist answers `403`, which a session the library builds reports as the same
-    code; a gateway built over a plain `RestTemplate`, without the library's error handler,
-    reports it as `attachment/forbidden`. Details:
+    sender allowlist answers `403`, which is reported as the same code. Details:
     `docs/attachments-v2-client.md`.
   - `TsaNetApiSession` gained `attachmentStorage()`, the receiving side of V2:
     `AttachmentStorageFacade` gets, registers and tests the company's S3 or Azure Blob

@@ -56,7 +56,7 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     // PROVISIONAL(tsanetgit/Connect-API-Code#183): the spec doesn't document this problem type;
     // the server's ProblemDetailFactory sends it for an allowlist refusal. Once the spec documents
     // createAttachmentGrant's 403 types, this becomes the documented value. Matched as the type's
-    // last segment (ConnectApiException.isProblem), so the URL's host doesn't matter.
+    // last segment (ConnectApiErrors.isProblem), so the URL's host doesn't matter.
     private static final String RECEIVER_NOT_ALLOWED_TYPE = "attachment-receiver-not-allowed";
 
     private final AttachmentGrantsApi api;
@@ -186,11 +186,14 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         }
     }
 
-    /** Grant creation only: the server's allowlist refusal reads the same as this client's. */
+    /**
+     * Grant creation only: the server's allowlist refusal reads the same as this client's, whether
+     * the answer came through the library's error handler or a plain RestTemplate.
+     */
     private static AttachmentV2Exception receiverNotAllowedOr(AttachmentV2Exception e) {
-        if (e.status() == 403 && e.getCause() instanceof ConnectApiException cause
-            && cause.isProblem(RECEIVER_NOT_ALLOWED_TYPE)) {
-            return new AttachmentV2Exception(e.getMessage(), 403, AttachmentV2Exception.RECEIVER_NOT_ALLOWED, cause);
+        if (e.status() == 403 && ConnectApiErrors.isProblem(e.getCause(), RECEIVER_NOT_ALLOWED_TYPE)) {
+            return new AttachmentV2Exception(e.getMessage(), 403, AttachmentV2Exception.RECEIVER_NOT_ALLOWED,
+                e.getCause());
         }
         return e;
     }
@@ -307,6 +310,8 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     public AttachmentGrant send(String caseToken, Path file, UploadProgressListener listener) {
         requireCase(caseToken);
         requireRegularFile(file);
+        // Before the case read and the grant: a send started on an interrupted thread sends nothing.
+        ConnectApiErrors.requireNotInterrupted("before sending", null);
         AttachmentGrant grant = createGrant(caseToken, file.getFileName().toString(), sizeOf(file));
         UploadReceipts receipts;
         try {
@@ -354,9 +359,15 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
             + " is not supported by this client", 0, AttachmentV2Exception.UNSUPPORTED_UPLOAD_MODE);
     }
 
-    /** Complete is safe to repeat: completing a completed grant returns it unchanged. */
+    /**
+     * Complete is safe to repeat: completing a completed grant returns it unchanged. An
+     * interrupted thread sends no complete, and an interrupt during a retry keeps the failure
+     * being retried as suppressed.
+     */
     private AttachmentGrant completeWithRetry(String caseToken, AttachmentGrant grant, UploadReceipts receipts) {
+        AttachmentV2Exception retrying = null;
         for (int attempt = 1; ; attempt++) {
+            ConnectApiErrors.requireNotInterrupted("before completing grant " + grant.grantId(), retrying);
             try {
                 return complete(caseToken, grant, receipts);
             } catch (AttachmentV2Exception e) {
@@ -364,7 +375,8 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
                 if (!retryable || attempt >= COMPLETE_ATTEMPTS) {
                     throw e;
                 }
-                pause(completeBackoff.multipliedBy(attempt));
+                ConnectApiErrors.pause(completeBackoff.multipliedBy(attempt), "while retrying complete", e);
+                retrying = e;
             }
         }
     }
@@ -539,19 +551,6 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         } catch (IOException e) {
             throw new AttachmentV2Exception("cannot read the file to send: " + e.getClass().getSimpleName(), 0,
                 AttachmentV2Exception.CLIENT_PRECONDITION, e);
-        }
-    }
-
-    private static void pause(Duration duration) {
-        if (duration.isZero() || duration.isNegative()) {
-            return;
-        }
-        try {
-            Thread.sleep(duration.toMillis());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AttachmentV2Exception("interrupted while retrying complete", 0,
-                AttachmentV2Exception.INTERRUPTED, e);
         }
     }
 }

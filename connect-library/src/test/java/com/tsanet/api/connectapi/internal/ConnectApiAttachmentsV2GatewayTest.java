@@ -90,6 +90,14 @@ class ConnectApiAttachmentsV2GatewayTest {
         return new ConnectApiException(ConnectApiException.Kind.OTHER, status, null, null, "HTTP " + status, null, null);
     }
 
+    private static void joinQuietly(Thread thread) {
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private static UploadReceipts s3Receipts() {
         return new UploadReceipts(AttachmentGrant.UploadMode.S3_MULTIPART, 17, List.of(
             new UploadReceipts.PartReceipt(1, "\"e1\""), new UploadReceipts.PartReceipt(2, "\"e2\"")));
@@ -362,6 +370,138 @@ class ConnectApiAttachmentsV2GatewayTest {
         verify(api).completeSingleUpload(TOKEN, GRANT_ID);
         verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
         verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void anInterruptedCompleteBackoffKeepsTheFailureItWasRetrying() {
+        ConnectApiAttachmentsV2Gateway backingOff = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofMillis(50));
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw apiError(502);
+        });
+        try {
+            assertThatThrownBy(() -> backingOff.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    assertThat(e.getSuppressed()).singleElement()
+                        .satisfies(s -> assertThat(((AttachmentV2Exception) s).code())
+                            .isEqualTo(AttachmentV2Exception.PROVIDER_ERROR));
+                });
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api).completeSingleUpload(TOKEN, GRANT_ID);
+    }
+
+    @Test
+    void anInterruptDuringARealCompleteBackoffStopsTheWaitAndKeepsBothCauses() {
+        ConnectApiAttachmentsV2Gateway slow = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofSeconds(2));
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        Thread caller = Thread.currentThread();
+        Thread[] interrupter = new Thread[1];
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
+            interrupter[0] = Thread.ofPlatform().start(() -> {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException ignored) {
+                    return;
+                }
+                caller.interrupt();
+            });
+            throw apiError(502);
+        });
+        long start = System.nanoTime();
+        try {
+            assertThatThrownBy(() -> slow.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    assertThat(e.getCause()).isInstanceOf(InterruptedException.class);
+                    assertThat(e.getSuppressed()).singleElement()
+                        .satisfies(s -> assertThat(((AttachmentV2Exception) s).code())
+                            .isEqualTo(AttachmentV2Exception.PROVIDER_ERROR));
+                });
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            // Clear the flag before joining (join throws on an interrupted thread), stop the helper
+            // and clear again, so a stray interrupt can't reach the next test on this thread.
+            Thread.interrupted();
+            if (interrupter[0] != null) {
+                interrupter[0].interrupt();
+                joinQuietly(interrupter[0]);
+            }
+            Thread.interrupted();
+        }
+        assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));
+        verify(api).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void anInterruptWithAZeroCompleteBackoffSendsNoSecondComplete() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            throw ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
+        });
+        try {
+            assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> {
+                    assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+                    assertThat(e.getSuppressed()).singleElement()
+                        .satisfies(s -> assertThat(((AttachmentV2Exception) s).code())
+                            .isEqualTo(AttachmentV2Exception.CONNECTIVITY));
+                });
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api).completeSingleUpload(TOKEN, GRANT_ID);
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
+        verify(api, never()).getAttachmentGrant(anyString(), anyLong());
+    }
+
+    @Test
+    void aSendStartedOnAnInterruptedThreadSendsNothing() {
+        Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verifyNoInteractions(api, coordinator);
+    }
+
+    @Test
+    void anInterruptAfterTheUploadSendsNoComplete() {
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
+            AttachmentGrantStatus.OPEN));
+        when(coordinator.upload(any(), eq(file), any(), any())).thenAnswer(invocation -> {
+            Thread.currentThread().interrupt();
+            return new UploadReceipts(AttachmentGrant.UploadMode.SINGLE, 17, List.of());
+        });
+        try {
+            assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verify(api, never()).completeSingleUpload(anyString(), anyLong());
+        verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());
     }
 
     @Test

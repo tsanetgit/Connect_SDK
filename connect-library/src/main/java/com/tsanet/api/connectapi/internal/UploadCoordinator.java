@@ -41,6 +41,10 @@ import java.util.concurrent.ThreadLocalRandom;
  *       retry kind: a {@code 403} refresh, and the same link again after an I/O failure, a
  *       {@code 429} or a {@code 5xx} (with backoff, {@code Retry-After} honored and capped).
  *       Any other status is final.</li>
+ *   <li><b>Interrupts.</b> An interrupted thread sends nothing more: the link calls, each
+ *       {@code PUT} and each retry wait check first, and the upload stops with
+ *       {@link AttachmentV2Exception#INTERRUPTED}, the interrupt still set
+ *       ({@link ConnectApiErrors#requireNotInterrupted}).</li>
  * </ul>
  *
  * <p>Nothing here completes or abandons a grant; the caller does. No message names a URL or a
@@ -156,6 +160,7 @@ class UploadCoordinator {
 
     /** Links for {@code regions[from]} and the ones after it that have none yet, at most one call's worth. */
     private void fetchBatch(List<Region> regions, int from, LinkSource source, Map<Integer, UploadLink> issued) {
+        ConnectApiErrors.requireNotInterrupted("before asking for the link for part " + regions.get(from).number(), null);
         List<Integer> numbers = new ArrayList<>();
         for (int i = from; i < regions.size() && numbers.size() < MAX_LINKS_PER_CALL; i++) {
             int number = regions.get(i).number();
@@ -180,12 +185,15 @@ class UploadCoordinator {
                        LinkSource source, java.util.function.LongConsumer onBytes) {
         UploadLink link = first;
         boolean fresh = firstIsFresh;
+        // The failure the current attempt is retrying, kept as suppressed if an interrupt stops it.
+        Throwable retrying = null;
         for (int attempt = 1; ; attempt++) {
             if (!fresh && expiresWithinMargin(link)) {
-                link = refresh(region, link, source);
+                link = refresh(region, link, source, retrying);
             }
             fresh = false;
             requireFits(region, link);
+            ConnectApiErrors.requireNotInterrupted("before uploading part " + region.number(), retrying);
             UploadTransport.PutResult result;
             try {
                 result = transport.put(link, file, region.offset(), region.length(), onBytes);
@@ -195,12 +203,12 @@ class UploadCoordinator {
                         + attempt + " attempts: " + e.getClass().getSimpleName(), 0,
                         AttachmentV2Exception.UPLOAD_UNREACHABLE, e);
                 }
-                sleep(backoff(attempt, Optional.empty()));
+                ConnectApiErrors.pause(backoff(attempt, Optional.empty()), "while retrying part " + region.number(), e);
+                retrying = e;
                 continue;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                throw new AttachmentV2Exception("interrupted while uploading part " + region.number(), 0,
-                    AttachmentV2Exception.INTERRUPTED, e);
+                throw ConnectApiErrors.interrupted("while uploading part " + region.number(), e, retrying);
             }
             int status = result.status();
             if (status / 100 == 2) {
@@ -215,10 +223,13 @@ class UploadCoordinator {
                 throw rejected(region, status, attempt);
             }
             if (status == 403) {
-                link = refresh(region, link, source);
+                retrying = rejected(region, status, attempt);
+                link = refresh(region, link, source, retrying);
                 fresh = true;
             } else if (status == 429 || status / 100 == 5) {
-                sleep(backoff(attempt, result.retryAfter()));
+                retrying = rejected(region, status, attempt);
+                ConnectApiErrors.pause(backoff(attempt, result.retryAfter()), "while retrying part " + region.number(),
+                    retrying);
             } else {
                 throw rejected(region, status, attempt);
             }
@@ -226,7 +237,8 @@ class UploadCoordinator {
     }
 
     /** Ask for {@code region}'s link again; the same link back is an error only once it has expired. */
-    private UploadLink refresh(Region region, UploadLink current, LinkSource source) {
+    private UploadLink refresh(Region region, UploadLink current, LinkSource source, Throwable retrying) {
+        ConnectApiErrors.requireNotInterrupted("before asking again for the link for part " + region.number(), retrying);
         List<UploadLink> links = source.links(List.of(region.number()));
         if (links == null || links.size() != 1 || links.get(0).number() != region.number()) {
             throw precondition("asked for a fresh link for number " + region.number() + " and did not get exactly one");
@@ -281,18 +293,6 @@ class UploadCoordinator {
         long millis = baseBackoff.toMillis() * (1L << (attempt - 1));
         long jitter = millis == 0 ? 0 : ThreadLocalRandom.current().nextLong(millis / 2 + 1);
         return Duration.ofMillis(millis + jitter);
-    }
-
-    private static void sleep(Duration duration) {
-        if (duration.isZero() || duration.isNegative()) {
-            return;
-        }
-        try {
-            Thread.sleep(duration.toMillis());
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new AttachmentV2Exception("interrupted while backing off", 0, AttachmentV2Exception.INTERRUPTED, e);
-        }
     }
 
     private static long sizeOf(Path file) {
