@@ -24,7 +24,10 @@ import org.junit.jupiter.api.Test;
  * guide. Javadoc code and link tags become backticks before the two are compared.
  *
  * <p>Text the README and the guide both carry sits in named blocks, {@code <!-- sync: name -->}
- * to {@code <!-- /sync: name -->}, and each block must read the same in both files.
+ * to {@code <!-- /sync: name -->}, and each block must read the same in both files. A block's
+ * inline Markdown links and images ({@code [text](target)}) target only absolute URLs: the two
+ * files are different pages in different directories, so a relative target or {@code #anchor}
+ * would resolve differently in each. Reference-style links aren't checked; no block uses one.
  */
 class AttachmentsV2GuideSyncTest {
 
@@ -40,6 +43,8 @@ class AttachmentsV2GuideSyncTest {
     private static final String TABLE_HEADER = "| Code | Cause |";
     private static final Pattern TABLE_ROW = Pattern.compile("^\\| `([^`]+)` \\| (.*) \\|$");
     private static final Pattern NAMED_OPEN = Pattern.compile("^<!-- sync: ([a-z0-9-]+) -->$");
+    private static final Pattern MARKDOWN_LINK_TARGET = Pattern.compile("\\]\\(\\s*([^)\\s]+)");
+    private static final Pattern ABSOLUTE_TARGET = Pattern.compile("^(https?://|mailto:).*");
     private static final Pattern ANY_SYNC_MARKER = Pattern.compile("<!--\\s*/?\\s*sync\\b", Pattern.CASE_INSENSITIVE);
 
     @Test
@@ -110,11 +115,36 @@ class AttachmentsV2GuideSyncTest {
                 end++;
             }
             assertThat(end).as("%s after %s in %s", close, line, file).isLessThan(lines.size());
-            assertThat(blocks.put(open.group(1), normalize(String.join(" ", lines.subList(i + 1, end)))))
+            List<String> block = lines.subList(i + 1, end);
+            assertThat(relativeTargets(block))
+                .as("relative link, anchor or image targets in the %s block in %s", open.group(1), file).isEmpty();
+            assertThat(blocks.put(open.group(1), normalize(String.join(" ", block))))
                 .as("one %s block in %s", open.group(1), file).isNull();
             i = end;
         }
         return blocks;
+    }
+
+    /** The block's inline Markdown link and image targets that aren't absolute URLs, outside fenced code. */
+    private static List<String> relativeTargets(List<String> block) {
+        List<String> relative = new ArrayList<>();
+        boolean fenced = false;
+        for (String line : block) {
+            if (line.trim().startsWith("```")) {
+                fenced = !fenced;
+                continue;
+            }
+            if (fenced) {
+                continue;
+            }
+            Matcher target = MARKDOWN_LINK_TARGET.matcher(line);
+            while (target.find()) {
+                if (!ABSOLUTE_TARGET.matcher(target.group(1)).matches()) {
+                    relative.add(target.group(1));
+                }
+            }
+        }
+        return relative;
     }
 
     /** The paragraphs of the javadoc just above the one {@code send(}, up to its first tag. */
