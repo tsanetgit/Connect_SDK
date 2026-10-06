@@ -14,8 +14,8 @@ package com.tsanet.api;
  *       500 where a 4xx belongs (tsanetgit/Connect-API-Code#122; kept for backward
  *       compatibility). Classified by the body, not the status, so it never reads as an
  *       unknown server error.</li>
- *   <li>{@link Kind#CONNECTIVITY}: the API could not be reached; {@link #detail()} names the
- *       failure's class only.</li>
+ *   <li>{@link Kind#CONNECTIVITY}: the API could not be reached, or its answer was lost;
+ *       {@link #detail()} names the failure's class only.</li>
  *   <li>{@link Kind#OTHER}: a non-2xx with no recognizable body; {@link #detail()} carries at
  *       most a short excerpt of it.</li>
  * </ul>
