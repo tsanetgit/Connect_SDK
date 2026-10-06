@@ -318,7 +318,7 @@ The member-facing walkthrough, including the calls without the SDK, is
 
 | Method | Description |
 |--------|-------------|
-| `send(caseToken, file, listener)` | Create a grant, upload and complete in one call, and return the completed grant. Its retries, its recovery after a failed complete, when it abandons the grant and how an interrupt stops it are `send()`'s javadoc, which the guide's [With the SDK](../docs/attachments-v2-client.md#with-the-sdk) section carries word for word. |
+| `send(caseToken, file, listener)` | Create a grant, upload and complete in one call, and return the completed grant. Its retries, its recovery after a failed complete, when it abandons the grant and how an interrupt stops it are in `send()`'s javadoc, which the guide's [With the SDK](../docs/attachments-v2-client.md#with-the-sdk) section carries word for word. |
 | `createGrant(caseToken, fileName, expectedSizeBytes)` | Create a grant. The receiver's storage decides its mode and plan. |
 | `getGrant(caseToken, grantId)`, `listGrants(caseToken, page, size)` | Read one grant, or a page of the case's grants. |
 | `singleUploadLink`, `s3PartLinks`, `azureBlockLinks` | Upload links for the grant's mode, at most 1,000 numbers per call. |

@@ -35,7 +35,8 @@ public class AttachmentV2Exception extends RuntimeException {
     public static final String RECEIVER_NOT_ALLOWED = "attachment/receiver-not-allowed";
     /**
      * 404: no such case or grant, a receiver that has registered no storage configuration (on
-     * create, or on a storage test), or a link or complete call that doesn't match the grant's mode.
+     * create), no storage configuration this endpoint shows (on a storage test), or a link or
+     * complete call that doesn't match the grant's mode.
      */
     public static final String NOT_FOUND = "attachment/not-found";
     /** 409: the grant is completed, abandoned or expired, so it can't take this call. */

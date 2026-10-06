@@ -108,7 +108,7 @@ against this account's list.
 | `attachment/invalid-request` | 400: a link call named a part or block number outside the plan, or S3 receipts don't cover it; or a storage configuration the platform won't register, including a method it hasn't enabled |
 | `attachment/forbidden` | 403: the caller's company isn't the case's sender, or any other refusal not named below |
 | `attachment/receiver-not-allowed` | the case's receiving company isn't allowed: either this account's receiver allowlist refused it before any grant request, or the server's sender allowlist refused grant creation with a `403`. Either way no grant exists and nothing was uploaded |
-| `attachment/not-found` | 404: no such case or grant, a receiver that has registered no storage configuration (on create, or on a storage test), or a link or complete call that doesn't match the grant's mode |
+| `attachment/not-found` | 404: no such case or grant, a receiver that has registered no storage configuration (on create), no storage configuration this endpoint shows (on a storage test), or a link or complete call that doesn't match the grant's mode |
 | `attachment/grant-terminal` | 409: the grant is completed, abandoned or expired, so it can't take this call |
 | `attachment/upload-mismatch` | 422: complete found the upload doesn't match the grant. The platform leaves the grant open; `send` abandons it |
 | `attachment/provider-error` | 502: the receiver's storage provider failed; nothing changed, retry later |
@@ -245,7 +245,7 @@ sent or stored.
   - `prefix` is optional. `gcs` is refused with a `400` until the platform enables it.
 - `POST /v2/attachments/storage-config/test` checks the registered storage and records the
   result. A failed check is a `200` with `verified: false` and a `detail`; with nothing
-  registered it's a `404`.
+  registered, or a configuration this endpoint doesn't show (today, a MongoDB one), it's a `404`.
 
 With the SDK, these are `session.attachmentStorage()`'s `get()`, `register(target)` and
 `test()`.
