@@ -290,6 +290,25 @@ class ConnectApiAttachmentsV2GatewayWireTest {
     }
 
     @Test
+    void aSendStartedOnAnInterruptedThreadMakesNoCaseReadOrGrantRequest() throws Exception {
+        // With an allowlist, send()'s first request would be the case read; none may go out.
+        ConnectApiAttachmentsV2Gateway guarded = allowlisted(101L);
+        java.nio.file.Path file = java.nio.file.Files.createTempFile("send-interrupted", ".log");
+        java.nio.file.Files.writeString(file, "hello attachments");
+        Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> guarded.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+            java.nio.file.Files.deleteIfExists(file);
+        }
+        server.verify();
+    }
+
+    @Test
     void theRealCaseLookupRefusesAReceiverOffTheListWithNoGrantRequest() {
         ConnectApiAttachmentsV2Gateway guarded = allowlisted(101L);
         server.expect(requestTo(CASE)).andExpect(method(HttpMethod.GET))

@@ -310,6 +310,8 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     public AttachmentGrant send(String caseToken, Path file, UploadProgressListener listener) {
         requireCase(caseToken);
         requireRegularFile(file);
+        // Before the case read and the grant: a send started on an interrupted thread sends nothing.
+        ConnectApiErrors.requireNotInterrupted("before sending", null);
         AttachmentGrant grant = createGrant(caseToken, file.getFileName().toString(), sizeOf(file));
         UploadReceipts receipts;
         try {

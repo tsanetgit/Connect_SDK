@@ -130,10 +130,12 @@ class UploadCoordinatorTest {
         final Map<Integer, Integer> issuedCount = new HashMap<>();
         BiFunction<Integer, Integer, OffsetDateTime> expiry = (number, version) -> now().plusMinutes(30);
         boolean sameEveryTime;
+        Runnable onLinks = () -> { };
 
         @Override
         public List<UploadLink> links(List<Integer> numbers) {
             calls.add(List.copyOf(numbers));
+            onLinks.run();
             List<UploadLink> out = new ArrayList<>();
             for (int n : numbers) {
                 int version = issuedCount.merge(n, 1, Integer::sum);
@@ -440,6 +442,43 @@ class UploadCoordinatorTest {
             Thread.interrupted();
         }
         assertThat(transport.puts).hasSize(1);
+    }
+
+    @Test
+    void anInterruptBetweenPartsAsksForNoNewBatch() throws IOException {
+        // Links last 90 s and part 1's PUT takes 40 s, which leaves part 2's link inside the 60 s
+        // margin, so part 2 would start by asking for a new batch.
+        links.expiry = (number, version) -> now().plusSeconds(90);
+        transport.onPut = () -> {
+            clock.advance(Duration.ofSeconds(40));
+            Thread.currentThread().interrupt();
+        };
+        try {
+            assertThatThrownBy(() -> coordinator.upload(s3(10, 2, 5), file(10), links, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(links.calls).hasSize(1);
+        assertThat(transport.puts).hasSize(1);
+    }
+
+    @Test
+    void anInterruptDuringALinkCallSendsNoPut() throws IOException {
+        // The link call itself returns normally; the interrupt lands while it runs.
+        links.onLinks = () -> Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> coordinator.upload(grant(UploadMode.SINGLE, 5, null), file(5), links, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        assertThat(links.calls).hasSize(1);
+        assertThat(transport.puts).isEmpty();
     }
 
     @Test

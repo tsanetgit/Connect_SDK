@@ -471,6 +471,20 @@ class ConnectApiAttachmentsV2GatewayTest {
     }
 
     @Test
+    void aSendStartedOnAnInterruptedThreadSendsNothing() {
+        Thread.currentThread().interrupt();
+        try {
+            assertThatThrownBy(() -> gateway.send(TOKEN, file, null))
+                .isInstanceOf(AttachmentV2Exception.class)
+                .satisfies(e -> assertThat(((AttachmentV2Exception) e).code()).isEqualTo(AttachmentV2Exception.INTERRUPTED));
+            assertThat(Thread.currentThread().isInterrupted()).isTrue();
+        } finally {
+            Thread.interrupted();
+        }
+        verifyNoInteractions(api, coordinator);
+    }
+
+    @Test
     void anInterruptAfterTheUploadSendsNoComplete() {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
