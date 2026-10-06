@@ -46,10 +46,10 @@ The working steps, in order:
   specification and passes the full suite (verified 2026-08-11: `mvn install`,
   JDK 21, 122 tests, 0 failures). Build from `main`; no commit pin is needed.
 - **Historical: the Connect Gateway `v0.1.0` certification pin.** Gateway
-  `v0.1.0` certified against `oauth` at `0f57facd3326`, from before the merge.
-  The pin is the record of what was certified, not the commit to build today.
-  The `oauth` branch itself remains only as history; do not build or consume
-  from it.
+  `v0.1.0` certified against commit `0f57facd3326` on the `oauth` branch, before
+  the merge. The tag `gateway-v0.1.0-certified` keeps that commit reachable now
+  that the branch is deleted. The pin is the record of what was certified, not
+  the commit to build today.
 - Releases are cut from `main` as GitHub Releases; each publishes `connect-library` and,
   from 2.0.0, `attachment-receiver` to GitHub Packages. Current version and notes:
   <https://github.com/tsanetgit/Connect_SDK/releases/latest>.
