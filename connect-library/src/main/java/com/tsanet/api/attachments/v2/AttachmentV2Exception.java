@@ -54,8 +54,9 @@ public class AttachmentV2Exception extends RuntimeException {
     /** A link is past its expiry and asking again returned the same link, so the upload can't go on. */
     public static final String LINK_NOT_REFRESHABLE = "client/link-not-refreshable";
     // PROVISIONAL(tsanetgit/Connect-API-Code#182): gcsResumable is named because it is the one mode
-    // this client refuses. Once GCS is on, the client uploads it and this javadoc names no mode.
-    /** The grant's mode is not one this client uploads ({@code gcsResumable}). */
+    // this client refuses. Once GCS is on, the client uploads it and this javadoc names only a
+    // missing mode.
+    /** The grant has no mode, or one this client doesn't upload ({@code gcsResumable}). */
     public static final String UNSUPPORTED_UPLOAD_MODE = "client/unsupported-upload-mode";
     /**
      * A client-side precondition failed: the file is empty, unreadable or not the size the grant

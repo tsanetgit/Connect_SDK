@@ -111,7 +111,7 @@ against this account's list.
 | `client/upload-rejected` | the storage answered an upload `PUT` with a status this client doesn't retry, or kept failing |
 | `client/upload-unreachable` | an upload `PUT` could not reach the storage after the retry budget |
 | `client/link-not-refreshable` | a link is past its expiry and asking again returned the same link, so the upload can't go on |
-| `client/unsupported-upload-mode` | the grant's mode is not one this client uploads (`gcsResumable`) |
+| `client/unsupported-upload-mode` | the grant has no mode, or one this client doesn't upload (`gcsResumable`) |
 | `client/precondition` | a client-side precondition failed: the file is empty, unreadable or not the size the grant expects; the grant's plan is missing or doesn't fit the file; a link doesn't fit the plan or isn't a usable request; or an answer is empty or missing a field this client needs |
 | `client/connectivity` | the Connect API could not be reached, or its answer was lost |
 | `client/interrupted` | the calling thread was interrupted; the interrupt is restored and nothing more is sent |
