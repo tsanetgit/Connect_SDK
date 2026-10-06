@@ -275,10 +275,11 @@ Watch the release notes on each release.
     more in `send` and `upload`, whether the interrupt was already set when `send` started or
     arrived during a link call, an upload `PUT`, a complete or a retry wait. The code is
     usually `client/interrupted`, with `status()` 0, but an interrupt during a call that then
-    fails and isn't retried (a link call, or a complete on its last attempt or with a failure
-    that isn't retryable) surfaces that call's own code; the interrupt stays set either way.
-    2.0.0 reported an interrupt during an upload as `client/upload-unreachable` and during
-    complete as `client/connectivity`; both codes remain, for transport failures.
+    fails and isn't retried (a link call; an upload `PUT` on its last attempt, or answered with
+    a status that isn't retried; or a complete on its last attempt or with a failure that isn't
+    retryable) surfaces that call's own code; the interrupt stays set either way. 2.0.0
+    reported an interrupt during an upload as `client/upload-unreachable` and during complete
+    as `client/connectivity`; both codes remain, for transport failures.
     `attachment/receiver-not-allowed` is the receiver allowlist's refusal (below): `status()`
     is 0 when the client refuses before any request, and `403` when the platform does.
   - Removed codes, and what a caller sees instead:

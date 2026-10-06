@@ -90,11 +90,12 @@ class ConnectApiAttachmentsV2GatewayTest {
         return new ConnectApiException(ConnectApiException.Kind.OTHER, status, null, null, "HTTP " + status, null, null);
     }
 
-    private static void joinQuietly(Thread thread) {
+    private static boolean stopQuietly(SleepInterrupter interrupter) {
         try {
-            thread.join();
+            return interrupter.stopAndReport();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return false;
         }
     }
 
@@ -405,19 +406,13 @@ class ConnectApiAttachmentsV2GatewayTest {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
         Thread caller = Thread.currentThread();
-        Thread[] interrupter = new Thread[1];
+        SleepInterrupter[] interrupter = new SleepInterrupter[1];
         when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
-            interrupter[0] = Thread.ofPlatform().start(() -> {
-                try {
-                    Thread.sleep(100);
-                } catch (InterruptedException ignored) {
-                    return;
-                }
-                caller.interrupt();
-            });
+            interrupter[0] = SleepInterrupter.watch(caller);
             throw apiError(502);
         });
         long start = System.nanoTime();
+        boolean insideSleep;
         try {
             assertThatThrownBy(() -> slow.send(TOKEN, file, null))
                 .isInstanceOf(AttachmentV2Exception.class)
@@ -430,15 +425,13 @@ class ConnectApiAttachmentsV2GatewayTest {
                 });
             assertThat(Thread.currentThread().isInterrupted()).isTrue();
         } finally {
-            // Clear the flag before joining (join throws on an interrupted thread), stop the helper
-            // and clear again, so a stray interrupt can't reach the next test on this thread.
+            // Clear the flag before stopping the helper (join throws on an interrupted thread), and
+            // again after, so a stray interrupt can't reach the next test on this thread.
             Thread.interrupted();
-            if (interrupter[0] != null) {
-                interrupter[0].interrupt();
-                joinQuietly(interrupter[0]);
-            }
+            insideSleep = interrupter[0] != null && stopQuietly(interrupter[0]);
             Thread.interrupted();
         }
+        assertThat(insideSleep).as("the interrupt landed inside the complete backoff's sleep").isTrue();
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));
         verify(api).completeSingleUpload(TOKEN, GRANT_ID);
         verify(api, never()).abandonAttachmentGrant(anyString(), anyLong());

@@ -165,10 +165,12 @@ public class SettingsController {
         if (body == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A receiver storage configuration is required");
         }
-        // Every field is stripped, so a padded value isn't stored as sent. Blank once stripped is missing.
+        // Every field is stripped, the method too, so a padded value isn't stored as sent. Blank once
+        // stripped is missing.
+        String method = stripped(body.method());
         String prefix = stripped(body.prefix());
         try {
-            return switch (body.method() == null ? "" : body.method()) {
+            return switch (method == null ? "" : method) {
                 case "s3" -> new StorageTarget.S3(stripped(body.bucket()), stripped(body.region()),
                     stripped(body.roleArn()), prefix);
                 case "azureBlob" -> new StorageTarget.AzureBlob(stripped(body.container()), stripped(body.tenantId()),
@@ -187,8 +189,8 @@ public class SettingsController {
     /**
      * The failure keeps its code in front of the message, as the V2 delivery screens show it. The
      * status is {@link ApiErrorHandler#upstreamStatus}, the rule for the SDK's other classified
-     * failures: a failure without a platform status (under 400; in practice 0, when the platform
-     * was unreachable or its answer unusable) is a 502.
+     * failures: a failure without a platform error status (outside 400 to 599; in practice 0,
+     * when the platform was unreachable or its answer unusable) is a 502.
      */
     private static <T> T storageCall(Supplier<T> call) {
         try {
