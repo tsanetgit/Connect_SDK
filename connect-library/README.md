@@ -304,15 +304,21 @@ Case responses include approval and other comment-like activity on a collaborati
 ### Direct delivery (V2) — `session.attachmentsV2()`
 
 The sender's side of V2 attachment delivery: the file goes straight into the receiving
-company's storage and nothing passes through the Connect API. A hand-written client over the
-API and data classes generated from the Attachment Grants operations in the Connect OpenAPI
-spec, which marks them `x-stability-level: alpha`.
+company's storage and nothing passes through the Connect API. The Connect OpenAPI spec marks
+these operations `x-stability-level: alpha`.
+
+<!-- sync: v2-client-intro -->
+`AttachmentsV2Facade`, in `connect-library`, is a hand-written client over the
+`AttachmentGrantsApi` and data classes generated from the Attachment Grants operations in the
+Connect OpenAPI spec.
+<!-- /sync: v2-client-intro -->
+
 The member-facing walkthrough, including the calls without the SDK, is
 [`docs/attachments-v2-client.md`](../docs/attachments-v2-client.md).
 
 | Method | Description |
 |--------|-------------|
-| `send(caseToken, file, listener)` | Create a grant, upload, complete. Retries complete on a `5xx` or a lost response. A failed upload or complete abandons the grant and throws `AttachmentV2Exception`, except on a `409`, where the grant is already terminal. If abandon doesn't settle a failed complete, the grant is read once, and a grant that reads completed is returned as delivered. An interrupted thread makes no more calls, so it doesn't abandon. Some failures after the upload don't prove the file wasn't delivered (the guide lists them): read the grant before sending again. |
+| `send(caseToken, file, listener)` | Create a grant, upload and complete in one call, and return the completed grant. Its retries, its recovery after a failed complete, when it abandons the grant and how an interrupt stops it are `send()`'s javadoc, which the guide's [With the SDK](../docs/attachments-v2-client.md#with-the-sdk) section carries word for word. |
 | `createGrant(caseToken, fileName, expectedSizeBytes)` | Create a grant. The receiver's storage decides its mode and plan. |
 | `getGrant(caseToken, grantId)`, `listGrants(caseToken, page, size)` | Read one grant, or a page of the case's grants. |
 | `singleUploadLink`, `s3PartLinks`, `azureBlockLinks` | Upload links for the grant's mode, at most 1,000 numbers per call. |

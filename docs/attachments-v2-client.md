@@ -3,9 +3,14 @@
 This page is for a member implementing the sender's side of V2 attachment delivery, with or
 without the Connect SDK. The contract is the Connect OpenAPI spec: the operations tagged
 **Attachment Grants**, under `/v2/collaboration-requests/{token}/attachments/grants`. The spec
-marks them `x-stability-level: alpha`, so they can still change. The SDK's
-`AttachmentsV2Facade` in `connect-library` is the reference implementation of everything below:
-a hand-written client over the `AttachmentGrantsApi` and data classes generated from that spec.
+marks them `x-stability-level: alpha`, so they can still change. The SDK's client is the
+reference implementation of everything below.
+
+<!-- sync: v2-client-intro -->
+`AttachmentsV2Facade`, in `connect-library`, is a hand-written client over the
+`AttachmentGrantsApi` and data classes generated from the Attachment Grants operations in the
+Connect OpenAPI spec.
+<!-- /sync: v2-client-intro -->
 
 ## The idea in one paragraph
 

@@ -22,6 +22,9 @@ import org.junit.jupiter.api.Test;
  * docs/attachments-v2-client.md copies text from the javadoc, because members read the guide
  * where the javadoc isn't rendered. The javadoc is the source: when it changes, copy it into the
  * guide. Javadoc code and link tags become backticks before the two are compared.
+ *
+ * <p>Text the README and the guide both carry sits in named blocks, {@code <!-- sync: name -->}
+ * to {@code <!-- /sync: name -->}, and each block must read the same in both files.
  */
 class AttachmentsV2GuideSyncTest {
 
@@ -31,10 +34,12 @@ class AttachmentsV2GuideSyncTest {
     private static final Path FACADE = MODULE.resolve("src/main/java/com/tsanet/api/facade/AttachmentsV2Facade.java");
     private static final Path EXCEPTION = MODULE.resolve("src/main/java/com/tsanet/api/attachments/v2/AttachmentV2Exception.java");
     private static final Path GUIDE = MODULE.resolve("../docs/attachments-v2-client.md").normalize();
+    private static final Path README = MODULE.resolve("README.md");
     private static final String OPEN = "<!-- sync: AttachmentsV2Facade.send.";
     private static final String CLOSE = "<!-- /sync -->";
     private static final String TABLE_HEADER = "| Code | Cause |";
     private static final Pattern TABLE_ROW = Pattern.compile("^\\| `([^`]+)` \\| (.*) \\|$");
+    private static final Pattern NAMED_OPEN = Pattern.compile("^<!-- sync: ([a-z0-9-]+) -->$");
 
     @Test
     void theGuideCarriesSendsJavadocWordForWord() throws IOException {
@@ -70,6 +75,44 @@ class AttachmentsV2GuideSyncTest {
                 .as("the %s row in %s must equal the javadoc of its constant in %s", code, GUIDE, EXCEPTION)
                 .isEqualTo(expected);
         }
+    }
+
+    /** Every named block appears in both the README and the guide, and reads the same in both. */
+    @Test
+    void theReadmeAndTheGuideCarryEachNamedBlockWordForWord() throws IOException {
+        Map<String, String> readme = namedBlocks(README);
+        Map<String, String> guide = namedBlocks(GUIDE);
+
+        assertThat(readme).as("named sync blocks in %s", README).isNotEmpty();
+        assertThat(guide.keySet()).as("the named sync blocks in %s, against those in %s", GUIDE, README)
+            .containsExactlyInAnyOrderElementsOf(readme.keySet());
+        readme.forEach((name, text) -> assertThat(guide.get(name))
+            .as("the %s block in %s must equal the one in %s", name, GUIDE, README).isEqualTo(text));
+    }
+
+    /** Name to whitespace-normalized text, for each named block in {@code file}. */
+    private static Map<String, String> namedBlocks(Path file) throws IOException {
+        List<String> lines = Files.readAllLines(file);
+        Map<String, String> blocks = new LinkedHashMap<>();
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i).trim();
+            if (!line.startsWith("<!-- sync:") || line.startsWith(OPEN)) {
+                continue;
+            }
+            Matcher open = NAMED_OPEN.matcher(line);
+            assertThat(open.matches()).as("a sync marker in %s reads <!-- sync: name --> (a-z, 0-9, -): %s", file, line)
+                .isTrue();
+            String close = "<!-- /sync: " + open.group(1) + " -->";
+            int end = i + 1;
+            while (end < lines.size() && !lines.get(end).trim().equals(close)) {
+                end++;
+            }
+            assertThat(end).as("%s after %s in %s", close, line, file).isLessThan(lines.size());
+            assertThat(blocks.put(open.group(1), normalize(String.join(" ", lines.subList(i + 1, end)))))
+                .as("one %s block in %s", open.group(1), file).isNull();
+            i = end;
+        }
+        return blocks;
     }
 
     /** The paragraphs of the javadoc just above the one {@code send(}, up to its first tag. */
