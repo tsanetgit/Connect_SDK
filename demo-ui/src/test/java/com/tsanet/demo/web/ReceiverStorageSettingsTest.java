@@ -1,8 +1,10 @@
 package com.tsanet.demo.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -22,6 +24,7 @@ import com.tsanet.demo.config.DemoProperties;
 import com.tsanet.demo.config.EnvironmentService;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -174,6 +177,61 @@ class ReceiverStorageSettingsTest {
         mvc(true).perform(put("/api/settings/dev/receiver-storage").contentType(MediaType.APPLICATION_JSON).content(S3_BODY))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.error").value("attachment/forbidden: register storage config failed: Forbidden"));
+    }
+
+    /** As ApiErrorHandler does for every other Connect API call: the platform's status passes through. */
+    @Test
+    void aPlatformStatusPassesThroughAndOnlyAFailureWithoutOneIsABadGateway() throws Exception {
+        Map<AttachmentV2Exception, Integer> expected = new LinkedHashMap<>();
+        expected.put(new AttachmentV2Exception("get storage config failed: HTTP 401", 401, AttachmentV2Exception.API_ERROR), 401);
+        expected.put(new AttachmentV2Exception("get storage config failed: HTTP 409", 409, AttachmentV2Exception.GRANT_TERMINAL), 409);
+        expected.put(new AttachmentV2Exception("get storage config failed: HTTP 500", 500, AttachmentV2Exception.API_ERROR), 500);
+        expected.put(new AttachmentV2Exception("get storage config failed: HTTP 502", 502, AttachmentV2Exception.PROVIDER_ERROR), 502);
+        // A status with no HttpStatus constant still passes through.
+        expected.put(new AttachmentV2Exception("get storage config failed: HTTP 499", 499, AttachmentV2Exception.API_ERROR), 499);
+        // No platform status: unreachable, or an answer this client couldn't use.
+        expected.put(new AttachmentV2Exception("get storage config failed: ResourceAccessException", 0,
+            AttachmentV2Exception.CONNECTIVITY), 502);
+        expected.put(new AttachmentV2Exception("the answer has no method", 0, AttachmentV2Exception.CLIENT_PRECONDITION), 502);
+        expected.put(new AttachmentV2Exception("get storage config failed: could not read the answer", 0,
+            AttachmentV2Exception.API_ERROR), 502);
+        MockMvc mvc = mvc(true);
+        for (Map.Entry<AttachmentV2Exception, Integer> entry : expected.entrySet()) {
+            AttachmentV2Exception failure = entry.getKey();
+            doThrow(failure).when(storage).get();
+
+            mvc.perform(get("/api/settings/dev/receiver-storage"))
+                .andExpect(status().is(entry.getValue()))
+                .andExpect(jsonPath("$.error").value(failure.code() + ": " + failure.getMessage()));
+        }
+    }
+
+    @Test
+    void everyFieldIsStrippedBeforeRegistering() throws Exception {
+        StorageTarget.S3 s3 = new StorageTarget.S3("acme-attachments", "us-east-1",
+            "arn:aws:iam::123456789012:role/tsanet-writer", "inbound");
+        StorageTarget.AzureBlob blob = new StorageTarget.AzureBlob("inbound", "tenant-1", "acmestore", null);
+        when(storage.register(s3)).thenReturn(new StorageConfig(s3, "ext-abc", StorageConfig.Verification.NEVER_TESTED, null));
+        when(storage.register(blob)).thenReturn(new StorageConfig(blob, null, StorageConfig.Verification.NEVER_TESTED, null));
+        MockMvc mvc = mvc(true);
+
+        mvc.perform(put("/api/settings/dev/receiver-storage").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"method\":\"s3\",\"bucket\":\" acme-attachments \",\"region\":\"us-east-1\\t\","
+                    + "\"roleArn\":\"\\narn:aws:iam::123456789012:role/tsanet-writer \",\"prefix\":\" inbound \"}"))
+            .andExpect(status().isOk());
+        mvc.perform(put("/api/settings/dev/receiver-storage").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"method\":\"azureBlob\",\"container\":\" inbound\",\"tenantId\":\"tenant-1 \","
+                    + "\"storageAccountName\":\" acmestore \",\"prefix\":\"   \"}"))
+            .andExpect(status().isOk());
+        // Blank once stripped is missing, not an empty value sent on.
+        mvc.perform(put("/api/settings/dev/receiver-storage").contentType(MediaType.APPLICATION_JSON)
+                .content(S3_BODY.replace("\"us-east-1\"", "\" \\t \"")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("region must not be blank"));
+
+        verify(storage).register(s3);
+        verify(storage).register(blob);
+        verify(storage, times(2)).register(any());
     }
 
     @Test
