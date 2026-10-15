@@ -37,6 +37,8 @@ The build wants JDK 21. On macOS with Homebrew, `openjdk@21` is keg-only: export
 
 ## Runtime, demo
 
+<!-- PROVISIONAL(tsanetgit/Connect_SDK#128): a bad login's 401 body is lost in transport, so it reads "HTTP 401 from the Connect API" with no title. Once the transport keeps the body, it reads "HTTP 401 Authentication Failed (authentication-error)" and this says so. -->
+
 **Badge says: Auth failed: HTTP 401 from the Connect API**
 Almost always wrong credentials: the API answered the login with a 401. Its problem-details
 body says "Authentication Failed", but the body of a 401 to the login request is lost in

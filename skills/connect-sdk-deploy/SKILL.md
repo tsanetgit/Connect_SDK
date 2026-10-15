@@ -112,6 +112,7 @@ These bite regardless of path, and none of them are visible in the OpenAPI schem
   transport (tsanetgit/Connect_SDK#128). A member calling the API directly without the
   header still sees the 500. Do not let a member burn an afternoon debugging their
   network for what is a typo in a password.
+  <!-- PROVISIONAL(tsanetgit/Connect_SDK#128): a bad login's 401 body is lost in transport, so it reads "HTTP 401 from the Connect API" with no title. Once the transport keeps the body, it reads "HTTP 401 Authentication Failed (authentication-error)" and this says so. -->
 - **Test-mode asymmetry.** You *write* the `testSubmission` flag when creating a case
   but *read* it back as `testCase`. The library's create API takes an explicit
   per-call `testSubmission` flag with no silent default; the older always-test

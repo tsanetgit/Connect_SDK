@@ -6,6 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import com.tsanet.api.auth.PasswordAuthConfig;
+import com.tsanet.api.connectapi.internal.ConnectApiRestTemplates;
+import com.tsanet.api.generated.api.WebhooksApi;
+import com.tsanet.api.generated.invoker.ApiClient;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -19,6 +22,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 
 /**
  * What a session opened through {@link TsaNetApi#initialize} puts in {@code Accept}, on the wire,
@@ -94,6 +101,7 @@ class TsaNetApiAcceptHeaderWiringTest {
                             + "\"message\":\"Invalid note type 'bogus'. Allowed values: partner\"}]}");
                 }
             }
+            case "DELETE /v1/webhooks/7" -> exchange.sendResponseHeaders(204, -1);
             default -> respond(exchange, 404, "application/json", "{\"message\":\"unexpected " + request + "\"}");
         }
     }
@@ -121,6 +129,31 @@ class TsaNetApiAcceptHeaderWiringTest {
         assertThat(requests).contains("POST /v1/login", "GET /v1/note-types");
         assertThat(acceptHeaders).hasSameSizeAs(requests)
             .allSatisfy(accept -> assertThat(accept).containsExactly(DUAL_ACCEPT));
+    }
+
+    @Test
+    void anOperationWithNoResponseBodySendsTheSameAccept() {
+        ApiClient apiClient = new ApiClient(ConnectApiRestTemplates.create());
+        apiClient.setBasePath(base);
+        apiClient.setBearerToken(() -> "bearer-1");
+
+        new WebhooksApi(apiClient).deleteWebhookSubscription(7L);
+
+        assertThat(requests).containsExactly("DELETE /v1/webhooks/7");
+        assertThat(acceptHeaders).containsExactly(List.of(DUAL_ACCEPT));
+    }
+
+    @Test
+    void anAcceptOtherThanJsonAloneIsLeftAsSet() {
+        // Every generated operation asks for application/json today; a request that asks for
+        // anything else keeps its own Accept.
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(List.of(MediaType.TEXT_PLAIN));
+
+        ConnectApiRestTemplates.create()
+            .exchange(base + "/v1/note-types", HttpMethod.GET, new HttpEntity<>(headers), String.class);
+
+        assertThat(acceptHeaders).containsExactly(List.of("text/plain"));
     }
 
     @Test

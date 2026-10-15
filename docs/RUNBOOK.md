@@ -69,6 +69,8 @@ Badge decoder:
 - **Amber "Not configured"** — no credentials saved yet
 - **Amber "Auth failed: HTTP 401 from the Connect API"** — the environment rejected the credentials (HTTP 401; a wrong password looks like this. The API's title is lost in transport, tsanetgit/Connect_SDK#128)
 
+<!-- PROVISIONAL(tsanetgit/Connect_SDK#128): a bad login's 401 body is lost in transport, so it reads "HTTP 401 from the Connect API" with no title. Once the transport keeps the body, it reads "HTTP 401 Authentication Failed (authentication-error)" and this says so. -->
+
 ## 4. First-session verification sweep (once, with the first real credentials)
 
 Two things were built against assumptions that need one live payload to confirm — run through these and note anything that renders wrong:

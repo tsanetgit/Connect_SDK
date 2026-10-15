@@ -45,6 +45,7 @@ The server listens on **http://localhost:8090**. Ctrl+C stops it, or
      credentials with a 401. The API's own title is lost in transport for now
      (tsanetgit/Connect_SDK#128). This almost always means a wrong username or password,
      not an outage.
+     <!-- PROVISIONAL(tsanetgit/Connect_SDK#128): a bad login's 401 body is lost in transport, so it reads "HTTP 401 from the Connect API" with no title. Once the transport keeps the body, it reads "HTTP 401 Authentication Failed (authentication-error)" and this says so. -->
 
 Credentials persist per environment to `~/.tsanet-demo-ui/` (mode 600, never in git),
 with an isolated SQLite cache per environment, so restarts skip this step. Settings →

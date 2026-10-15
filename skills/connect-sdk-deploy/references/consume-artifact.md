@@ -355,3 +355,4 @@ Watch the release notes on each release.
     `status()`, or on the message text sees different values: sweep for it. A wrong password
     is the exception for now: it reads `HTTP 401 from the Connect API`, kind `OTHER`, because
     the body of a 401 to the login request is lost in transport (tsanetgit/Connect_SDK#128).
+    <!-- PROVISIONAL(tsanetgit/Connect_SDK#128): a bad login's 401 body is lost in transport, so it reads "HTTP 401 from the Connect API" with no title. Once the transport keeps the body, it reads "HTTP 401 Authentication Failed (authentication-error)" and this says so. -->
