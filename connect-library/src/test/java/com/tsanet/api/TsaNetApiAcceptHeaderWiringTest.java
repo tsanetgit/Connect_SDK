@@ -194,6 +194,11 @@ class TsaNetApiAcceptHeaderWiringTest {
 
     @Test
     void aFourOhOneToAPostIsResentWithTheSameBodyAfterTheReLogin() {
+        // Pins the 401 retry's re-send: the same body, with a fixed length. RestTemplate's
+        // interceptor request buffers the request body whatever the factory, so this passes on
+        // either transport and without BufferingClientHttpRequestFactory; the response side of
+        // that wrapper is pinned by ConnectApiConnectivityInterceptorBodyReadTest's wire test
+        // (tsanetgit/Connect_SDK#131).
         TsaNetApiSession session = session();
         session.auth().login("sender@example.test", GOOD_PASSWORD);
 

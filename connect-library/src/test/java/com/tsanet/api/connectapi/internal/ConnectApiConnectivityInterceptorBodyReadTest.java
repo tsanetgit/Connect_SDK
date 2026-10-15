@@ -62,6 +62,39 @@ class ConnectApiConnectivityInterceptorBodyReadTest {
     }
 
     @Test
+    void aBodyCutShortOnTheWireIsAConnectivityFailureOnTheLibrarysOwnTemplate() throws Exception {
+        // The canned factory above stands in for the transport; this goes over the real one.
+        // Without BufferingClientHttpRequestFactory under create(), the interceptor's getBody()
+        // only opens the stream, the cut surfaces in the extractor, and Spring's
+        // RestClientException escapes instead of ConnectApiException (tsanetgit/Connect_SDK#131).
+        com.sun.net.httpserver.HttpServer cutting =
+            com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        cutting.createContext("/", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, 500);
+            exchange.getResponseBody().write("{\"id\":".getBytes(StandardCharsets.UTF_8));
+            exchange.getResponseBody().flush();
+            // Closing short of the declared length drops the connection mid-body.
+            exchange.close();
+        });
+        cutting.start();
+        try {
+            ApiClient apiClient = new ApiClient(ConnectApiRestTemplates.create());
+            apiClient.setBasePath("http://127.0.0.1:" + cutting.getAddress().getPort());
+            apiClient.setBearerToken(() -> "bearer-1");
+
+            assertThatThrownBy(() -> new CaseResponsesApi(apiClient).closeCollaborationRequest(TOKEN))
+                .isInstanceOfSatisfying(ConnectApiException.class, ex -> {
+                    assertThat(ex.kind()).isEqualTo(ConnectApiException.Kind.CONNECTIVITY);
+                    assertThat(ex.getMessage()).doesNotContain("MARKER").doesNotContain("127.0.0.1");
+                });
+        } finally {
+            cutting.stop(0);
+        }
+    }
+
+    @Test
     void theExtractorStillReceivesTheWholeBodyAfterTheInterceptorReadIt() {
         byte[] body = "{\"accessToken\":\"tok-1\",\"expiresIn\":3600}".getBytes(StandardCharsets.UTF_8);
         ApiClient apiClient = clientAnswering(response(HttpStatus.OK, MediaType.APPLICATION_JSON, new ByteArrayInputStream(body)));
