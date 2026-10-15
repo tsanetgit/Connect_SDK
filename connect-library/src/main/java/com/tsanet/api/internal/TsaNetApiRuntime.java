@@ -53,6 +53,7 @@ import com.tsanet.api.auth.AuthMode;
 import com.tsanet.api.connectapi.internal.OAuth401RetryInterceptor;
 import com.tsanet.api.connectapi.internal.OAuthTokenGateway;
 import com.tsanet.api.connectapi.internal.TokenManager;
+import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.springframework.web.client.RestTemplate;
@@ -66,18 +67,21 @@ public final class TsaNetApiRuntime {
     public static TsaNetApiSession create(TsaNetApiConfiguration configuration) {
         ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
 
+        // One JDK client per session under all three templates (tsanetgit/Connect_SDK#131).
+        HttpClient httpClient = ConnectApiRestTemplates.newHttpClient();
+
         // Login rides an unauthenticated client of its own: no bearer supplier, no 401 retry.
         // On the session client a re-login would recurse into itself through both.
-        ApiClient loginApiClient = new ApiClient(ConnectApiRestTemplates.create());
+        ApiClient loginApiClient = new ApiClient(ConnectApiRestTemplates.create(httpClient));
         loginApiClient.setBasePath(configuration.apiBaseUrl());
         ConnectApiAuthGateway authGateway = new ConnectApiAuthGateway(new IdentityApi(loginApiClient));
 
-        RestTemplate restTemplate = ConnectApiRestTemplates.create();
+        RestTemplate restTemplate = ConnectApiRestTemplates.create(httpClient);
         ApiClient apiClient = new ApiClient(restTemplate);
         apiClient.setBasePath(configuration.apiBaseUrl());
 
         IdentityApi identityApi = new IdentityApi(apiClient);
-        OAuthTokenGateway oauthTokenGateway = new OAuthTokenGateway();
+        OAuthTokenGateway oauthTokenGateway = new OAuthTokenGateway(httpClient);
         TokenManager tokenManager = new TokenManager(
             sessionStore,
             authGateway,

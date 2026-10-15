@@ -39,4 +39,34 @@ class OAuthTokenGatewayTest {
         assertThat(token.expiresInSeconds()).isEqualTo(7200);
         server.verify();
     }
+
+    @Test
+    void aRefusedTokenCallOnTheSharedClientStaysStatusOnlyNotAConnectApiException() throws Exception {
+        // The token call rides the session's JDK client through transport(), not create(): an
+        // Entra refusal must not be classified by the Connect API's error handler, and its body
+        // (which names the app) must not reach the message.
+        com.sun.net.httpserver.HttpServer entra =
+            com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        entra.createContext("/", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            byte[] body = ("{\"error\":\"invalid_client\",\"error_description\":\"AADSTS7000215: app client-id-MARKER\","
+                + "\"title\":\"t\",\"type\":\"x\"}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(401, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        entra.start();
+        try {
+            String tokenUrl = "http://127.0.0.1:" + entra.getAddress().getPort() + "/tenant/oauth2/v2.0/token";
+            OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
+
+            assertThatThrownBy(() -> gateway.fetchClientCredentialsToken(
+                new ClientCredentialsAuthConfig("tenant", tokenUrl, "client-id", "client-secret", "api://audience", null)))
+                .isExactlyInstanceOf(IllegalStateException.class)
+                .hasMessage("OAuth client-credentials request failed: HTTP 401");
+        } finally {
+            entra.stop(0);
+        }
+    }
 }
