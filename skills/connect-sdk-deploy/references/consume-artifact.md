@@ -101,7 +101,9 @@ Every login ends with a `/v1/me` call; the answer is kept as `auth().currentUser
 transport failures, arrive as the unchecked `ConnectApiException`: `kind()` is `PROBLEM`,
 `LEGACY`, `CONNECTIVITY` or `OTHER`, with the API's own `status()`, `title()`, `detail()`
 and `isProblem("case-update-error")`-style checks. Its message never carries the URL, a
-header or a token. Handle by kind and type, not by parsing the message.
+header or a token. Handle by kind and status, not by parsing the message: the library's
+`/v1/` calls get the API's legacy bodies, which have no type (see "Errors" in
+`connect-library/README.md`).
 
 Every remote read and successful write upserts into the SQLite cache;
 `listStored*` methods read the cache without touching the network. `logout()` clears
