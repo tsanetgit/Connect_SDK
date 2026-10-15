@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,10 +40,14 @@ class TsaNetApiAcceptHeaderWiringTest {
 
     private static final String DUAL_ACCEPT = "application/json, application/problem+json";
     private static final String TOKEN = "case-token-1";
+    private static final String RETRY_TOKEN = "case-token-retry";
     private static final String GOOD_PASSWORD = "test-password";
 
     private final List<String> requests = new CopyOnWriteArrayList<>();
     private final List<List<String>> acceptHeaders = new CopyOnWriteArrayList<>();
+    private final List<String> retriedNoteBodies = new CopyOnWriteArrayList<>();
+    private final List<String> retriedNoteFraming = new CopyOnWriteArrayList<>();
+    private final AtomicInteger logins = new AtomicInteger();
     private HttpServer server;
     private String base;
 
@@ -75,8 +80,8 @@ class TsaNetApiAcceptHeaderWiringTest {
         switch (request) {
             case "POST /v1/login" -> {
                 if (body.contains("\"" + GOOD_PASSWORD + "\"")) {
-                    respond(exchange, 200, "application/json",
-                        "{\"accessToken\":\"bearer-1\",\"tokenType\":\"Bearer\",\"expiresIn\":3600}");
+                    respond(exchange, 200, "application/json", "{\"accessToken\":\"bearer-" + logins.incrementAndGet()
+                        + "\",\"tokenType\":\"Bearer\",\"expiresIn\":3600}");
                 } else if (problem) {
                     respond(exchange, 401, "application/problem+json",
                         "{\"type\":\"https://api.tsanet.org/errors/authentication-error\",\"title\":\"Authentication Failed\","
@@ -101,6 +106,20 @@ class TsaNetApiAcceptHeaderWiringTest {
                             + "\"message\":\"Invalid note type 'bogus'. Allowed values: partner\"}]}");
                 }
             }
+            case "POST /v1/collaboration-requests/" + RETRY_TOKEN + "/notes" -> {
+                // The first login's bearer is refused, as an expired one would be; the re-login's is accepted.
+                retriedNoteBodies.add(body);
+                retriedNoteFraming.add("Content-Length=" + exchange.getRequestHeaders().getFirst("Content-Length")
+                    + " Transfer-Encoding=" + exchange.getRequestHeaders().getFirst("Transfer-Encoding"));
+                if ("Bearer bearer-1".equals(exchange.getRequestHeaders().getFirst("Authorization"))) {
+                    respond(exchange, 401, "application/problem+json",
+                        "{\"type\":\"https://api.tsanet.org/errors/authentication-error\",\"title\":\"Authentication Failed\","
+                            + "\"status\":401,\"detail\":\"Token expired.\"}");
+                } else {
+                    respond(exchange, 200, "application/json", "{\"id\":5,\"token\":\"n5\",\"type\":null}");
+                }
+            }
+            case "GET /v1/collaboration-requests/" + RETRY_TOKEN + "/notes" -> respond(exchange, 200, "application/json", "[]");
             case "DELETE /v1/webhooks/7" -> exchange.sendResponseHeaders(204, -1);
             default -> respond(exchange, 404, "application/json", "{\"message\":\"unexpected " + request + "\"}");
         }
@@ -160,18 +179,33 @@ class TsaNetApiAcceptHeaderWiringTest {
     void aBadLoginIsAFourOhOneNotTheLegacyFiveHundred() {
         TsaNetApiSession session = session();
 
-        // The status is the API's 401, but the body is lost: the JDK HttpURLConnection under
-        // SimpleClientHttpRequestFactory discards the body of a 401 answer to a request it streamed,
-        // and Spring 7 streams every request with a body, so the problem's title doesn't arrive.
-        // PROVISIONAL(tsanetgit/Connect_SDK#128): a transport that keeps the body makes this PROBLEM
-        // with the title "Authentication Failed".
+        // A 401 answer to a POST keeps its body (tsanetgit/Connect_SDK#128): the old
+        // HttpURLConnection transport dropped it and this read "HTTP 401 from the Connect API".
         assertThatThrownBy(() -> session.auth().login("sender@example.test", "wrong"))
             .isInstanceOfSatisfying(ConnectApiException.class, e -> {
                 assertThat(e.status()).isEqualTo(401);
-                assertThat(e.kind()).isEqualTo(ConnectApiException.Kind.OTHER);
-                assertThat(e.getMessage()).isEqualTo("HTTP 401 from the Connect API");
+                assertThat(e.kind()).isEqualTo(ConnectApiException.Kind.PROBLEM);
+                assertThat(e.isProblem("authentication-error")).isTrue();
+                assertThat(e.getMessage())
+                    .isEqualTo("HTTP 401 Authentication Failed (authentication-error): Authentication attempt failed.");
             });
         assertThat(acceptHeaders).containsExactly(List.of(DUAL_ACCEPT));
+    }
+
+    @Test
+    void aFourOhOneToAPostIsResentWithTheSameBodyAfterTheReLogin() {
+        TsaNetApiSession session = session();
+        session.auth().login("sender@example.test", GOOD_PASSWORD);
+
+        session.caseNotes().createNote(RETRY_TOKEN, "retry summary", "retry description", "LOW", "partner");
+
+        assertThat(logins).hasValue(2);
+        assertThat(retriedNoteBodies).hasSize(2);
+        assertThat(retriedNoteBodies.get(0)).contains("retry summary").isEqualTo(retriedNoteBodies.get(1));
+        // A fixed length on both sends, not chunked.
+        String framing = "Content-Length=" + retriedNoteBodies.get(0).getBytes(StandardCharsets.UTF_8).length
+            + " Transfer-Encoding=null";
+        assertThat(retriedNoteFraming).containsExactly(framing, framing);
     }
 
     @Test

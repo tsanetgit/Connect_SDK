@@ -1,6 +1,7 @@
 package com.tsanet.api.connectapi.internal;
 
 import java.io.IOException;
+import java.net.http.HttpClient;
 import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRequest;
@@ -8,7 +9,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.client.BufferingClientHttpRequestFactory;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.http.client.ClientHttpResponse;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -18,6 +19,15 @@ import org.springframework.web.client.RestTemplate;
  * header that asks for problem details. The runtime builds two: an unauthenticated one for
  * login, and the session one that additionally carries the bearer supplier and the 401 retry.
  * Tests build theirs here too, so what they exercise is what production runs.
+ *
+ * <p><b>Transport.</b> The JDK's {@link HttpClient}, not {@code HttpURLConnection}: Spring 7
+ * streams every request body to {@code HttpURLConnection}, which drops the body of a 401 answer
+ * to a streamed request, so a bad login lost its problem details (tsanetgit/Connect_SDK#128).
+ * HTTP/1.1, no response compression and no timeouts, as before. Redirects are never followed;
+ * the old transport followed them for a {@code GET}. The proxy selector and SSL context are the
+ * JVM defaults, read once when the template is built. No {@code Authenticator} is set: with one,
+ * the JDK client turns a 401 without {@code WWW-Authenticate}, which is how the API answers,
+ * into an {@code IOException}, so the re-auth retry would never see the 401.
  */
 public final class ConnectApiRestTemplates {
 
@@ -30,12 +40,21 @@ public final class ConnectApiRestTemplates {
 
     public static RestTemplate create() {
         RestTemplate restTemplate = new RestTemplate(
-            new BufferingClientHttpRequestFactory(new SimpleClientHttpRequestFactory())
+            new BufferingClientHttpRequestFactory(jdkRequestFactory())
         );
         restTemplate.setErrorHandler(new ConnectApiResponseErrorHandler());
         restTemplate.getInterceptors().add(new ConnectApiConnectivityInterceptor());
         restTemplate.getInterceptors().add(ConnectApiRestTemplates::askForProblemDetails);
         return restTemplate;
+    }
+
+    private static JdkClientHttpRequestFactory jdkRequestFactory() {
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .build());
+        factory.enableCompression(false);
+        return factory;
     }
 
     /**
