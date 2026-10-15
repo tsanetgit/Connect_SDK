@@ -1,15 +1,10 @@
 package com.tsanet.api.facade;
 
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
+import com.tsanet.api.connectapi.dto.NoteTypeDto;
 import java.util.List;
 
 public interface CaseNotesFacade {
-    /**
-     * The note types a caller may create: every API note type except {@code SYSTEM}, which the
-     * platform writes. This is the one copy of that rule; a test keeps it equal to the spec's.
-     */
-    List<String> CREATABLE_NOTE_TYPES = List.of("USER_PARTNER", "USER_PUBLIC");
-
     List<CaseNoteDto> listNotesForRequest(String caseToken);
 
     List<CaseNoteDto> listNotesForAllRequests();
@@ -18,15 +13,23 @@ public interface CaseNotesFacade {
 
     List<CaseNoteDto> listStoredNotesForRequest(String caseToken);
 
-    /** Create a note with the server's default type, {@code USER_PARTNER}. */
+    /**
+     * The note types a caller may send on create, in the server's display order, from
+     * {@code GET /v1/note-types}. The server owns this list and can grow it without an API
+     * release, so read it rather than hard-coding codes.
+     */
+    List<NoteTypeDto> listNoteTypes();
+
+    /** Create a note with no type. The server stores none; there is no default type. */
     default CaseNoteDto createNote(String caseToken, String summary, String description, String priority) {
         return createNote(caseToken, summary, description, priority, null);
     }
 
     /**
-     * Create a note of the given type, one of {@link #CREATABLE_NOTE_TYPES}. A null type leaves
-     * it out, so the server's default ({@code USER_PARTNER}) applies. Any other value, including
-     * {@code SYSTEM}, is refused with {@link IllegalArgumentException} before any request.
+     * Create a note with the given type code, one {@link #listNoteTypes()} returns. The code is
+     * sent as given; the server matches it ignoring case and refuses any other with a 400, which
+     * reaches the caller as a {@link com.tsanet.api.ConnectApiException}. A null type creates a
+     * note with no type.
      */
     CaseNoteDto createNote(String caseToken, String summary, String description, String priority, String type);
 }

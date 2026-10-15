@@ -1,7 +1,6 @@
 package com.tsanet.facade.cli;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
@@ -21,23 +20,19 @@ class CollaborationRequestNoteAddExecutorTest {
     }
 
     @Test
-    void noTypeLeavesItToTheServer() {
+    void noTypeMeansANoteWithNoType() {
         assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--id", "1"})).isNull();
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", ""})).isNull();
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "  "})).isNull();
     }
 
     @Test
-    void eitherUserTypeIsAcceptedInAnyCase() {
-        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "user_public"}))
-            .isEqualTo("USER_PUBLIC");
-        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "USER_PARTNER"}))
-            .isEqualTo("USER_PARTNER");
-    }
-
-    @Test
-    void systemOrAnUnknownTypeIsRefused() {
-        assertThatThrownBy(() -> CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "SYSTEM"}))
-            .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "PUBLIC"}))
-            .isInstanceOf(IllegalArgumentException.class);
+    void aTypeIsPassedThroughAsGivenForTheServerToCheck() {
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "PuBlic"}))
+            .isEqualTo("PuBlic");
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "escalation"}))
+            .isEqualTo("escalation");
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "not-a-type"}))
+            .isEqualTo("not-a-type");
     }
 }

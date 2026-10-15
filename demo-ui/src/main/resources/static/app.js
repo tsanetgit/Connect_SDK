@@ -474,9 +474,9 @@ function renderCase(detail) {
     renderCaseActions(dir);
     renderTimeline('case-notes', detail.notes.map(n => ({
         title: n.summary,
-        // type and direction exactly as the API sent them; a note without them shows neither.
+        // type label and direction exactly as the API sent them; a note without them shows neither.
         meta: `${n.creatorName ?? n.creatorUsername ?? '?'} (${n.companyName ?? '?'}) · ${n.priority ?? ''}`
-            + [n.type, n.direction].filter(Boolean).map(v => ` · ${v}`).join('')
+            + [n.typeDisplayName ?? n.type, n.direction].filter(Boolean).map(v => ` · ${v}`).join('')
             + ` · ${n.createdAt ?? ''}`,
         body: n.description,
     })), 'No notes yet.');
@@ -612,25 +612,42 @@ const ACTION_FORMS = {
             ['summary', 'Summary', 'text'],
             ['description', 'Description', 'textarea'],
             ['priority', 'Priority', 'select', ['LOW', 'MEDIUM', 'HIGH']],
-            // CaseNotesFacade.CREATABLE_NOTE_TYPES; demo-ui's NoteTypeSelectTest fails when the two differ.
-            ['type', 'Type', 'select', ['USER_PARTNER', 'USER_PUBLIC']],
+            ['type', 'Type', 'select', noteTypeOptions],
         ],
     },
 };
 
-function showActionForm(action) {
+// The Add note form's Type options: "No type" first, so it is the default, then the server's
+// list in its order. A blank type creates a note with no type; there is no default type.
+async function noteTypeOptions() {
+    const none = {value: '', label: 'No type'};
+    try {
+        const types = await fetchJson('/api/note-types');
+        return [none, ...types.map(t => ({value: t.code, label: t.displayName}))];
+    } catch (err) {
+        console.warn('Note types unavailable; offering only "No type".', err);
+        return [none];
+    }
+}
+
+// A select's options are a list, or an async function returning one; each option is a string
+// (value and label alike) or {value, label}.
+async function showActionForm(action) {
     const spec = ACTION_FORMS[action];
     const host = document.getElementById('action-form-host');
-    const fieldsHtml = spec.fields.map(([name, label, type, options]) => {
+    const fieldsHtml = (await Promise.all(spec.fields.map(async ([name, label, type, options]) => {
         if (type === 'textarea') {
             return `<label>${esc(label)}<textarea name="${name}" rows="3" required></textarea></label>`;
         }
         if (type === 'select') {
-            const opts = options.map(o => `<option>${esc(o)}</option>`).join('');
+            const list = typeof options === 'function' ? await options() : options;
+            const opts = list.map(o => typeof o === 'string' ? {value: o, label: o} : o)
+                // esc() leaves quotes alone, and a value sits inside a quoted attribute.
+                .map(o => `<option value="${esc(o.value).replaceAll('"', '&quot;')}">${esc(o.label)}</option>`).join('');
             return `<label>${esc(label)}<select name="${name}">${opts}</select></label>`;
         }
         return `<label>${esc(label)}<input type="${type}" name="${name}" required></label>`;
-    }).join('');
+    }))).join('');
     host.innerHTML = `
         <form class="action-form" id="current-action-form">
             <h3>${esc(spec.title)}</h3>

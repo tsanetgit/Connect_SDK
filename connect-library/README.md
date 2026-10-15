@@ -236,13 +236,13 @@ wrong password reads `HTTP 401 Authentication Failed`; an invalid lifecycle tran
 | `listNotesForAllRequests()` | Fetches notes for every known collaboration request. |
 | `listStoredNotes()` | Returns all notes from SQLite. |
 | `listStoredNotesForRequest(caseToken)` | Returns cached notes for one request. |
-| `createNote(caseToken, summary, description, priority)` | Creates a note on the API with the server's default type, `USER_PARTNER`. Validates non-empty summary/text and OpenAPI size limits (summary ≤ 500, description ≤ 5000). Refreshes the full notes list in SQLite for that request. |
-| `createNote(caseToken, summary, description, priority, type)` | The same, with a type: `USER_PARTNER` or `USER_PUBLIC`, the list in `CaseNotesFacade.CREATABLE_NOTE_TYPES`. A null type is left out, so the server's default applies. `SYSTEM` is reserved for platform notes, and it and any other value are refused with `IllegalArgumentException` before any request. |
+| `listNoteTypes()` | The note types a caller may send, as `NoteTypeDto(code, displayName)` in the server's display order, from `GET /v1/note-types`. The server owns the list and can add a type without an API release, so read it rather than hard-coding codes. |
+| `createNote(caseToken, summary, description, priority)` | Creates a note with no type; there is no default type. Validates non-empty summary/text and OpenAPI size limits (summary ≤ 500, description ≤ 5000). Refreshes the full notes list in SQLite for that request. |
+| `createNote(caseToken, summary, description, priority, type)` | The same, with a type code that `listNoteTypes()` returns. The library sends the code as given and doesn't check it: the server matches it ignoring case and refuses any other code, including `system`, with a 400 that reaches the caller as a `ConnectApiException`. A null type creates a note with no type. |
 
-Each `CaseNoteDto` carries the note's `type` (`USER_PUBLIC`, `USER_PARTNER` or `SYSTEM`, exactly as the API sent it), the authoring company's `companyId`, and its `direction`: `OUTBOUND` when the company of the account that fetched it wrote the note, `INBOUND` when another company did. A platform-generated note comes without `companyId` and `direction`. Each is null when the API didn't send it, and the SQLite cache stores all three. The 14-argument constructor from before these fields is deprecated.
+Each `CaseNoteDto` carries the note's `type`, the lowercase code the API sent (for example `partner`, `public` or `system`), its `typeDisplayName` label, the authoring company's `companyId`, and its `direction`: `OUTBOUND` when the company of the account that fetched it wrote the note, `INBOUND` when another company did. A platform-generated note comes without `companyId` and `direction`. Each is null when the API didn't send it, and the SQLite cache stores all four. Match on `type`, never on the label, and don't treat a null or unrecognized type as public. The 14-argument constructor from before these fields is deprecated.
 
-<!-- PROVISIONAL(tsanetgit/Connect-API-Code#132): the server types platform-generated notes, and notes written before note types existed, as USER_PARTNER. If #132 makes platform notes SYSTEM, say so here instead. -->
-Platform-generated notes come back as `USER_PARTNER`, not `SYSTEM`, and so do notes written before note types existed. For example, an SLA alert the platform wrote after note types were live read `USER_PARTNER`, with no `companyId` or `direction`. The SDK shows the type the API sends and doesn't infer one.
+A note whose sender set no type reads back with `type` and `typeDisplayName` null, and so does every note written before note types existed. Notes the platform writes itself come back typed: the API types its own case-event notes `partner`, and the web app's automated notes read `system`. The SDK shows the type the API sends and doesn't infer one.
 
 ### Case responses — `session.caseResponses()`
 
@@ -455,7 +455,8 @@ The console application (`TSANet-integration-app`) exposes CLI commands that cal
 | `respond-information` / `requests info-response` | `caseResponses().submitInformationResponse()` |
 | `notes` | `caseNotes().listNotesForAllRequests()` |
 | `notes list` / `notes-list` | `caseNotes().listNotesForRequest()` (chronological timeline for one request) |
-| `notes add` / `add-note` | `caseNotes().createNote()` (prompts for text when omitted; optional `--type USER_PUBLIC` or `USER_PARTNER`) |
+| `notes add` / `add-note` | `caseNotes().createNote()` (prompts for text when omitted; optional `--type` with a code from `notes types`) |
+| `notes types` | `caseNotes().listNoteTypes()` (the codes `--type` takes, with their labels) |
 | `responses` | `caseResponses().listResponsesForAllRequests()` |
 | `sync` | `collaborationRequests().syncAllDetails()` |
 | `me` | `users().getCurrentUser()` |
@@ -706,23 +707,35 @@ notes add --id 123
 notes add --token abc-case-token-xyz --text "Investigating on our side."
 add-note --id 123 --summary "Update" --text "Customer confirmed the issue."
 notes add --id 123 --text "Follow-up" --priority HIGH
-notes add --id 123 --text "Follow-up" --type USER_PUBLIC
+notes types
+notes add --id 123 --text "Follow-up" --type public
 ```
 
-`--type` takes `USER_PUBLIC` or `USER_PARTNER`, in any case. Without it, the server's default (`USER_PARTNER`) applies.
+`--type` takes a code that `notes types` lists, and the CLI passes it to the server as typed; the server matches it ignoring case. Without `--type`, the note has no type.
 
-After a successful post, the command prints a confirmation and the refreshed notes timeline. The timeline shows each note's type and direction after its author, whichever of the two the API sent:
+After a successful post, the command prints a confirmation and the refreshed notes timeline. The timeline shows each note's type code and direction after its author, whichever of the two the API sent, so a note with no type shows only its direction:
 
 ```text
-Note created: id=42 summary=Investigating on our side. priority=MEDIUM type=USER_PARTNER
+Note created: id=43 summary=Follow-up priority=MEDIUM type=public
 Notes timeline for request id=123 token=... status=ACCEPTED
- 1. [2026-01-01T12:00:00Z] engineer@example.com (USER_PARTNER, OUTBOUND) | Investigating on our side.
+ 1. [2026-01-01T12:00:00Z] engineer@example.com (OUTBOUND) | Investigating on our side.
+ 2. [2026-01-01T12:05:00Z] engineer@example.com (public, OUTBOUND) | Follow-up
+```
+
+`notes types` lists the codes in the server's order:
+
+```text
+Note types (4):
+ - partner (Partner)
+ - public (Public)
+ - escalation (Escalation)
+ - status (Status)
 ```
 
 Validation examples:
 
 ```text
-Failed: Type must be one of: USER_PARTNER, USER_PUBLIC
+Failed: HTTP 400 (legacy error): Validation failed [type: Invalid note type 'bogus'. Allowed values: partner, public, escalation, status]
 Note text must not be empty.
 Note text exceeds maximum length of 5000 characters.
 Cannot add notes to a closed request (status=CLOSED).

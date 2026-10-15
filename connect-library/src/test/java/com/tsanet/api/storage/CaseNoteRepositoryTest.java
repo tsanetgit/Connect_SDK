@@ -16,32 +16,34 @@ class CaseNoteRepositoryTest {
         return new JdbcTemplate(dataSource);
     }
 
-    private static CaseNoteDto note(long id, String token, String type, Long companyId, String direction) {
+    private static CaseNoteDto note(long id, String token, String type, String typeDisplayName, Long companyId,
+                                    String direction) {
         return new CaseNoteDto(id, 1L, "tok1", "Acme", "api@acme.com", "api@acme.com", "API", "Summary",
-            "Body", "LOW", "ACTIVE", token, null, null, type, companyId, direction);
+            "Body", "LOW", "ACTIVE", token, null, null, type, companyId, direction, typeDisplayName);
     }
 
     @Test
-    void typeCompanyAndDirectionRoundTripAndAbsentOnesStayNull() {
+    void typeLabelCompanyAndDirectionRoundTripAndAbsentOnesStayNull() {
         JdbcTemplate jdbcTemplate = database("case-note-round-trip");
         DatabaseInitializer.createSchema(jdbcTemplate);
         CaseNoteRepository repository = new CaseNoteRepository(jdbcTemplate);
 
         repository.saveAll(List.of(
-            note(1L, "n1", "USER_PUBLIC", 101L, "OUTBOUND"),
-            note(2L, "n2", null, null, null)));
+            note(1L, "n1", "public", "Public", 101L, "OUTBOUND"),
+            note(2L, "n2", null, null, null, null)));
 
         assertThat(repository.findByCaseToken("tok1"))
-            .extracting(CaseNoteDto::id, CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
+            .extracting(CaseNoteDto::id, CaseNoteDto::type, CaseNoteDto::typeDisplayName, CaseNoteDto::companyId,
+                CaseNoteDto::direction)
             .containsExactly(
-                org.assertj.core.groups.Tuple.tuple(1L, "USER_PUBLIC", 101L, "OUTBOUND"),
-                org.assertj.core.groups.Tuple.tuple(2L, null, null, null));
+                org.assertj.core.groups.Tuple.tuple(1L, "public", "Public", 101L, "OUTBOUND"),
+                org.assertj.core.groups.Tuple.tuple(2L, null, null, null, null));
     }
 
     /**
      * The DDL below is a FROZEN copy of case_note as connect-library 2.0.0 created it (from the
      * v2.0.0 tag), on purpose: deriving it from current constants would make this test pass by
-     * construction. It proves an upgrade's two claims: createSchema adds the three columns to an
+     * construction. It proves an upgrade's two claims: createSchema adds the four columns to an
      * existing cache (CREATE TABLE IF NOT EXISTS alone is a no-op there), and a refetched note
      * gets its values while one that isn't refetched keeps nulls.
      */
@@ -77,12 +79,13 @@ class CaseNoteRepositoryTest {
         DatabaseInitializer.createSchema(jdbcTemplate);
         DatabaseInitializer.createSchema(jdbcTemplate);
         CaseNoteRepository upgraded = new CaseNoteRepository(jdbcTemplate);
-        upgraded.saveAll(List.of(note(1L, "n1", "USER_PARTNER", 202L, "INBOUND")));
+        upgraded.saveAll(List.of(note(1L, "n1", "partner", "Partner", 202L, "INBOUND")));
 
         assertThat(upgraded.findAll())
-            .extracting(CaseNoteDto::id, CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
+            .extracting(CaseNoteDto::id, CaseNoteDto::type, CaseNoteDto::typeDisplayName, CaseNoteDto::companyId,
+                CaseNoteDto::direction)
             .containsExactly(
-                org.assertj.core.groups.Tuple.tuple(1L, "USER_PARTNER", 202L, "INBOUND"),
-                org.assertj.core.groups.Tuple.tuple(2L, null, null, null));
+                org.assertj.core.groups.Tuple.tuple(1L, "partner", "Partner", 202L, "INBOUND"),
+                org.assertj.core.groups.Tuple.tuple(2L, null, null, null, null));
     }
 }

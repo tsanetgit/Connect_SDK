@@ -4,7 +4,6 @@ import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.CaseNoteValidation;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
-import com.tsanet.api.facade.CaseNotesFacade;
 import java.util.List;
 import java.util.Locale;
 import java.util.Scanner;
@@ -103,13 +102,13 @@ public class CollaborationRequestNoteAddExecutor {
         return priority;
     }
 
-    /** The optional {@code --type}, one of the library's creatable types, or null for the server's default. */
+    /**
+     * The optional {@code --type}, a code that {@code notes types} lists, passed through as given:
+     * the server matches it ignoring case and refuses any other. Absent or blank creates a note
+     * with no type, as the demo-ui's blank "No type" does.
+     */
     static String resolveType(String[] args) {
-        String type = CliArgs.noteType(args).map(value -> value.toUpperCase(Locale.ROOT)).orElse(null);
-        if (type != null && !CaseNotesFacade.CREATABLE_NOTE_TYPES.contains(type)) {
-            throw new IllegalArgumentException("Type must be one of: " + String.join(", ", CaseNotesFacade.CREATABLE_NOTE_TYPES));
-        }
-        return type;
+        return CliArgs.noteType(args).filter(value -> !value.isBlank()).orElse(null);
     }
 
     static String deriveSummary(String description) {

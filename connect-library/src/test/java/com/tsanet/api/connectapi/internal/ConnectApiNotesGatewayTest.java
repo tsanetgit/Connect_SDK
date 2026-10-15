@@ -6,16 +6,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
+import com.tsanet.api.connectapi.dto.NoteTypeDto;
 import com.tsanet.api.generated.api.CaseNotesApi;
 import com.tsanet.api.generated.model.CaseNoteDTO;
 import com.tsanet.api.generated.model.CaseNoteTemplateDTO;
 import com.tsanet.api.generated.model.CollaborationRequestDirection;
 import com.tsanet.api.generated.model.NotePriority;
-import com.tsanet.api.generated.model.NoteType;
+import com.tsanet.api.generated.model.NoteTypeSelectionDTO;
 import com.tsanet.api.storage.CaseNoteRepository;
 import com.tsanet.api.storage.CaseNoteStorageService;
 import java.util.Collections;
@@ -101,7 +101,7 @@ class ConnectApiNotesGatewayTest {
             .description("Details")
             .priority(NotePriority.LOW)
             .token("note-token-8")
-            .type(NoteType.USER_PUBLIC)
+            .type(new NoteTypeSelectionDTO().code("public").displayName("Public"))
             .companyId(101L)
             .direction(CollaborationRequestDirection.OUTBOUND);
         when(caseNotesApi.getNotes("tok-3", null, null, false)).thenReturn(List.of(apiNote));
@@ -109,13 +109,14 @@ class ConnectApiNotesGatewayTest {
         List<CaseNoteDto> notes = gateway.getNotes("tok-3");
 
         assertThat(notes).singleElement().satisfies(note -> {
-            assertThat(note.type()).isEqualTo("USER_PUBLIC");
+            assertThat(note.type()).isEqualTo("public");
+            assertThat(note.typeDisplayName()).isEqualTo("Public");
             assertThat(note.companyId()).isEqualTo(101L);
             assertThat(note.direction()).isEqualTo("OUTBOUND");
         });
         assertThat(storageService.findByCaseToken("tok-3")).singleElement()
-            .extracting(CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
-            .containsExactly("USER_PUBLIC", 101L, "OUTBOUND");
+            .extracting(CaseNoteDto::type, CaseNoteDto::typeDisplayName, CaseNoteDto::companyId, CaseNoteDto::direction)
+            .containsExactly("public", "Public", 101L, "OUTBOUND");
     }
 
     @Test
@@ -130,27 +131,39 @@ class ConnectApiNotesGatewayTest {
         when(caseNotesApi.getNotes("tok-4", null, null, false)).thenReturn(List.of(platformNote));
 
         assertThat(gateway.getNotes("tok-4")).singleElement()
-            .extracting(CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
-            .containsExactly(null, null, null);
+            .extracting(CaseNoteDto::type, CaseNoteDto::typeDisplayName, CaseNoteDto::companyId, CaseNoteDto::direction)
+            .containsExactly(null, null, null, null);
         assertThat(storageService.findByCaseToken("tok-4")).singleElement()
-            .extracting(CaseNoteDto::type, CaseNoteDto::companyId, CaseNoteDto::direction)
-            .containsExactly(null, null, null);
+            .extracting(CaseNoteDto::type, CaseNoteDto::typeDisplayName, CaseNoteDto::companyId, CaseNoteDto::direction)
+            .containsExactly(null, null, null, null);
     }
 
     @Test
-    void aTypeGivenOnCreateIsSent() {
+    void aTypeGivenOnCreateIsSentAsGiven() {
         when(caseNotesApi.createNote(eq("tok-5"), any(CaseNoteTemplateDTO.class)))
             .thenReturn(new CaseNoteDTO().id(10L).token("note-token-10"));
 
-        gateway.createNote("tok-5", "Public note", "Body", "LOW", "USER_PUBLIC");
+        gateway.createNote("tok-5", "Public note", "Body", "LOW", "Public");
 
         ArgumentCaptor<CaseNoteTemplateDTO> captor = ArgumentCaptor.forClass(CaseNoteTemplateDTO.class);
         verify(caseNotesApi).createNote(eq("tok-5"), captor.capture());
-        assertThat(captor.getValue().getType()).isEqualTo(NoteType.USER_PUBLIC);
+        assertThat(captor.getValue().getType().getCode()).isEqualTo("Public");
     }
 
     @Test
-    void noTypeOnCreateLeavesItOutForTheServersDefault() {
+    void aCodeTheLibraryHasNeverHeardOfIsLeftToTheServer() {
+        when(caseNotesApi.createNote(eq("tok-7"), any(CaseNoteTemplateDTO.class)))
+            .thenReturn(new CaseNoteDTO().id(12L).token("note-token-12"));
+
+        gateway.createNote("tok-7", "New type", "Body", "LOW", "escalation");
+
+        ArgumentCaptor<CaseNoteTemplateDTO> captor = ArgumentCaptor.forClass(CaseNoteTemplateDTO.class);
+        verify(caseNotesApi).createNote(eq("tok-7"), captor.capture());
+        assertThat(captor.getValue().getType().getCode()).isEqualTo("escalation");
+    }
+
+    @Test
+    void noTypeOnCreateSetsNoTypeReference() {
         when(caseNotesApi.createNote(eq("tok-6"), any(CaseNoteTemplateDTO.class)))
             .thenReturn(new CaseNoteDTO().id(11L).token("note-token-11"));
 
@@ -163,42 +176,27 @@ class ConnectApiNotesGatewayTest {
     }
 
     @Test
-    void aSystemNoteIsRefusedBeforeAnyRequest() {
-        assertThatThrownBy(() -> gateway.createNote("tok-7", "Spoofed", "Body", "LOW", "SYSTEM"))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("SYSTEM");
+    void listNoteTypesMapsEachCodeAndLabelInOrder() {
+        when(caseNotesApi.getNoteTypes()).thenReturn(List.of(
+            new NoteTypeSelectionDTO().code("partner").displayName("Partner"),
+            new NoteTypeSelectionDTO().code("public").displayName("Public")));
 
-        verifyNoInteractions(caseNotesApi);
+        assertThat(gateway.listNoteTypes())
+            .containsExactly(new NoteTypeDto("partner", "Partner"), new NoteTypeDto("public", "Public"));
     }
 
     @Test
-    void aTypeThatIsNotExactlyAUserTypeIsRefusedBeforeAnyRequest() {
-        assertThatThrownBy(() -> gateway.createNote("tok-8", "Spoofed", "Body", "LOW", "system"))
-            .isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> gateway.createNote("tok-8", "Typo", "Body", "LOW", "PUBLIC"))
-            .isInstanceOf(IllegalArgumentException.class);
+    void listNoteTypesIsEmptyWhenTheApiReturnsNull() {
+        when(caseNotesApi.getNoteTypes()).thenReturn(null);
 
-        verifyNoInteractions(caseNotesApi);
+        assertThat(gateway.listNoteTypes()).isEmpty();
     }
 
     @Test
-    void aBadTypeIsRefusedBeforeTheLoginCheck() {
+    void listNoteTypesNeedsALogin() {
         ConnectApiNotesGateway loggedOut = new ConnectApiNotesGateway(caseNotesApi, new ConnectApiSessionStore(), storageService);
 
-        assertThatThrownBy(() -> loggedOut.createNote("tok-9", "Typo", "Body", "LOW", "PUBLIC"))
-            .isInstanceOf(IllegalArgumentException.class);
-        verifyNoInteractions(caseNotesApi);
-    }
-
-    @Test
-    void theCreatableTypesAreEverySpecNoteTypeButSystem() {
-        assertThat(com.tsanet.api.facade.CaseNotesFacade.CREATABLE_NOTE_TYPES)
-            .as("CaseNotesFacade.CREATABLE_NOTE_TYPES must be the spec's NoteType values minus SYSTEM;"
-                + " when it changes, update demo-ui/src/main/resources/static/app.js's note type select too")
-            .containsExactlyInAnyOrderElementsOf(java.util.Arrays.stream(NoteType.values())
-                .filter(type -> type != NoteType.SYSTEM)
-                .map(NoteType::getValue)
-                .toList());
+        assertThatThrownBy(loggedOut::listNoteTypes).isInstanceOf(IllegalStateException.class);
     }
 
     @Test

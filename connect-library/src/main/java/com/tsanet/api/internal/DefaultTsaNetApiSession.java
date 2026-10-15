@@ -6,6 +6,7 @@ import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.dto.AttachmentConfigDto;
 import com.tsanet.api.connectapi.dto.AttachmentForwardResultDto;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
+import com.tsanet.api.connectapi.dto.NoteTypeDto;
 import com.tsanet.api.connectapi.dto.CaseResponseDto;
 import com.tsanet.api.connectapi.CollaborationRequestFormValidation;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormDto;
@@ -527,6 +528,11 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     @Override
     public List<CaseNoteDto> listStoredNotesForRequest(String caseToken) {
         return caseNoteStorageService.findByCaseToken(caseToken);
+    }
+
+    @Override
+    public List<NoteTypeDto> listNoteTypes() {
+        return notesGateway.listNoteTypes();
     }
 
     @Override
