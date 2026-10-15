@@ -19,7 +19,8 @@ import org.springframework.http.client.ClientHttpResponse;
  * body that fails mid-read would fail after the chain has returned, in the extractor, and
  * surface with the URL in the same way. On an unbuffered template this read would consume the
  * body instead, which is why the class is package-private: only
- * {@link ConnectApiRestTemplates#create()}, which installs the buffering factory, can add it.
+ * {@link ConnectApiRestTemplates#create(java.net.http.HttpClient)}, whose
+ * {@link ConnectApiRestTemplates#transport transport} is the buffering factory, can add it.
  */
 final class ConnectApiConnectivityInterceptor implements ClientHttpRequestInterceptor {
 

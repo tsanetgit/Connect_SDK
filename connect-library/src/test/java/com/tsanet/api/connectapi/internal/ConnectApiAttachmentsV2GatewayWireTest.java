@@ -290,22 +290,25 @@ class ConnectApiAttachmentsV2GatewayWireTest {
     }
 
     @Test
-    void aGrantCallInterruptedInFlightIsClientInterruptedNotConnectivity() {
+    void aGrantCallOnAnInterruptedThreadIsClientInterruptedNotConnectivity() throws Exception {
         // The library's client reports an interrupted call as ConnectApiException OTHER with the
         // InterruptedException as cause; the V2 surface reports it with its own interrupt code.
-        ApiClient dead = new ApiClient(ConnectApiRestTemplates.create());
-        dead.setBasePath("http://127.0.0.1:1");
-        dead.setBearerToken(() -> "bearer-123");
-        ConnectApiAttachmentsV2Gateway deadGateway = new ConnectApiAttachmentsV2Gateway(new AttachmentGrantsApi(dead),
-            GatewayTestSupport.authenticatedSessionStore());
-
-        Thread.currentThread().interrupt();
+        // The server accepts the connection and never answers, so the wait is what gets interrupted.
         Throwable thrown;
         boolean stillInterrupted;
-        try {
-            thrown = org.assertj.core.api.Assertions.catchThrowable(() -> deadGateway.createGrant(TOKEN, "diag.log", 12));
-        } finally {
-            stillInterrupted = Thread.interrupted();
+        try (java.net.ServerSocket silent = new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())) {
+            ApiClient apiClient = new ApiClient(ConnectApiRestTemplates.create());
+            apiClient.setBasePath("http://127.0.0.1:" + silent.getLocalPort());
+            apiClient.setBearerToken(() -> "bearer-123");
+            ConnectApiAttachmentsV2Gateway silentGateway = new ConnectApiAttachmentsV2Gateway(
+                new AttachmentGrantsApi(apiClient), GatewayTestSupport.authenticatedSessionStore());
+
+            Thread.currentThread().interrupt();
+            try {
+                thrown = org.assertj.core.api.Assertions.catchThrowable(() -> silentGateway.createGrant(TOKEN, "diag.log", 12));
+            } finally {
+                stillInterrupted = Thread.interrupted();
+            }
         }
 
         assertThat(stillInterrupted).isTrue();

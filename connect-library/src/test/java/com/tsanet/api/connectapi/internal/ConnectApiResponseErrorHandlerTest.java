@@ -148,21 +148,25 @@ class ConnectApiResponseErrorHandlerTest {
     }
 
     @Test
-    void anInterruptedCallIsOtherNotConnectivityAndTheFlagStaysSet() {
+    void aCallOnAnInterruptedThreadIsOtherNotConnectivityAndTheFlagStaysSet() throws Exception {
         // Spring's JDK request turns the interrupt into an IOException caused by the
-        // InterruptedException; the caller cancelled, so it must not read as "unreachable".
-        ApiClient dead = new ApiClient(ConnectApiRestTemplates.create());
-        dead.setBasePath("http://127.0.0.1:1");
-        dead.setBearerToken(() -> "bearer-1");
-
-        Thread.currentThread().interrupt();
+        // InterruptedException; the caller cancelled, so it must not read as "unreachable". The
+        // server accepts the connection and never answers, so the wait is what gets interrupted,
+        // not a connect failure that could finish first.
         Throwable thrown;
         boolean stillInterrupted;
-        try {
-            thrown = org.assertj.core.api.Assertions.catchThrowable(
-                () -> new CaseResponsesApi(dead).closeCollaborationRequest(TOKEN));
-        } finally {
-            stillInterrupted = Thread.interrupted();
+        try (java.net.ServerSocket silent = new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())) {
+            ApiClient apiClient = new ApiClient(ConnectApiRestTemplates.create());
+            apiClient.setBasePath("http://127.0.0.1:" + silent.getLocalPort());
+            apiClient.setBearerToken(() -> "bearer-1");
+
+            Thread.currentThread().interrupt();
+            try {
+                thrown = org.assertj.core.api.Assertions.catchThrowable(
+                    () -> new CaseResponsesApi(apiClient).closeCollaborationRequest(TOKEN));
+            } finally {
+                stillInterrupted = Thread.interrupted();
+            }
         }
 
         assertThat(stillInterrupted).isTrue();
