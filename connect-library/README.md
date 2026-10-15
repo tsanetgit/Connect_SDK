@@ -193,22 +193,30 @@ Legacy top-level `username` / `password` on an account entry still map to `conne
 
 Every failure the API answers, and every transport failure, reaches the caller as
 `com.tsanet.api.ConnectApiException` (unchecked). The library sends
-`Accept: application/json, application/problem+json` on every call, so the API answers with
-RFC 7807 problem details and the documented status codes instead of its legacy
-`500 {"message"}` mode; a legacy body is still classified by its content if one arrives.
+`Accept: application/json, application/problem+json` on every Connect API call, which opts a
+`/v1/` call into the API's RFC 7807 problem details: a failure answers with a problem body and the
+documented `4xx` status, classified `PROBLEM`. Without that header a `/v1/` endpoint answers in
+the API's legacy mode, a `{"message"}` body often with a `500` where a `4xx` belongs
+(tsanetgit/Connect-API-Code#122); a legacy body is still classified, as `LEGACY`, if one arrives.
+Classification goes by the body, not the status. The `/v2/` endpoints always answer with problem
+details, but the only ones the library calls are the V2 attachment and receiver storage calls,
+which report failures as `AttachmentV2Exception` instead.
 
 | Member | Meaning |
 |--------|---------|
 | `kind()` | `PROBLEM` (an RFC 7807 body), `LEGACY` (the `{"message"}` body), `CONNECTIVITY` (the API could not be reached, or its answer was lost), `OTHER` (a non-2xx with no recognizable body). |
 | `status()` | The status the API asserted: a problem body's own `status` when it carries one, otherwise the wire status; `0` for `CONNECTIVITY`. |
-| `type()`, `title()`, `detail()`, `instance()` | The problem-details fields, or null where the answer had none. For `CONNECTIVITY`, `detail()` is the failure's class name only. |
+| `type()`, `title()`, `detail()`, `instance()` | The problem-details fields, or null where the answer had none. For `LEGACY`, only `detail()` is set: the body's `message`, with any `validationErrors` folded in as `[field: message]`. For `CONNECTIVITY`, `detail()` is the failure's class name only. |
 | `isProblem(typeSuffix)` | `true` when `type()` ends with the given suffix, e.g. `isProblem("case-update-error")`. |
-| `getMessage()` | `HTTP <status> <title> (<type suffix>): <detail>`, built from the fields above. |
+| `getMessage()` | `HTTP <status> <title> (<type suffix>): <detail>` for `PROBLEM`, `HTTP <status> (legacy error): <detail>` for `LEGACY`, built from the fields above. |
 
-The message is value-free by construction: never the request URL, a header, or a token. A
-wrong password reads `HTTP 401 Authentication Failed`; an invalid lifecycle transition reads
-`HTTP 422 Unprocessable Entity (case-update-error): OPEN cases cannot be closed.`. Handle by
-`kind()` and `isProblem(...)`, not by parsing the message.
+The message is value-free by construction: never the request URL, a header, or a token. A note
+type the server doesn't offer reads
+`HTTP 400 Invalid Note Type (invalid-note-type): Invalid note type 'bogus'. Allowed values: partner, public, escalation, status`
+(Development, 2026-10-15). A wrong password reads
+`HTTP 401 Authentication Failed (authentication-error)`, followed by the API's detail. A legacy
+answer has no `type`, so `isProblem(...)` is `false` for it. Handle by `kind()`, `status()` and
+`isProblem(...)`, not by parsing the message.
 
 ### Collaboration requests — `session.collaborationRequests()`
 
@@ -735,7 +743,7 @@ Note types (4):
 Validation examples:
 
 ```text
-Failed: HTTP 400 (legacy error): Validation failed [type: Invalid note type 'bogus'. Allowed values: partner, public, escalation, status]
+Failed: HTTP 400 Invalid Note Type (invalid-note-type): Invalid note type 'bogus'. Allowed values: partner, public, escalation, status
 Note text must not be empty.
 Note text exceeds maximum length of 5000 characters.
 Cannot add notes to a closed request (status=CLOSED).
