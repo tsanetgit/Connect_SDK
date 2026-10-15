@@ -124,7 +124,8 @@ class ConnectApiNotesGatewayWireTest {
     @Test
     void aCodeTheServerDoesNotOfferReachesTheCallerAsItsProblem() {
         // The problem+json body Development returned on 2026-10-15 for {"code": "bogus"} when asked with
-        // Accept: application/problem+json; the next test is the legacy body it returns otherwise.
+        // Accept: application/problem+json, the shape this library receives now that it sends the dual
+        // Accept (tsanetgit/Connect_SDK#127); the next test is the legacy body it returns otherwise.
         server.expect(requestTo(NOTES)).andExpect(method(HttpMethod.POST))
             .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .body("{\"type\":\"https://api.tsanet.org/errors/invalid-note-type\",\"title\":\"Invalid Note Type\","
@@ -146,7 +147,7 @@ class ConnectApiNotesGatewayWireTest {
     @Test
     void theLegacyRefusalOfACodeReachesTheCallerWithItsReason() {
         // The legacy body Development returned on 2026-10-15 for {"code": "bogus"}, the shape a caller
-        // that doesn't ask for problem+json (this library) receives.
+        // that doesn't ask for problem+json receives. The library asks, but still classifies this body.
         server.expect(requestTo(NOTES)).andExpect(method(HttpMethod.POST))
             .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
                 .body("{\"message\":\"Validation failed\",\"validationErrors\":[{\"field\":\"type\","

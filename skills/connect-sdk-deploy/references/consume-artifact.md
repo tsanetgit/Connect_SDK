@@ -101,9 +101,9 @@ Every login ends with a `/v1/me` call; the answer is kept as `auth().currentUser
 transport failures, arrive as the unchecked `ConnectApiException`: `kind()` is `PROBLEM`,
 `LEGACY`, `CONNECTIVITY` or `OTHER`, with the API's own `status()`, `title()`, `detail()`
 and `isProblem("case-update-error")`-style checks. Its message never carries the URL, a
-header or a token. Handle by kind and status, not by parsing the message: the library's
-`/v1/` calls get the API's legacy bodies, which have no type (see "Errors" in
-`connect-library/README.md`).
+header or a token. The library asks for problem details, so a failed `/v1/` call carries the
+documented status and a `type`. Handle by kind, status and `isProblem(...)`, not by parsing
+the message (see "Errors" in `connect-library/README.md`).
 
 Every remote read and successful write upserts into the SQLite cache;
 `listStored*` methods read the cache without touching the network. `logout()` clears
@@ -249,13 +249,14 @@ Watch the release notes on each release.
   - New, not breaking: the V2 direct-delivery attachment client (`attachmentsV2()`, built
     against a draft contract with no live endpoint yet) and the published
     `com.tsanet:attachment-receiver` at the same version (see Coordinates).
-- **3.0.0** is a major for four reasons; the runtime line (Spring Boot 4.1, Jackson 3,
+- **3.0.0** is a major for five reasons; the runtime line (Spring Boot 4.1, Jackson 3,
   JDK 21) is unchanged from 2.0.0. The V2 attachment client (`attachmentsV2()`) is rebuilt
   on the grant model in the Connect OpenAPI spec and its public types change incompatibly;
   `TsaNetApiSession` gains `attachmentStorage()`; `ApplicationUserAccount` and
-  `TsaNetApiConfiguration` gain a record component; and case notes take their types from the
-  server, so `CaseNotesFacade` gains methods and `CaseNoteDto` gains components. V1
-  attachments and the other facades are unchanged.
+  `TsaNetApiConfiguration` gain a record component; case notes take their types from the
+  server, so `CaseNotesFacade` gains methods and `CaseNoteDto` gains components; and `/v1/`
+  failures arrive as problem details instead of legacy bodies. V1 attachments and the other
+  facades are unchanged.
   - Generation: the V2 APIs and their DTOs are generated from the spec, so the build needs a
     Connect-API-Code spec branch that has the Attachment Grants and Attachment Storage
     Config operations.
@@ -331,8 +332,9 @@ Watch the release notes on each release.
     as a default method that passes a null type, and a null type creates a note with no type:
     neither the library nor the server picks one.
   - A code the server doesn't offer is refused with a `400`, which reaches the caller as a
-    `ConnectApiException` with `status()` 400. From this library it arrives as a `LEGACY` body
-    whose `detail()` names the allowed codes (see "Errors" in `connect-library/README.md`).
+    `ConnectApiException` with `status()` 400. It arrives as a `PROBLEM` body, type
+    `invalid-note-type`, whose `detail()` names the allowed codes (see "Errors" in
+    `connect-library/README.md`).
   - `CaseNotesFacade` gains `listNoteTypes()` and the five-argument `createNote`, both
     abstract. Callers are unaffected; an implementer or decorator of `CaseNotesFacade` must
     add them.
@@ -343,3 +345,19 @@ Watch the release notes on each release.
     leaves the four null. A 2.0.0 record pattern over `CaseNoteDto` has four fewer
     components, so it stops compiling. The SQLite cache adds the four `case_note` columns
     at startup; notes cached by 2.0.0 read them as null until they are fetched again.
+  - `/v1/` failures are now `PROBLEM`. The library sends
+    `Accept: application/json, application/problem+json` (tsanetgit/Connect_SDK#127); 2.0.0
+    sent `application/json` alone, so the API answered every `/v1/` failure in its legacy
+    mode. A failed `/v1/` call now carries the documented `4xx` status where 2.0.0 often saw
+    a `500` (tsanetgit/Connect-API-Code#122), with `type()` and `title()` set, and
+    `getMessage()` reads `HTTP <status> <title> (<type suffix>): <detail>` instead of
+    `HTTP <status> (legacy error): <detail>`. Code that branches on `kind() == LEGACY`, on
+    `status()`, or on the message text sees different values: sweep for it. A wrong password
+    is a `PROBLEM` too: `HTTP 401 Authentication Failed (authentication-error)`.
+  - Connect API calls go over the JDK's `java.net.http.HttpClient` instead of
+    `HttpURLConnection`, which dropped the body of a 401 answer to a `POST`
+    (tsanetgit/Connect_SDK#128). The JVM's default proxy selector and SSL context still
+    apply, so `https.proxyHost` and `javax.net.ssl.*` settings carry over. Settings only
+    `HttpURLConnection` reads do not: a default `Authenticator` (for an authenticating
+    proxy), and `HttpsURLConnection`'s default socket factory and hostname verifier. A `GET`
+    that is redirected is no longer followed.

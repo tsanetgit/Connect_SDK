@@ -8,14 +8,15 @@ package com.tsanet.api;
  * <p>{@link #kind()} says what the API answered with:
  * <ul>
  *   <li>{@link Kind#PROBLEM}: an RFC 7807 body ({@code type}, {@code title}, {@code status},
- *       {@code detail}, {@code instance}). A {@code /v1/} endpoint returns one only to a caller
- *       whose {@code Accept} asks for {@code application/problem+json}, and the library sends
- *       {@code Accept: application/json}, so this library's {@code /v1/} calls get the legacy
- *       body instead.</li>
- *   <li>{@link Kind#LEGACY}: the API's default {@code {"message": ...}} body, what a failed
- *       {@code /v1/} call from this library gets, usually with a 500 where a 4xx belongs
- *       (tsanetgit/Connect-API-Code#122; kept for backward compatibility). Classified by the
- *       body, not the status, so it never reads as an unknown server error.</li>
+ *       {@code detail}, {@code instance}), which the API returns for the documented 4xx codes
+ *       because the library sends {@code Accept: application/json, application/problem+json}
+ *       (tsanetgit/Connect_SDK#127). A {@code /v1/} endpoint returns one only to a caller whose
+ *       {@code Accept} asks for it.</li>
+ *   <li>{@link Kind#LEGACY}: the API's default {@code {"message": ...}} body, which a
+ *       {@code /v1/} endpoint returns to a caller that doesn't ask for problem details, usually
+ *       with a 500 where a 4xx belongs (tsanetgit/Connect-API-Code#122; kept for backward
+ *       compatibility). Classified by the body, not the status, so it never reads as an
+ *       unknown server error.</li>
  *   <li>{@link Kind#CONNECTIVITY}: the API could not be reached, or its answer was lost;
  *       {@link #detail()} names the failure's class only.</li>
  *   <li>{@link Kind#OTHER}: a non-2xx with no recognizable body; {@link #detail()} carries at
