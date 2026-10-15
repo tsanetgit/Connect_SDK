@@ -24,8 +24,9 @@ class ConnectApiExceptionKindsDocsTest {
     private static final Path README = MODULE.resolve("README.md");
     private static final Path GUIDE =
         MODULE.resolve("../skills/connect-sdk-deploy/references/consume-artifact.md").normalize();
-    /** "`kind()` is `PROBLEM`, ... or `OTHER`, with the API's own", across line breaks. */
-    private static final Pattern GUIDE_KIND_LIST = Pattern.compile("`kind\\(\\)` is (.*?), with the API's own", Pattern.DOTALL);
+    /** "`kind()` is `PROBLEM`, ... or `OTHER`, with the API's own", across line breaks but not past a sentence. */
+    private static final Pattern GUIDE_KIND_LIST = Pattern.compile("`kind\\(\\)` is ([^.;]*?), with the API's own");
+    private static final String GUIDE_KIND_LIST_START = "`kind()` is ";
 
     @Test
     void theReadmeKindRowNamesEveryKind() throws IOException {
@@ -39,13 +40,17 @@ class ConnectApiExceptionKindsDocsTest {
 
     @Test
     void everyKindListInTheGuideNamesEveryKind() throws IOException {
-        Matcher lists = GUIDE_KIND_LIST.matcher(Files.readString(GUIDE));
+        String guide = Files.readString(GUIDE);
+        Matcher lists = GUIDE_KIND_LIST.matcher(guide);
         List<String> found = new ArrayList<>();
         while (lists.find()) {
             found.add(lists.group(1).replaceAll("\\s+", " "));
         }
 
-        assertThat(found).as("`kind()` lists in %s", GUIDE).isNotEmpty();
+        // Every list the guide opens must be one this pattern reads, so a list phrased differently
+        // fails here instead of going unchecked.
+        assertThat(found).as("`kind()` lists in %s", GUIDE).isNotEmpty()
+            .hasSize(guide.split(Pattern.quote(GUIDE_KIND_LIST_START), -1).length - 1);
         found.forEach(list -> assertNamesEveryKind(list, "guide list \"" + list + "\""));
     }
 

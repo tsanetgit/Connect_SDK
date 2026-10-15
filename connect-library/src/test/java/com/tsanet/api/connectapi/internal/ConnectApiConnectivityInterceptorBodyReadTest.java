@@ -76,11 +76,7 @@ class ConnectApiConnectivityInterceptorBodyReadTest {
             exchange.getResponseBody().write("{\"id\":".getBytes(StandardCharsets.UTF_8));
             exchange.getResponseBody().flush();
             // Closing short of the declared length drops the connection mid-body.
-            try {
-                exchange.close();
-            } catch (RuntimeException expected) {
-                // "insufficient bytes written to stream"
-            }
+            exchange.close();
         });
         cutting.start();
         try {
