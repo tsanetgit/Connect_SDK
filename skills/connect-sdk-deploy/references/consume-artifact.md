@@ -353,6 +353,11 @@ Watch the release notes on each release.
     `getMessage()` reads `HTTP <status> <title> (<type suffix>): <detail>` instead of
     `HTTP <status> (legacy error): <detail>`. Code that branches on `kind() == LEGACY`, on
     `status()`, or on the message text sees different values: sweep for it. A wrong password
-    is the exception for now: it reads `HTTP 401 from the Connect API`, kind `OTHER`, because
-    the body of a 401 to the login request is lost in transport (tsanetgit/Connect_SDK#128).
-    <!-- PROVISIONAL(tsanetgit/Connect_SDK#128): a bad login's 401 body is lost in transport, so it reads "HTTP 401 from the Connect API" with no title. Once the transport keeps the body, it reads "HTTP 401 Authentication Failed (authentication-error)" and this says so. -->
+    is a `PROBLEM` too: `HTTP 401 Authentication Failed (authentication-error)`.
+  - Connect API calls go over the JDK's `java.net.http.HttpClient` instead of
+    `HttpURLConnection`, which dropped the body of a 401 answer to a `POST`
+    (tsanetgit/Connect_SDK#128). The JVM's default proxy selector and SSL context still
+    apply, so `https.proxyHost` and `javax.net.ssl.*` settings carry over. Settings only
+    `HttpURLConnection` reads do not: a default `Authenticator` (for an authenticating
+    proxy), and `HttpsURLConnection`'s default socket factory and hostname verifier. A `GET`
+    that is redirected is no longer followed.

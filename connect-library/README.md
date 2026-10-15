@@ -210,15 +210,12 @@ which report failures as `AttachmentV2Exception` instead.
 | `isProblem(typeSuffix)` | `true` when `type()` ends with the given suffix, e.g. `isProblem("case-update-error")`. |
 | `getMessage()` | `HTTP <status> <title> (<type suffix>): <detail>` for `PROBLEM`, `HTTP <status> (legacy error): <detail>` for `LEGACY`, built from the fields above. |
 
-<!-- PROVISIONAL(tsanetgit/Connect_SDK#128): a bad login's 401 body is lost in transport, so it reads "HTTP 401 from the Connect API" with no title. Once the transport keeps the body, it reads "HTTP 401 Authentication Failed (authentication-error)" and this says so. -->
-
 The message is value-free by construction: never the request URL, a header, or a token. A note
 type the server doesn't offer reads
 `HTTP 400 Invalid Note Type (invalid-note-type): Invalid note type 'bogus'. Allowed values: partner, public, escalation, status`
-(Development, 2026-10-15). A wrong password is the exception for now: the API answers it with a
-401 problem body, but the body of a 401 answer to a `POST` is lost in transport, so it reads
-`HTTP 401 from the Connect API`, kind `OTHER` (tsanetgit/Connect_SDK#128). A legacy answer has no
-`type`, so `isProblem(...)` is `false` for it. Handle by `kind()`, `status()` and
+(Development, 2026-10-15). A wrong password reads
+`HTTP 401 Authentication Failed (authentication-error)`, followed by the API's detail. A legacy
+answer has no `type`, so `isProblem(...)` is `false` for it. Handle by `kind()`, `status()` and
 `isProblem(...)`, not by parsing the message.
 
 ### Collaboration requests — `session.collaborationRequests()`
