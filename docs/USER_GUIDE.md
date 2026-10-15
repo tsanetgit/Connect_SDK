@@ -28,9 +28,7 @@ The badge in the top-right corner is the connection truth:
 |---|---|
 | Green — "Company — email" | Authenticated; shows who BETA thinks you are |
 | Amber — "Not configured" | No credentials saved yet (Settings tab) |
-| Amber — "Auth failed: HTTP 401 from the Connect API" | BETA rejected the credentials (HTTP 401), so this is almost always a wrong username/password. The API answers with its own title, "Authentication Failed", but the body of a 401 to the login request is lost in transport, so the page shows the status only (tsanetgit/Connect_SDK#128) |
-
-<!-- PROVISIONAL(tsanetgit/Connect_SDK#128): a bad login's 401 body is lost in transport, so it reads "HTTP 401 from the Connect API" with no title. Once the transport keeps the body, it reads "HTTP 401 Authentication Failed (authentication-error)" and this says so. -->
+| Amber — "Auth failed: Authentication Failed — …" | BETA rejected the credentials (HTTP 401). The SDK asks the API for RFC 7807 problem details and shows the API's own title and detail, so this is almost always a wrong username/password |
 
 ## 3. Settings — environments and credentials
 
@@ -184,13 +182,11 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 | Symptom | Cause / action |
 |---|---|
 | Everything says "BETA credentials not configured" | No credentials saved — Settings tab |
-| Badge: "Auth failed: HTTP 401 from the Connect API" | Wrong BETA credentials (HTTP 401; the title is lost in transport, tsanetgit/Connect_SDK#128) |
+| Badge: "Auth failed: Authentication Failed — …" | Wrong BETA credentials (HTTP 401 problem details) |
 | Actions fail with "<title> — <detail>" | Upstream validation: wrong case state, off-domain engineer email. The API's problem-details title and detail are shown; a legacy `{"message"}` body is classified and shown the same way |
 | Case list loads but partner search errors | Partner search requires a valid session — re-check the badge first |
 | Build fails: `cannot find symbol … WebhooksApi` | Sibling `Connect-API-Code` checkout is on the wrong branch — needs `beta` |
 | Startup fails: "base URL must use https" | An environment's `api-base-url` is plain http. Fix the URL; `tsanet.demo.allow-insecure-http=true` is for a local mock only |
-
-<!-- PROVISIONAL(tsanetgit/Connect_SDK#128): a bad login's 401 body is lost in transport, so it reads "HTTP 401 from the Connect API" with no title. Once the transport keeps the body, it reads "HTTP 401 Authentication Failed (authentication-error)" and this says so. -->
 
 ## 9. What the demo intentionally does not do
 

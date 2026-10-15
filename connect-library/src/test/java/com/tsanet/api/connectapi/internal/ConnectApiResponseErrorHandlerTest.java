@@ -23,9 +23,9 @@ import org.springframework.web.client.RestTemplate;
  * recorded on tsanetgit/Connect-API-Code#122 (2026-07-10): problem+json with the documented
  * 4xx for a client that sends {@code Accept: application/json, application/problem+json}, as
  * the library does (tsanetgit/Connect_SDK#127), and the legacy 500 body for one that doesn't.
- * The mock server stands in for the transport, so a body the JDK transport drops (a 401 to a
- * {@code POST}, tsanetgit/Connect_SDK#128) still arrives here; {@code TsaNetApiAcceptHeaderWiringTest}
- * covers the wire. Every request path carries a marker token, and no message may carry it back.
+ * The mock server stands in for the transport; {@code TsaNetApiAcceptHeaderWiringTest} covers
+ * the wire, including the body of a 401 to a {@code POST} (tsanetgit/Connect_SDK#128). Every
+ * request path carries a marker token, and no message may carry it back.
  */
 class ConnectApiResponseErrorHandlerTest {
 

@@ -41,11 +41,9 @@ The server listens on **http://localhost:8090**. Ctrl+C stops it, or
 2. The header badge is the connection truth:
    - **Green "Company — email"**: authenticated; that is the live `/api/me` answer
    - **Amber "Not configured"**: nothing saved yet
-   - **Amber "Auth failed: HTTP 401 from the Connect API"**: the environment rejected the
-     credentials with a 401. The API's own title is lost in transport for now
-     (tsanetgit/Connect_SDK#128). This almost always means a wrong username or password,
-     not an outage.
-     <!-- PROVISIONAL(tsanetgit/Connect_SDK#128): a bad login's 401 body is lost in transport, so it reads "HTTP 401 from the Connect API" with no title. Once the transport keeps the body, it reads "HTTP 401 Authentication Failed (authentication-error)" and this says so. -->
+   - **Amber "Auth failed: Authentication Failed — …"**: the environment rejected the
+     credentials with a 401 problem-details answer, shown as the API's title and detail.
+     This almost always means a wrong username or password, not an outage.
 
 Credentials persist per environment to `~/.tsanet-demo-ui/` (mode 600, never in git),
 with an isolated SQLite cache per environment, so restarts skip this step. Settings →
