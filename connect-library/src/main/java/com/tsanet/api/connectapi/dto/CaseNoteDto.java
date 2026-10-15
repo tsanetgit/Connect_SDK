@@ -10,8 +10,8 @@ package com.tsanet.api.connectapi.dto;
  *                  says is the case for a platform-generated note
  * @param direction {@code OUTBOUND} when the reading company wrote the note, {@code INBOUND}
  *                  otherwise; relative to the account that fetched it, and null when absent
- * @param typeDisplayName the type's human-readable label as the API sent it; null exactly when
- *                  {@code type} is null. For display only, never for matching
+ * @param typeDisplayName the type's human-readable label as the API sent it; null when the API
+ *                  sent no type. For display only, never for matching
  */
 public record CaseNoteDto(
     Long id,

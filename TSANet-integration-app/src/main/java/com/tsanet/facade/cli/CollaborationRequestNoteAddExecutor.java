@@ -104,10 +104,11 @@ public class CollaborationRequestNoteAddExecutor {
 
     /**
      * The optional {@code --type}, a code that {@code notes types} lists, passed through as given:
-     * the server matches it ignoring case and refuses any other. Null creates a note with no type.
+     * the server matches it ignoring case and refuses any other. Absent or blank creates a note
+     * with no type, as the demo-ui's blank "No type" does.
      */
     static String resolveType(String[] args) {
-        return CliArgs.noteType(args).orElse(null);
+        return CliArgs.noteType(args).filter(value -> !value.isBlank()).orElse(null);
     }
 
     static String deriveSummary(String description) {

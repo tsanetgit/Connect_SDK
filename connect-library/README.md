@@ -242,7 +242,7 @@ wrong password reads `HTTP 401 Authentication Failed`; an invalid lifecycle tran
 
 Each `CaseNoteDto` carries the note's `type`, the lowercase code the API sent (for example `partner`, `public` or `system`), its `typeDisplayName` label, the authoring company's `companyId`, and its `direction`: `OUTBOUND` when the company of the account that fetched it wrote the note, `INBOUND` when another company did. A platform-generated note comes without `companyId` and `direction`. Each is null when the API didn't send it, and the SQLite cache stores all four. Match on `type`, never on the label, and don't treat a null or unrecognized type as public. The 14-argument constructor from before these fields is deprecated.
 
-A note whose sender set no type reads back with `type` and `typeDisplayName` null, and so does every note written before note types existed. Notes the platform writes for case events are typed by the platform, and the SDK shows the type the API sends without inferring one.
+A note whose sender set no type reads back with `type` and `typeDisplayName` null, and so does every note written before note types existed. Notes the platform writes itself come back typed: the API types its own case-event notes `partner`, and the web app's automated notes read `system`. The SDK shows the type the API sends and doesn't infer one.
 
 ### Case responses — `session.caseResponses()`
 

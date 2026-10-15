@@ -625,6 +625,7 @@ async function noteTypeOptions() {
         const types = await fetchJson('/api/note-types');
         return [none, ...types.map(t => ({value: t.code, label: t.displayName}))];
     } catch (err) {
+        console.warn('Note types unavailable; offering only "No type".', err);
         return [none];
     }
 }

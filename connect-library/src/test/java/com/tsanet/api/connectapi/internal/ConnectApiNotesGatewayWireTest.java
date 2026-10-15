@@ -123,7 +123,8 @@ class ConnectApiNotesGatewayWireTest {
 
     @Test
     void aCodeTheServerDoesNotOfferReachesTheCallerAsItsProblem() {
-        // The problem+json body Development returned on 2026-10-15 for {"code": "bogus"}.
+        // The problem+json body Development returned on 2026-10-15 for {"code": "bogus"} when asked with
+        // Accept: application/problem+json; the next test is the legacy body it returns otherwise.
         server.expect(requestTo(NOTES)).andExpect(method(HttpMethod.POST))
             .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_PROBLEM_JSON)
                 .body("{\"type\":\"https://api.tsanet.org/errors/invalid-note-type\",\"title\":\"Invalid Note Type\","
@@ -137,6 +138,26 @@ class ConnectApiNotesGatewayWireTest {
                 assertThat(e.status()).isEqualTo(400);
                 assertThat(e.type()).isEqualTo("https://api.tsanet.org/errors/invalid-note-type");
                 assertThat(e.getMessage()).contains("Allowed values: partner, public, escalation, status");
+            });
+        assertThat(storageService.findByCaseToken("tok-1")).isEmpty();
+        server.verify();
+    }
+
+    @Test
+    void theLegacyRefusalOfACodeReachesTheCallerWithItsReason() {
+        // The legacy body Development returned on 2026-10-15 for {"code": "bogus"}, the shape a caller
+        // that doesn't ask for problem+json (this library) receives.
+        server.expect(requestTo(NOTES)).andExpect(method(HttpMethod.POST))
+            .andRespond(withStatus(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"message\":\"Validation failed\",\"validationErrors\":[{\"field\":\"type\","
+                    + "\"message\":\"Invalid note type 'bogus'. Allowed values: partner, public, escalation, status\"}]}"));
+
+        assertThatThrownBy(() -> gateway.createNote("tok-1", "s", "d", "LOW", "bogus"))
+            .isInstanceOfSatisfying(ConnectApiException.class, e -> {
+                assertThat(e.kind()).isEqualTo(ConnectApiException.Kind.LEGACY);
+                assertThat(e.status()).isEqualTo(400);
+                assertThat(e.getMessage())
+                    .contains("Invalid note type 'bogus'. Allowed values: partner, public, escalation, status");
             });
         assertThat(storageService.findByCaseToken("tok-1")).isEmpty();
         server.verify();

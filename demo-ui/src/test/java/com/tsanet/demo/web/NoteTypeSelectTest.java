@@ -34,7 +34,7 @@ class NoteTypeSelectTest {
     }
 
     @Test
-    void appJsNamesNoTypeFromBeforeNoteTypesWereReferenceData() throws IOException {
+    void appJsNoLongerNamesTheRetiredUserTypes() throws IOException {
         assertThat(appJs()).doesNotContain("USER_PARTNER", "USER_PUBLIC");
     }
 

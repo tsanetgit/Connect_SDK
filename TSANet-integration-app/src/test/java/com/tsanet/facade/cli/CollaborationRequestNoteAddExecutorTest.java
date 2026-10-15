@@ -22,6 +22,8 @@ class CollaborationRequestNoteAddExecutorTest {
     @Test
     void noTypeMeansANoteWithNoType() {
         assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--id", "1"})).isNull();
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", ""})).isNull();
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "  "})).isNull();
     }
 
     @Test
