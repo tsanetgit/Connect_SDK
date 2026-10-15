@@ -363,7 +363,9 @@ Watch the release notes on each release.
     that is redirected is no longer followed: any `3xx` is `OTHER`, with the status and
     `unexpected redirect` in the message, never the `Location`. The OAuth client-credentials
     token call rides the same client (tsanetgit/Connect_SDK#131), so the same proxy and TLS
-    notes apply to it; a refused token call keeps its status-only message.
+    notes apply to it. A refused token call keeps its status-only message; one that can't reach
+    the token endpoint is `CONNECTIVITY`, `cannot reach the OAuth token endpoint (<class>)`, with
+    no URL or tenant in it.
   - An interrupted call stops: `OTHER`, status `0`, `Connect API call: interrupted`, with
     the thread left interrupted (the V2 attachment calls report it as `client/interrupted`).
   - Idle connections are kept for reuse for up to 30 seconds on JDK 21, the JDK client's

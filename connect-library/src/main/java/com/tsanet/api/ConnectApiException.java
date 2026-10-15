@@ -18,7 +18,8 @@ package com.tsanet.api;
  *       compatibility). Classified by the body, not the status, so it never reads as an
  *       unknown server error.</li>
  *   <li>{@link Kind#CONNECTIVITY}: the API could not be reached, or its answer was lost;
- *       {@link #detail()} names the failure's class only.</li>
+ *       {@link #detail()} names the failure's class only. On the OAuth token call,
+ *       {@link #title()} is {@value #TOKEN_ENDPOINT}.</li>
  *   <li>{@link Kind#OTHER}: a non-2xx with no recognizable body, where {@link #detail()} carries
  *       at most a short excerpt of it; a redirect, which the client never follows; or a call the
  *       caller interrupted, with status 0 and {@link #detail()} {@code interrupted}.</li>
@@ -36,6 +37,9 @@ package com.tsanet.api;
 public class ConnectApiException extends RuntimeException {
 
     public enum Kind { PROBLEM, LEGACY, CONNECTIVITY, OTHER }
+
+    /** The {@link #title()} of a {@link Kind#CONNECTIVITY} failure on the OAuth token call. */
+    public static final String TOKEN_ENDPOINT = "OAuth token endpoint";
 
     private final Kind kind;
     private final int status;
@@ -61,6 +65,23 @@ public class ConnectApiException extends RuntimeException {
             root = root.getCause();
         }
         return new ConnectApiException(Kind.CONNECTIVITY, 0, null, null, root.getClass().getSimpleName(), null, cause);
+    }
+
+    /**
+     * The OAuth token endpoint could not be reached, or its answer was lost. Kind
+     * {@link Kind#CONNECTIVITY}, with {@link #title()} {@value #TOKEN_ENDPOINT} so the message names
+     * what was unreachable, and {@link #detail()} the failure's class name only: never the token
+     * URL, which carries the tenant (tsanetgit/Connect_SDK#131). The token gateway passes the
+     * transport's own {@code IOException} as {@code cause}, not Spring's wrapper, whose message
+     * embeds the URL.
+     */
+    public static ConnectApiException tokenEndpointUnreachable(Throwable cause) {
+        Throwable root = cause;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return new ConnectApiException(Kind.CONNECTIVITY, 0, null, TOKEN_ENDPOINT, root.getClass().getSimpleName(), null,
+            cause);
     }
 
     /**
@@ -112,7 +133,8 @@ public class ConnectApiException extends RuntimeException {
     private static String format(Kind kind, int status, String type, String title, String detail) {
         StringBuilder message = new StringBuilder();
         switch (kind) {
-            case CONNECTIVITY -> message.append("cannot reach the Connect API (").append(detail).append(')');
+            case CONNECTIVITY -> message.append("cannot reach the ").append(title == null ? "Connect API" : title)
+                .append(" (").append(detail).append(')');
             case PROBLEM -> {
                 message.append("HTTP ").append(status);
                 if (title != null && !title.isBlank()) {
