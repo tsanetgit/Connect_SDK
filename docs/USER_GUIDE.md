@@ -28,7 +28,7 @@ The badge in the top-right corner is the connection truth:
 |---|---|
 | Green — "Company — email" | Authenticated; shows who BETA thinks you are |
 | Amber — "Not configured" | No credentials saved yet (Settings tab) |
-| Amber — "Auth failed: Authentication Failed — …" | BETA rejected the credentials (HTTP 401). The SDK asks the API for RFC 7807 problem details and shows the API's own title and detail, so this is almost always a wrong username/password |
+| Amber — "Auth failed: HTTP 401 from the Connect API" | BETA rejected the credentials (HTTP 401), so this is almost always a wrong username/password. The API answers with its own title, "Authentication Failed", but the body of a 401 to the login request is lost in transport, so the page shows the status only (tsanetgit/Connect_SDK#128) |
 
 ## 3. Settings — environments and credentials
 
@@ -182,7 +182,7 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 | Symptom | Cause / action |
 |---|---|
 | Everything says "BETA credentials not configured" | No credentials saved — Settings tab |
-| Badge: "Auth failed: Authentication Failed — …" | Wrong BETA credentials (HTTP 401 problem details) |
+| Badge: "Auth failed: HTTP 401 from the Connect API" | Wrong BETA credentials (HTTP 401; the title is lost in transport, tsanetgit/Connect_SDK#128) |
 | Actions fail with "<title> — <detail>" | Upstream validation: wrong case state, off-domain engineer email. The API's problem-details title and detail are shown; a legacy `{"message"}` body is classified and shown the same way |
 | Case list loads but partner search errors | Partner search requires a valid session — re-check the badge first |
 | Build fails: `cannot find symbol … WebhooksApi` | Sibling `Connect-API-Code` checkout is on the wrong branch — needs `beta` |

@@ -37,10 +37,11 @@ The build wants JDK 21. On macOS with Homebrew, `openjdk@21` is keg-only: export
 
 ## Runtime, demo
 
-**Badge says: Auth failed: Authentication Failed — …**
-Almost always wrong credentials: the API answered the login with a 401 problem-details
-body, and the badge shows its title and detail. Re-enter the username and password
-before suspecting the platform. (A raw client that does not send the
+**Badge says: Auth failed: HTTP 401 from the Connect API**
+Almost always wrong credentials: the API answered the login with a 401. Its problem-details
+body says "Authentication Failed", but the body of a 401 to the login request is lost in
+transport, so the badge shows the status only (tsanetgit/Connect_SDK#128). Re-enter the
+username and password before suspecting the platform. (A raw client that does not send the
 `application/problem+json` Accept header sees the legacy `500 Error processing request`
 for the same mistake; the SDK always sends the header.)
 
