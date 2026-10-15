@@ -290,6 +290,32 @@ class ConnectApiAttachmentsV2GatewayWireTest {
     }
 
     @Test
+    void aGrantCallInterruptedInFlightIsClientInterruptedNotConnectivity() {
+        // The library's client reports an interrupted call as ConnectApiException OTHER with the
+        // InterruptedException as cause; the V2 surface reports it with its own interrupt code.
+        ApiClient dead = new ApiClient(ConnectApiRestTemplates.create());
+        dead.setBasePath("http://127.0.0.1:1");
+        dead.setBearerToken(() -> "bearer-123");
+        ConnectApiAttachmentsV2Gateway deadGateway = new ConnectApiAttachmentsV2Gateway(new AttachmentGrantsApi(dead),
+            GatewayTestSupport.authenticatedSessionStore());
+
+        Thread.currentThread().interrupt();
+        Throwable thrown;
+        boolean stillInterrupted;
+        try {
+            thrown = org.assertj.core.api.Assertions.catchThrowable(() -> deadGateway.createGrant(TOKEN, "diag.log", 12));
+        } finally {
+            stillInterrupted = Thread.interrupted();
+        }
+
+        assertThat(stillInterrupted).isTrue();
+        assertThat(thrown).isInstanceOfSatisfying(AttachmentV2Exception.class, ex -> {
+            assertThat(ex.code()).isEqualTo(AttachmentV2Exception.INTERRUPTED);
+            assertThat(ex.getCause()).isInstanceOf(InterruptedException.class);
+        });
+    }
+
+    @Test
     void aSendStartedOnAnInterruptedThreadMakesNoCaseReadOrGrantRequest() throws Exception {
         // With an allowlist, send()'s first request would be the case read; none may go out.
         ConnectApiAttachmentsV2Gateway guarded = allowlisted(101L);

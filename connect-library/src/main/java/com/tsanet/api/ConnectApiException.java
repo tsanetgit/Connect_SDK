@@ -19,8 +19,9 @@ package com.tsanet.api;
  *       unknown server error.</li>
  *   <li>{@link Kind#CONNECTIVITY}: the API could not be reached, or its answer was lost;
  *       {@link #detail()} names the failure's class only.</li>
- *   <li>{@link Kind#OTHER}: a non-2xx with no recognizable body; {@link #detail()} carries at
- *       most a short excerpt of it.</li>
+ *   <li>{@link Kind#OTHER}: a non-2xx with no recognizable body, where {@link #detail()} carries
+ *       at most a short excerpt of it; a redirect, which the client never follows; or a call the
+ *       caller interrupted, with status 0 and {@link #detail()} {@code interrupted}.</li>
  * </ul>
  *
  * <p>The message is value-free by construction: status, kind, the API's own title and detail,
@@ -62,6 +63,15 @@ public class ConnectApiException extends RuntimeException {
         return new ConnectApiException(Kind.CONNECTIVITY, 0, null, null, root.getClass().getSimpleName(), null, cause);
     }
 
+    /**
+     * The calling thread was interrupted while the call was in flight. The thread's interrupt flag
+     * stays set. Kind {@link Kind#OTHER} with status 0, not {@link Kind#CONNECTIVITY}: the caller
+     * cancelled, so retrying the same call is not the remedy (tsanetgit/Connect_SDK#131).
+     */
+    public static ConnectApiException interrupted(InterruptedException cause) {
+        return new ConnectApiException(Kind.OTHER, 0, null, null, "interrupted", null, cause);
+    }
+
     public Kind kind() {
         return kind;
     }
@@ -69,7 +79,8 @@ public class ConnectApiException extends RuntimeException {
     /**
      * The status the API asserted: for {@link Kind#PROBLEM} the body's own {@code status} when it
      * carries one (which can differ from the wire status, see tsanetgit/Connect-API-Code#122),
-     * otherwise the wire status; 0 for {@link Kind#CONNECTIVITY}. Not a transport-level fact.
+     * otherwise the wire status; 0 for {@link Kind#CONNECTIVITY} and an interrupted call. Not a
+     * transport-level fact.
      */
     public int status() {
         return status;
@@ -121,7 +132,7 @@ public class ConnectApiException extends RuntimeException {
                 }
             }
             case OTHER -> {
-                message.append("HTTP ").append(status).append(" from the Connect API");
+                message.append(status == 0 ? "Connect API call" : "HTTP " + status + " from the Connect API");
                 if (detail != null && !detail.isBlank()) {
                     message.append(": ").append(detail);
                 }

@@ -72,8 +72,15 @@ final class ConnectApiErrors {
         }
     }
 
-    /** The runtime's client already classified the answer; keep its words and map its status to a code. */
+    /**
+     * The runtime's client already classified the answer; keep its words and map its status to a
+     * code. A call the caller interrupted is {@code client/interrupted}, as the V2 retry paths
+     * report it (tsanetgit/Connect_SDK#131).
+     */
     static AttachmentV2Exception translate(String operation, ConnectApiException e) {
+        if (e.getCause() instanceof InterruptedException interrupted) {
+            return interrupted(operation, interrupted, null);
+        }
         if (e.kind() == ConnectApiException.Kind.CONNECTIVITY) {
             return new AttachmentV2Exception(operation + " failed: " + e.getMessage(), 0,
                 AttachmentV2Exception.CONNECTIVITY, e);
