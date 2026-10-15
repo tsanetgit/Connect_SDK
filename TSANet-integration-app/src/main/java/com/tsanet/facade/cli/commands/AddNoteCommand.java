@@ -1,6 +1,5 @@
 package com.tsanet.facade.cli.commands;
 
-import com.tsanet.api.facade.CaseNotesFacade;
 import com.tsanet.facade.cli.CliRunContext;
 import com.tsanet.facade.cli.CollaborationRequestNoteAddExecutor;
 import com.tsanet.facade.cli.EntityPrinter;
@@ -27,9 +26,8 @@ public class AddNoteCommand implements Command {
 
     @Override
     public String description() {
-        return "Add a note to a collaboration request (--id ID or --token TOKEN; --type "
-            + String.join(" or ", CaseNotesFacade.CREATABLE_NOTE_TYPES)
-            + ", default USER_PARTNER; prompts for text if omitted)";
+        return "Add a note to a collaboration request (--id ID or --token TOKEN; optional --type CODE"
+            + " from 'notes types', no type when omitted; prompts for text if omitted)";
     }
 
     @Override

@@ -8,6 +8,7 @@ import static com.tsanet.facade.cli.TerminalColors.RESET;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.connectapi.dto.CaseResponseDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
+import com.tsanet.api.connectapi.dto.NoteTypeDto;
 import com.tsanet.api.connectapi.dto.PartnerSelectionDto;
 import com.tsanet.api.connectapi.dto.UserContextDto;
 import com.tsanet.api.connectapi.dto.WebhookSubscriptionDto;
@@ -39,6 +40,18 @@ public final class EntityPrinter {
                 note.summary(),
                 CollaborationRequestNotesTimeline.author(note)
             );
+        }
+    }
+
+    /** The note types {@code notes add --type} takes, in the server's order: the code, then its label. */
+    public static void printNoteTypes(CliRunContext context, List<NoteTypeDto> types) {
+        if (types.isEmpty()) {
+            println(context, BLUE, "No note types.");
+            return;
+        }
+        println(context, GREEN, "Note types (" + types.size() + "):");
+        for (NoteTypeDto type : types) {
+            System.out.printf(" - %s (%s)%n", type.code(), type.displayName());
         }
     }
 
@@ -75,7 +88,7 @@ public final class EntityPrinter {
         }
     }
 
-    /** " (USER_PUBLIC, OUTBOUND)" with whichever of the two the API sent; empty when it sent neither. */
+    /** " (public, OUTBOUND)", the type code and direction, with whichever of the two the API sent; empty when it sent neither. */
     private static String typeAndDirection(CaseNoteDto note) {
         String joined = java.util.stream.Stream.of(note.type(), note.direction())
             .filter(value -> value != null && !value.isBlank())
