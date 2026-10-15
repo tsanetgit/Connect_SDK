@@ -148,6 +148,70 @@ class ConnectApiResponseErrorHandlerTest {
     }
 
     @Test
+    void aCallOnAnInterruptedThreadIsOtherNotConnectivityAndTheFlagStaysSet() throws Exception {
+        // Spring's JDK request turns the interrupt into an IOException caused by the
+        // InterruptedException; the caller cancelled, so it must not read as "unreachable". The
+        // server accepts the connection and never answers, so the wait is what gets interrupted,
+        // not a connect failure that could finish first.
+        Throwable thrown;
+        boolean stillInterrupted;
+        try (java.net.ServerSocket silent = new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())) {
+            ApiClient apiClient = new ApiClient(ConnectApiRestTemplates.create());
+            apiClient.setBasePath("http://127.0.0.1:" + silent.getLocalPort());
+            apiClient.setBearerToken(() -> "bearer-1");
+
+            Thread.currentThread().interrupt();
+            try {
+                thrown = org.assertj.core.api.Assertions.catchThrowable(
+                    () -> new CaseResponsesApi(apiClient).closeCollaborationRequest(TOKEN));
+            } finally {
+                stillInterrupted = Thread.interrupted();
+            }
+        }
+
+        assertThat(stillInterrupted).isTrue();
+        assertThat(thrown).isInstanceOfSatisfying(ConnectApiException.class, ex -> {
+            assertThat(ex.kind()).isEqualTo(ConnectApiException.Kind.OTHER);
+            assertThat(ex.status()).isZero();
+            assertThat(ex.detail()).isEqualTo("interrupted");
+            assertThat(ex.getMessage()).isEqualTo("Connect API call: interrupted");
+            assertThat(ex.getCause()).isInstanceOf(InterruptedException.class);
+        });
+    }
+
+    @Test
+    void aRedirectIsOtherIsNotFollowedAndDoesNotEchoTheLocation() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger hits = new java.util.concurrent.atomic.AtomicInteger();
+        com.sun.net.httpserver.HttpServer redirecting =
+            com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        redirecting.createContext("/", exchange -> {
+            hits.incrementAndGet();
+            exchange.getRequestBody().readAllBytes();
+            exchange.getResponseHeaders().add("Location", "http://elsewhere.example/" + TOKEN);
+            exchange.sendResponseHeaders(302, -1);
+            exchange.close();
+        });
+        redirecting.start();
+        try {
+            ApiClient apiClient = new ApiClient(ConnectApiRestTemplates.create());
+            apiClient.setBasePath("http://127.0.0.1:" + redirecting.getAddress().getPort());
+            apiClient.setBearerToken(() -> "bearer-1");
+
+            assertThatThrownBy(() -> new CaseResponsesApi(apiClient).closeCollaborationRequest(TOKEN))
+                .isInstanceOfSatisfying(ConnectApiException.class, ex -> {
+                    assertThat(ex.kind()).isEqualTo(ConnectApiException.Kind.OTHER);
+                    assertThat(ex.status()).isEqualTo(302);
+                    assertThat(ex.getMessage())
+                        .isEqualTo("HTTP 302 from the Connect API: " + ConnectApiResponseErrorHandler.UNEXPECTED_REDIRECT)
+                        .doesNotContain("MARKER").doesNotContain("elsewhere");
+                });
+            assertThat(hits).hasValue(1);
+        } finally {
+            redirecting.stop(0);
+        }
+    }
+
+    @Test
     void anIntermediaryErrorPageThatEchoesTheRequestPathLosesItBeforeTheExcerpt() {
         server.expect(requestTo(BASE + "/v1/collaboration-requests/" + TOKEN + "/closure"))
             .andRespond(withStatus(HttpStatus.NOT_FOUND).contentType(MediaType.TEXT_HTML)

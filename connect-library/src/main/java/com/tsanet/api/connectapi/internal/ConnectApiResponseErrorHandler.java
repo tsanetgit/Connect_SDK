@@ -17,23 +17,28 @@ import tools.jackson.databind.json.JsonMapper;
  * Turns every non-2xx answer into a {@link ConnectApiException}, classified by the body
  * alone (tsanetgit/Connect_SDK#20): RFC 7807 fields mean {@code PROBLEM}; a {@code message}
  * field means the API's legacy shape, even on a 500 (tsanetgit/Connect-API-Code#122); anything
- * else is the status plus a short excerpt. The URL and method Spring passes in are never
- * used in the message.
+ * else is the status plus a short excerpt. A redirect is {@code OTHER} too: the client never
+ * follows one, and the API declares none (tsanetgit/Connect_SDK#131). The URL and method Spring
+ * passes in are never used in the message, and neither is a redirect's {@code Location}.
  */
 public final class ConnectApiResponseErrorHandler implements ResponseErrorHandler {
 
     static final int EXCERPT_LENGTH = 200;
+    static final String UNEXPECTED_REDIRECT = "unexpected redirect; the API declares none, so check the base URL";
 
     private final JsonMapper mapper = JsonMapper.builder().build();
 
     @Override
     public boolean hasError(ClientHttpResponse response) throws IOException {
-        return response.getStatusCode().isError();
+        return response.getStatusCode().isError() || response.getStatusCode().is3xxRedirection();
     }
 
     @Override
     public void handleError(URI url, HttpMethod method, ClientHttpResponse response) throws IOException {
         int status = response.getStatusCode().value();
+        if (response.getStatusCode().is3xxRedirection()) {
+            throw new ConnectApiException(ConnectApiException.Kind.OTHER, status, null, null, UNEXPECTED_REDIRECT, null, null);
+        }
         String body;
         try (InputStream in = response.getBody()) {
             body = in == null ? "" : new String(in.readAllBytes(), StandardCharsets.UTF_8);

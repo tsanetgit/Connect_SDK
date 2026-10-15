@@ -5,6 +5,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import com.tsanet.api.auth.ClientCredentialsAuthConfig;
 import com.tsanet.api.auth.OAuthAccessToken;
+import java.net.http.HttpClient;
 import java.util.List;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -20,8 +21,12 @@ public class OAuthTokenGateway {
 
     private final RestTemplate restTemplate;
 
-    public OAuthTokenGateway() {
-        this(new RestTemplate());
+    /**
+     * The token call rides the session's JDK client but none of the Connect API's error handling:
+     * a failure stays the status-only {@code IllegalStateException} below (tsanetgit/Connect_SDK#131).
+     */
+    public OAuthTokenGateway(HttpClient httpClient) {
+        this(new RestTemplate(ConnectApiRestTemplates.transport(httpClient)));
     }
 
     OAuthTokenGateway(RestTemplate restTemplate) {

@@ -8,6 +8,7 @@ import org.springframework.http.HttpRequest;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.BufferingClientHttpRequestFactory;
 import org.springframework.http.client.ClientHttpRequestExecution;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
@@ -18,16 +19,20 @@ import org.springframework.web.client.RestTemplate;
  * yields {@code ConnectApiException}, the connectivity interceptor, and the {@code Accept}
  * header that asks for problem details. The runtime builds two: an unauthenticated one for
  * login, and the session one that additionally carries the bearer supplier and the 401 retry.
- * Tests build theirs here too, so what they exercise is what production runs.
+ * Both share one {@link HttpClient} per session, and the Entra token call uses the same client
+ * through {@link #transport(HttpClient)}, without the Connect API's error handling
+ * (tsanetgit/Connect_SDK#131). Tests build theirs here too, so what they exercise is what
+ * production runs.
  *
  * <p><b>Transport.</b> The JDK's {@link HttpClient}, not {@code HttpURLConnection}: Spring 7
  * streams every request body to {@code HttpURLConnection}, which drops the body of a 401 answer
  * to a streamed request, so a bad login lost its problem details (tsanetgit/Connect_SDK#128).
  * HTTP/1.1, no response compression and no timeouts, as before. Redirects are never followed;
  * the old transport followed them for a {@code GET}. The proxy selector and SSL context are the
- * JVM defaults, read once when the template is built. No {@code Authenticator} is set: with one,
- * the JDK client turns a 401 without {@code WWW-Authenticate}, which is how the API answers,
- * into an {@code IOException}, so the re-auth retry would never see the 401.
+ * JVM defaults, read once when {@link #newHttpClient()} builds the client. No
+ * {@code Authenticator} is set: with one, the JDK client turns a 401 without
+ * {@code WWW-Authenticate}, which is how the API answers, into an {@code IOException}, so the
+ * re-auth retry would never see the 401.
  */
 public final class ConnectApiRestTemplates {
 
@@ -39,22 +44,30 @@ public final class ConnectApiRestTemplates {
     }
 
     public static RestTemplate create() {
-        RestTemplate restTemplate = new RestTemplate(
-            new BufferingClientHttpRequestFactory(jdkRequestFactory())
-        );
+        return create(newHttpClient());
+    }
+
+    public static RestTemplate create(HttpClient httpClient) {
+        RestTemplate restTemplate = new RestTemplate(transport(httpClient));
         restTemplate.setErrorHandler(new ConnectApiResponseErrorHandler());
         restTemplate.getInterceptors().add(new ConnectApiConnectivityInterceptor());
         restTemplate.getInterceptors().add(ConnectApiRestTemplates::askForProblemDetails);
         return restTemplate;
     }
 
-    private static JdkClientHttpRequestFactory jdkRequestFactory() {
-        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
+    /** The JDK client every Connect API template and the token call ride, as the class javadoc describes. */
+    public static HttpClient newHttpClient() {
+        return HttpClient.newBuilder()
             .version(HttpClient.Version.HTTP_1_1)
             .followRedirects(HttpClient.Redirect.NEVER)
-            .build());
+            .build();
+    }
+
+    /** The buffered request factory over {@code httpClient}, with no error handler or interceptors. */
+    public static ClientHttpRequestFactory transport(HttpClient httpClient) {
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.enableCompression(false);
-        return factory;
+        return new BufferingClientHttpRequestFactory(factory);
     }
 
     /**

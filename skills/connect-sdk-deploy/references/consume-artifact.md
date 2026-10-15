@@ -360,4 +360,13 @@ Watch the release notes on each release.
     apply, so `https.proxyHost` and `javax.net.ssl.*` settings carry over. Settings only
     `HttpURLConnection` reads do not: a default `Authenticator` (for an authenticating
     proxy), and `HttpsURLConnection`'s default socket factory and hostname verifier. A `GET`
-    that is redirected is no longer followed.
+    that is redirected is no longer followed: any `3xx` is `OTHER`, with the status and
+    `unexpected redirect` in the message, never the `Location`. The OAuth client-credentials
+    token call rides the same client (tsanetgit/Connect_SDK#131), so the same proxy and TLS
+    notes apply to it; a refused token call keeps its status-only message.
+  - An interrupted call stops: `OTHER`, status `0`, `Connect API call: interrupted`, with
+    the thread left interrupted (the V2 attachment calls report it as `client/interrupted`).
+  - Idle connections are kept for reuse for up to 30 seconds on JDK 21, the JDK client's
+    `jdk.httpclient.keepalive.timeout` default, a JVM-wide setting the library leaves alone.
+    A `POST` sent on a pooled connection that something on the network path closed while it
+    sat idle fails as `CONNECTIVITY`: the JDK client can retry a `GET` there, never a `POST`.
