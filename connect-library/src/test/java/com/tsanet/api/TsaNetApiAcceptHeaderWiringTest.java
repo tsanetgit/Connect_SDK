@@ -39,7 +39,7 @@ class TsaNetApiAcceptHeaderWiringTest {
 
     private static final String DUAL_ACCEPT = "application/json, application/problem+json";
     private static final String TOKEN = "case-token-1";
-    private static final String GOOD_PASSWORD = "pw";
+    private static final String GOOD_PASSWORD = "test-password";
 
     private final List<String> requests = new CopyOnWriteArrayList<>();
     private final List<List<String>> acceptHeaders = new CopyOnWriteArrayList<>();
