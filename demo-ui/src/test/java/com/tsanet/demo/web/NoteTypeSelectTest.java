@@ -15,7 +15,8 @@ import org.junit.jupiter.api.Test;
 /**
  * The Add note form's Type select comes from the server (tsanetgit/Connect-API-Code#200): its
  * options are the {@code noteTypeOptions} function, which puts a blank "No type" first, so it is
- * the default, and then loads {@code /api/note-types}. A hard-coded list of codes would go stale
+ * the default, and then loads {@code /api/note-types}, with each option's value the type's code
+ * and never its label. A hard-coded list of codes would go stale
  * when the server adds a type, and a typed default would type every note sent from the form.
  */
 class NoteTypeSelectTest {
@@ -27,6 +28,8 @@ class NoteTypeSelectTest {
         "async function noteTypeOptions\\(\\)\\s*\\{(.*?)\\n\\}", Pattern.DOTALL);
     private static final Pattern NO_TYPE_FIRST = Pattern.compile(
         "const none = \\{value: '', label: 'No type'\\};.*return \\[none, \\.\\.\\.", Pattern.DOTALL);
+    private static final Pattern TYPE_MAPPING = Pattern.compile(
+        "\\.map\\(\\s*\\(?\\s*(\\w+)\\s*\\)?\\s*=>\\s*\\(\\s*\\{([^}]*)\\}\\s*\\)\\s*\\)");
 
     @Test
     void theAddNoteFormLoadsItsTypesWithNoTypeFirst() throws IOException {
@@ -56,6 +59,33 @@ class NoteTypeSelectTest {
                 + "    const types = await fetchJson('/api/note-types');\n" + body + "}\n";
             assertThatThrownBy(() -> checkNoteTypeSelect(js), body).isInstanceOf(AssertionError.class);
         }
+    }
+
+    @Test
+    void theCheckRefusesOptionsWhoseValueIsNotTheCode() {
+        // The server matches the code, never the display text, so a form that sent the label would
+        // work only while each label equals its code ignoring case, and 400 on the first that doesn't.
+        for (String mapping : List.of(
+            "types.map(t => ({value: t.displayName, label: t.displayName}))",
+            "types.map(t => ({label: t.code, value: t.displayName}))",
+            "types.map(t => ({label: t.displayName}))")) {
+            String js = noteForm("noteTypeOptions") + "\nasync function noteTypeOptions() {\n"
+                + "    const none = {value: '', label: 'No type'};\n"
+                + "    const types = await fetchJson('/api/note-types');\n"
+                + "    return [none, ..." + mapping + "];\n}\n";
+            assertThatThrownBy(() -> checkNoteTypeSelect(js), mapping).isInstanceOf(AssertionError.class)
+                .hasMessageContaining("value must be the type's code");
+        }
+    }
+
+    @Test
+    void theCheckAcceptsTheCodeAsTheValueInAnyOrderAndUnderAnyName() {
+        String js = noteForm("noteTypeOptions") + "\nasync function noteTypeOptions() {\n"
+            + "    const none = {value: '', label: 'No type'};\n"
+            + "    const types = await fetchJson('/api/note-types');\n"
+            + "    return [none, ...types.map((nt) => ({label: nt.displayName, value: nt.code}))];\n}\n";
+
+        assertThatCode(() -> checkNoteTypeSelect(js)).doesNotThrowAnyException();
     }
 
     @Test
@@ -106,6 +136,12 @@ class NoteTypeSelectTest {
         assertThat(body).as("noteTypeOptions must load the server's list").contains("fetchJson('/api/note-types')");
         assertThat(NO_TYPE_FIRST.matcher(body).find())
             .as("noteTypeOptions must return a blank 'No type' option first, so it is the default")
+            .isTrue();
+        Matcher mapping = TYPE_MAPPING.matcher(body);
+        assertThat(mapping.find()).as("noteTypeOptions must map the server's types to options").isTrue();
+        assertThat(Pattern.compile("(?:^|,)\\s*value\\s*:\\s*" + mapping.group(1) + "\\.code\\s*(?:,|$)")
+                .matcher(mapping.group(2)).find())
+            .as("an option's value must be the type's code, never its display name: " + mapping.group())
             .isTrue();
     }
 
