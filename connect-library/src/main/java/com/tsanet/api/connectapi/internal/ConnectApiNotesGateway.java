@@ -5,12 +5,13 @@ import static com.tsanet.api.connectapi.internal.OpenApiMapping.enumValue;
 
 import com.tsanet.api.connectapi.CaseNoteValidation;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
-import com.tsanet.api.facade.CaseNotesFacade;
+import com.tsanet.api.connectapi.dto.NoteTypeDto;
 import com.tsanet.api.generated.api.CaseNotesApi;
 import com.tsanet.api.generated.model.CaseNoteDTO;
 import com.tsanet.api.generated.model.CaseNoteTemplateDTO;
 import com.tsanet.api.generated.model.NotePriority;
-import com.tsanet.api.generated.model.NoteType;
+import com.tsanet.api.generated.model.NoteTypeReferenceDTO;
+import com.tsanet.api.generated.model.NoteTypeSelectionDTO;
 import com.tsanet.api.storage.CaseNoteStorageService;
 import java.util.Collections;
 import java.util.List;
@@ -46,11 +47,22 @@ public class ConnectApiNotesGateway {
         return createNote(caseToken, summary, description, priority, null);
     }
 
-    public CaseNoteDto createNote(String caseToken, String summary, String description, String priority, String type) {
-        if (type != null && !CaseNotesFacade.CREATABLE_NOTE_TYPES.contains(type)) {
-            throw new IllegalArgumentException("Type must be one of: " + String.join(", ", CaseNotesFacade.CREATABLE_NOTE_TYPES)
-                + " (SYSTEM notes are written by the platform)");
+    public List<NoteTypeDto> listNoteTypes() {
+        requireLogin();
+
+        List<NoteTypeSelectionDTO> body = caseNotesApi.getNoteTypes();
+        if (body == null) {
+            return Collections.emptyList();
         }
+        return body.stream().map(type -> new NoteTypeDto(type.getCode(), type.getDisplayName())).toList();
+    }
+
+    /**
+     * The type is passed through as {@code {"code": type}}; the server validates it. A null type
+     * sets no reference at all: never a reference with a null code, so the request carries
+     * {@code "type": null}, which the server stores as no type.
+     */
+    public CaseNoteDto createNote(String caseToken, String summary, String description, String priority, String type) {
         requireLogin();
 
         CaseNoteValidation.ValidationResult validation = CaseNoteValidation.validate(summary, description);
@@ -63,7 +75,7 @@ public class ConnectApiNotesGateway {
         template.setDescription(description.strip());
         template.setPriority(NotePriority.fromValue(priority));
         if (type != null) {
-            template.setType(NoteType.fromValue(type));
+            template.setType(new NoteTypeReferenceDTO().code(type));
         }
 
         CaseNoteDTO created = caseNotesApi.createNote(caseToken, template);
@@ -91,9 +103,10 @@ public class ConnectApiNotesGateway {
             dto.getToken(),
             dateTime(dto.getCreatedAt()),
             dateTime(dto.getUpdatedAt()),
-            enumValue(dto.getType()),
+            dto.getType() == null ? null : dto.getType().getCode(),
             dto.getCompanyId(),
-            enumValue(dto.getDirection())
+            enumValue(dto.getDirection()),
+            dto.getType() == null ? null : dto.getType().getDisplayName()
         );
     }
 

@@ -39,7 +39,8 @@ public final class DatabaseInitializer {
             fetched_at TEXT NOT NULL,
             type TEXT,
             company_id INTEGER,
-            direction TEXT
+            direction TEXT,
+            type_display_name TEXT
         )
         """;
 
@@ -160,6 +161,7 @@ public final class DatabaseInitializer {
         ensureColumn(jdbcTemplate, "case_note", "type", "TEXT");
         ensureColumn(jdbcTemplate, "case_note", "company_id", "INTEGER");
         ensureColumn(jdbcTemplate, "case_note", "direction", "TEXT");
+        ensureColumn(jdbcTemplate, "case_note", "type_display_name", "TEXT");
         jdbcTemplate.execute(CASE_RESPONSE_TABLE);
         jdbcTemplate.execute(USER_CONTEXT_TABLE);
         jdbcTemplate.execute(WEBHOOK_SUBSCRIPTION_TABLE);
