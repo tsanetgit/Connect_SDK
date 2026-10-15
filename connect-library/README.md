@@ -192,23 +192,28 @@ Legacy top-level `username` / `password` on an account entry still map to `conne
 ### Errors: `ConnectApiException`
 
 Every failure the API answers, and every transport failure, reaches the caller as
-`com.tsanet.api.ConnectApiException` (unchecked). The library sends
-`Accept: application/json, application/problem+json` on every call, so the API answers with
-RFC 7807 problem details and the documented status codes instead of its legacy
-`500 {"message"}` mode; a legacy body is still classified by its content if one arrives.
+`com.tsanet.api.ConnectApiException` (unchecked). The library sends `Accept: application/json`,
+which doesn't opt a `/v1/` call into the API's RFC 7807 problem details. So a failed `/v1/` call
+answers in the API's legacy mode: a `{"message"}` body, often with a `500` where a documented
+`4xx` belongs (tsanetgit/Connect-API-Code#122), which the library classifies as `LEGACY`.
+Classification goes by the body, not the status. The `/v2/` endpoints always answer with problem
+details, but the only ones the library calls are the V2 attachment and receiver storage calls,
+which report failures as `AttachmentV2Exception` instead.
 
 | Member | Meaning |
 |--------|---------|
 | `kind()` | `PROBLEM` (an RFC 7807 body), `LEGACY` (the `{"message"}` body), `CONNECTIVITY` (the API could not be reached, or its answer was lost), `OTHER` (a non-2xx with no recognizable body). |
 | `status()` | The status the API asserted: a problem body's own `status` when it carries one, otherwise the wire status; `0` for `CONNECTIVITY`. |
-| `type()`, `title()`, `detail()`, `instance()` | The problem-details fields, or null where the answer had none. For `CONNECTIVITY`, `detail()` is the failure's class name only. |
+| `type()`, `title()`, `detail()`, `instance()` | The problem-details fields, or null where the answer had none. For `LEGACY`, only `detail()` is set: the body's `message`, with any `validationErrors` folded in as `[field: message]`. For `CONNECTIVITY`, `detail()` is the failure's class name only. |
 | `isProblem(typeSuffix)` | `true` when `type()` ends with the given suffix, e.g. `isProblem("case-update-error")`. |
-| `getMessage()` | `HTTP <status> <title> (<type suffix>): <detail>`, built from the fields above. |
+| `getMessage()` | `HTTP <status> <title> (<type suffix>): <detail>` for `PROBLEM`, `HTTP <status> (legacy error): <detail>` for `LEGACY`, built from the fields above. |
 
-The message is value-free by construction: never the request URL, a header, or a token. A
-wrong password reads `HTTP 401 Authentication Failed`; an invalid lifecycle transition reads
-`HTTP 422 Unprocessable Entity (case-update-error): OPEN cases cannot be closed.`. Handle by
-`kind()` and `isProblem(...)`, not by parsing the message.
+The message is value-free by construction: never the request URL, a header, or a token. An
+invalid lifecycle transition on `/v1/`, in the legacy shape recorded on
+tsanetgit/Connect-API-Code#122, reads `HTTP 500 (legacy error): OPEN cases cannot be closed.`.
+A legacy answer has no `type`, so `isProblem(...)` is `false` for it. Handle by `kind()` and
+`status()`, not by parsing the message; for `LEGACY`, `detail()` is the API's own free text, for
+showing or logging.
 
 ### Collaboration requests — `session.collaborationRequests()`
 
