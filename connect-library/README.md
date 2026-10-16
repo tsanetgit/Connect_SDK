@@ -292,7 +292,7 @@ Case responses include approval and other comment-like activity on a collaborati
 | Method | Description |
 |--------|-------------|
 | `searchPartners(searchTerm)` | Keyword search via `GET /v1/partners/{searchTerm}`. Stores results locally (keyed by search term). |
-| `searchPartnersSemantic(query, limit)` | Semantic search via `GET /v1/partners/search`. Stores results locally (keyed by query). |
+| `searchPartnersSemantic(query, limit)` | **Deprecated, do not use.** Semantic search via `GET /v1/partners/search`, which returns HTTP 500 on BETA and DEV and is being deprecated in the API specification. Use `searchPartners`. Stores results locally (keyed by query). |
 | `listStoredPartners()` | Returns all cached partner search results. |
 | `listStoredPartnersForSearchTerm(searchTerm)` | Returns cached results for one search term. |
 
@@ -434,6 +434,8 @@ session.collaborationRequests().createRequest(
 
 Semantic search:
 
+> **Deprecated.** `GET /v1/partners/search` returns HTTP 500 on BETA and DEV and is being deprecated in the API specification. Use `searchPartners` (keyword search) instead.
+
 ```java
 session.partners().searchPartnersSemantic("partners specializing in cloud infrastructure", 10);
 ```
@@ -475,7 +477,7 @@ The console application (`TSANet-integration-app`) exposes CLI commands that cal
 | `webhooks deliveries --id ID` | `webhooks().listDeliveries()` |
 | `webhook-events` / `stored-webhook-events` | `webhooks().listStoredInboundEvents()` |
 | `stored-webhooks` | `webhooks().listStoredSubscriptions()` |
-| `partners` | `partners().searchPartners()` or `searchPartnersSemantic()` with `--semantic` |
+| `partners` | `partners().searchPartners()`, or `searchPartnersSemantic()` with `--semantic` (deprecated, see the Partners section) |
 | `stored-partners` | `partners().listStoredPartners()` |
 | `attachments list/add/config/https-analyze/https-set` | `attachments()` facade methods |
 | `add-attachment` | `attachments().forwardAttachments()` |
@@ -540,6 +542,8 @@ Select partner (1-3): 2
 ```
 
 Semantic search:
+
+> **Deprecated.** `GET /v1/partners/search` returns HTTP 500 on BETA and DEV and is being deprecated in the API specification. Use `searchPartners` (keyword search) instead.
 
 ```text
 partners --search "partners specializing in AWS networking" --semantic --limit 5
