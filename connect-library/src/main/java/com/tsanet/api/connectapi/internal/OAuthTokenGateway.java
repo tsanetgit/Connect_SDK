@@ -55,9 +55,10 @@ public class OAuthTokenGateway {
             );
             return parseTokenResponse(response.getBody());
         } catch (RestClientResponseException ex) {
+            // No cause: Spring's message names the token URL, which carries the tenant, and quotes
+            // Entra's error body, which names the app (tsanetgit/Connect_SDK#131).
             throw new IllegalStateException(
-                "OAuth client-credentials request failed: HTTP " + ex.getStatusCode().value(),
-                ex
+                "OAuth client-credentials request failed: HTTP " + ex.getStatusCode().value()
             );
         } catch (ResourceAccessException ex) {
             // Spring's message embeds the token URL, and the URL carries the tenant: keep only the

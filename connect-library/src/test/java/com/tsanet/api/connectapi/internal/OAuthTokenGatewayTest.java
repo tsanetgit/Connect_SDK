@@ -63,10 +63,17 @@ class OAuthTokenGatewayTest {
             String tokenUrl = "http://127.0.0.1:" + entra.getAddress().getPort() + "/tenant/oauth2/v2.0/token";
             OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
 
-            assertThatThrownBy(() -> gateway.fetchClientCredentialsToken(
-                new ClientCredentialsAuthConfig("tenant", tokenUrl, "client-id", "client-secret", "api://audience", null)))
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> gateway.fetchClientCredentialsToken(
+                new ClientCredentialsAuthConfig("tenant", tokenUrl, "client-id", "client-secret", "api://audience", null)));
+            assertThat(thrown)
                 .isExactlyInstanceOf(IllegalStateException.class)
                 .hasMessage("OAuth client-credentials request failed: HTTP 401");
+            // Not only the message: a logged stack trace prints every cause's message, and Spring's
+            // response exception names the token URL (the tenant) and quotes Entra's body (the app).
+            for (Throwable t = thrown; t != null; t = t.getCause() == t ? null : t.getCause()) {
+                assertThat(String.valueOf(t.getMessage()))
+                    .doesNotContain("MARKER").doesNotContain("/tenant/").doesNotContain("127.0.0.1");
+            }
             // The JDK client sends "Java-http-client/<version>"; HttpURLConnection sends
             // "Java/<version>". Pins the token call to the session's transport (tsanetgit/Connect_SDK#131).
             assertThat(userAgent.get()).startsWith("Java-http-client/");
