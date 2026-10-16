@@ -3,6 +3,7 @@ package com.tsanet.api.connectapi.internal;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
+import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.auth.ClientCredentialsAuthConfig;
 import com.tsanet.api.auth.OAuthAccessToken;
 import java.net.http.HttpClient;
@@ -13,6 +14,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
@@ -23,7 +25,8 @@ public class OAuthTokenGateway {
 
     /**
      * The token call rides the session's JDK client but none of the Connect API's error handling:
-     * a failure stays the status-only {@code IllegalStateException} below (tsanetgit/Connect_SDK#131).
+     * a refusal stays the status-only {@code IllegalStateException} below, and a transport failure
+     * is {@code ConnectApiException} with no URL or tenant (tsanetgit/Connect_SDK#131).
      */
     public OAuthTokenGateway(HttpClient httpClient) {
         this(new RestTemplate(ConnectApiRestTemplates.transport(httpClient)));
@@ -52,10 +55,21 @@ public class OAuthTokenGateway {
             );
             return parseTokenResponse(response.getBody());
         } catch (RestClientResponseException ex) {
+            // No cause: Spring's message names the token URL, which carries the tenant, and quotes
+            // Entra's error body, which names the app (tsanetgit/Connect_SDK#131).
             throw new IllegalStateException(
-                "OAuth client-credentials request failed: HTTP " + ex.getStatusCode().value(),
-                ex
+                "OAuth client-credentials request failed: HTTP " + ex.getStatusCode().value()
             );
+        } catch (ResourceAccessException ex) {
+            // Spring's message embeds the token URL, and the URL carries the tenant: keep only the
+            // transport's own exception (tsanetgit/Connect_SDK#131). Spring's JDK request reports an
+            // interrupt as an IOException caused by the InterruptedException, with the flag set again.
+            // RestTemplate always wraps the transport's IOException; never fall back to the wrapper.
+            Throwable transport = ex.getCause() == null ? new java.io.IOException("no transport cause") : ex.getCause();
+            if (transport.getCause() instanceof InterruptedException interrupted) {
+                throw ConnectApiException.interrupted(interrupted);
+            }
+            throw ConnectApiException.tokenEndpointUnreachable(transport);
         }
     }
 
