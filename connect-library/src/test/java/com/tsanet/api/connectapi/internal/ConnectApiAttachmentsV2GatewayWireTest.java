@@ -143,6 +143,42 @@ class ConnectApiAttachmentsV2GatewayWireTest {
         server.verify();
     }
 
+    /**
+     * The spec requires {@code expiresAt} on every link and {@code sizeBytes} on every part and
+     * block. A link without them would never be refreshed or size-checked, so an answer missing
+     * either is refused as it is reached, like a missing {@code url}, and the message quotes no link.
+     */
+    @Test
+    void aLinkWithoutItsExpiryOrSizeIsRefused() {
+        String url = "\"url\":\"https://store.example/p?sig=SENTINEL\"";
+        String expiry = "\"expiresAt\":\"2026-10-01T12:30:00Z\"";
+        assertMissing("/single/url", "{" + url + "}", "expiresAt",
+            () -> gateway.singleUploadLink(TOKEN, GRANT_ID));
+        assertMissing("/s3-multipart/parts", "{\"parts\":[{\"partNumber\":1," + url + ",\"sizeBytes\":8}]}",
+            "expiresAt", () -> gateway.s3PartLinks(TOKEN, GRANT_ID, List.of(1)));
+        assertMissing("/s3-multipart/parts", "{\"parts\":[{\"partNumber\":1," + url + "," + expiry + "}]}",
+            "sizeBytes", () -> gateway.s3PartLinks(TOKEN, GRANT_ID, List.of(1)));
+        assertMissing("/azure-block/blocks", "{\"blocks\":[{\"blockNumber\":1," + url + ",\"sizeBytes\":8}]}",
+            "expiresAt", () -> gateway.azureBlockLinks(TOKEN, GRANT_ID, List.of(1)));
+        assertMissing("/azure-block/blocks", "{\"blocks\":[{\"blockNumber\":1," + url + "," + expiry + "}]}",
+            "sizeBytes", () -> gateway.azureBlockLinks(TOKEN, GRANT_ID, List.of(1)));
+    }
+
+    private void assertMissing(String path, String answer, String field,
+                               org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
+        server.reset();
+        server.expect(requestTo(GRANT + path))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withStatus(HttpStatus.OK).contentType(MediaType.APPLICATION_JSON).body(answer));
+        assertThatThrownBy(call)
+            .isInstanceOfSatisfying(AttachmentV2Exception.class, e -> {
+                assertThat(e.code()).isEqualTo(AttachmentV2Exception.CLIENT_PRECONDITION);
+                assertThat(e.getMessage()).isEqualTo("the answer has no " + field)
+                    .doesNotContain("SENTINEL").doesNotContain("store.example");
+            });
+        server.verify();
+    }
+
     @Test
     void completeS3MultipartSendsEveryReceiptWithItsEtagExactly() {
         server.expect(requestTo(GRANT + "/s3-multipart/complete"))

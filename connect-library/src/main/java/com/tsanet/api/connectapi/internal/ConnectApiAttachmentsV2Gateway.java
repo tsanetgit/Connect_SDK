@@ -224,7 +224,8 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         if (dto == null) {
             throw emptyAnswer("sign single upload link");
         }
-        return new UploadLink(1, required(dto.getUrl(), "url"), dto.getHeaders(), null, dto.getExpiresAt());
+        return new UploadLink(1, required(dto.getUrl(), "url"), dto.getHeaders(), null,
+            required(dto.getExpiresAt(), "expiresAt"));
     }
 
     @Override
@@ -501,12 +502,12 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
 
     private static UploadLink toLink(S3PartDTO part) {
         return new UploadLink(required(part.getPartNumber(), "partNumber"), required(part.getUrl(), "url"),
-            part.getHeaders(), part.getSizeBytes(), part.getExpiresAt());
+            part.getHeaders(), required(part.getSizeBytes(), "sizeBytes"), required(part.getExpiresAt(), "expiresAt"));
     }
 
     private static UploadLink toLink(AzureBlockDTO block) {
         return new UploadLink(required(block.getBlockNumber(), "blockNumber"), required(block.getUrl(), "url"),
-            block.getHeaders(), block.getSizeBytes(), block.getExpiresAt());
+            block.getHeaders(), required(block.getSizeBytes(), "sizeBytes"), required(block.getExpiresAt(), "expiresAt"));
     }
 
     private static <T> T required(T value, String field) {
