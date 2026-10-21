@@ -4,8 +4,8 @@ import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.TsaNetApiConfiguration;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsGateway;
-import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsV2Api;
 import com.tsanet.api.connectapi.internal.ConnectApiRestTemplates;
+import com.tsanet.api.connectapi.internal.ConnectApiAttachmentStorageGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiAttachmentsV2Gateway;
 import com.tsanet.api.connectapi.internal.ConnectApiAuthGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiCollaborationGateway;
@@ -16,6 +16,8 @@ import com.tsanet.api.connectapi.internal.ConnectApiResponsesGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiSessionStore;
 import com.tsanet.api.connectapi.internal.ConnectApiUserGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiWebhooksGateway;
+import com.tsanet.api.generated.api.AttachmentGrantsApi;
+import com.tsanet.api.generated.api.AttachmentStorageConfigApi;
 import com.tsanet.api.generated.api.CaseAttachmentsApi;
 import com.tsanet.api.generated.api.CaseNotesApi;
 import com.tsanet.api.generated.api.CaseResponsesApi;
@@ -51,6 +53,7 @@ import com.tsanet.api.auth.AuthMode;
 import com.tsanet.api.connectapi.internal.OAuth401RetryInterceptor;
 import com.tsanet.api.connectapi.internal.OAuthTokenGateway;
 import com.tsanet.api.connectapi.internal.TokenManager;
+import java.net.http.HttpClient;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.springframework.web.client.RestTemplate;
@@ -64,18 +67,21 @@ public final class TsaNetApiRuntime {
     public static TsaNetApiSession create(TsaNetApiConfiguration configuration) {
         ConnectApiSessionStore sessionStore = new ConnectApiSessionStore();
 
+        // One JDK client per session under all three templates (tsanetgit/Connect_SDK#131).
+        HttpClient httpClient = ConnectApiRestTemplates.newHttpClient();
+
         // Login rides an unauthenticated client of its own: no bearer supplier, no 401 retry.
         // On the session client a re-login would recurse into itself through both.
-        ApiClient loginApiClient = new ApiClient(ConnectApiRestTemplates.create());
+        ApiClient loginApiClient = new ApiClient(ConnectApiRestTemplates.create(httpClient));
         loginApiClient.setBasePath(configuration.apiBaseUrl());
         ConnectApiAuthGateway authGateway = new ConnectApiAuthGateway(new IdentityApi(loginApiClient));
 
-        RestTemplate restTemplate = ConnectApiRestTemplates.create();
+        RestTemplate restTemplate = ConnectApiRestTemplates.create(httpClient);
         ApiClient apiClient = new ApiClient(restTemplate);
         apiClient.setBasePath(configuration.apiBaseUrl());
 
         IdentityApi identityApi = new IdentityApi(apiClient);
-        OAuthTokenGateway oauthTokenGateway = new OAuthTokenGateway();
+        OAuthTokenGateway oauthTokenGateway = new OAuthTokenGateway(httpClient);
         TokenManager tokenManager = new TokenManager(
             sessionStore,
             authGateway,
@@ -172,9 +178,13 @@ public final class TsaNetApiRuntime {
         );
 
         ConnectApiAttachmentsV2Gateway attachmentsV2Gateway = new ConnectApiAttachmentsV2Gateway(
-            new ConnectApiAttachmentsV2Api(apiClient),
-            sessionStore
+            new AttachmentGrantsApi(apiClient),
+            sessionStore,
+            configuration.allowedReceiverCompanyIds(),
+            ConnectApiAttachmentsV2Gateway.receivingCompanyFrom(collaborationRequestsApi)
         );
+        ConnectApiAttachmentStorageGateway attachmentStorageGateway =
+            new ConnectApiAttachmentStorageGateway(new AttachmentStorageConfigApi(apiClient), sessionStore);
 
         return new DefaultTsaNetApiSession(
             configuration,
@@ -190,6 +200,7 @@ public final class TsaNetApiRuntime {
             partnersGateway,
             attachmentsGateway,
             attachmentsV2Gateway,
+            attachmentStorageGateway,
             collaborationRequestStorageService,
             collaborationRequestFormStorageService,
             caseNoteStorageService,

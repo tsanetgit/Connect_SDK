@@ -33,7 +33,17 @@ public class SessionGuard {
      * session, sending the first environment's secret to the second's API.
      */
     public TsaNetApiSession session() {
-        String key = environments.activeEnvironment();
+        return session(environments.activeEnvironment());
+    }
+
+    /**
+     * Authenticated session for environment {@code key}, built from that
+     * environment's own stored credentials, for a caller that names the
+     * environment (the Settings page, one card per environment). Every lookup is
+     * keyed off {@code key}, so one environment's credentials never reach
+     * another's API.
+     */
+    public TsaNetApiSession session(String key) {
         DemoProperties.EnvironmentDef def = environments.definitionFor(key);
         CredentialsStore.Credentials credentials = environments.credentialsFor(key).load()
             .orElseThrow(() -> new ResponseStatusException(

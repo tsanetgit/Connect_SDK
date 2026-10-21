@@ -101,7 +101,9 @@ Every login ends with a `/v1/me` call; the answer is kept as `auth().currentUser
 transport failures, arrive as the unchecked `ConnectApiException`: `kind()` is `PROBLEM`,
 `LEGACY`, `CONNECTIVITY` or `OTHER`, with the API's own `status()`, `title()`, `detail()`
 and `isProblem("case-update-error")`-style checks. Its message never carries the URL, a
-header or a token. Handle by kind and type, not by parsing the message.
+header or a token. The library asks for problem details, so a failed `/v1/` call carries the
+documented status and a `type`. Handle by kind, status and `isProblem(...)`, not by parsing
+the message (see "Errors" in `connect-library/README.md`).
 
 Every remote read and successful write upserts into the SQLite cache;
 `listStored*` methods read the cache without touching the network. `logout()` clears
@@ -247,3 +249,126 @@ Watch the release notes on each release.
   - New, not breaking: the V2 direct-delivery attachment client (`attachmentsV2()`, built
     against a draft contract with no live endpoint yet) and the published
     `com.tsanet:attachment-receiver` at the same version (see Coordinates).
+- **3.0.0** is a major for five reasons; the runtime line (Spring Boot 4.1, Jackson 3,
+  JDK 21) is unchanged from 2.0.0. The V2 attachment client (`attachmentsV2()`) is rebuilt
+  on the grant model in the Connect OpenAPI spec and its public types change incompatibly;
+  `TsaNetApiSession` gains `attachmentStorage()`; `ApplicationUserAccount` and
+  `TsaNetApiConfiguration` gain a record component; case notes take their types from the
+  server, so `CaseNotesFacade` gains methods and `CaseNoteDto` gains components; and `/v1/`
+  failures arrive as problem details instead of legacy bodies. V1 attachments and the other
+  facades are unchanged.
+  - Generation: the V2 APIs and their DTOs are generated from the spec, so the build needs a
+    Connect-API-Code spec branch that has the Attachment Grants and Attachment Storage
+    Config operations.
+  - Facade: one method per Connect API call (`createGrant`, `getGrant`, `listGrants`,
+    `singleUploadLink`, `s3PartLinks`, `azureBlockLinks`, `completeSingle`,
+    `completeS3Multipart`, `completeAzureBlock`, `abandon`), plus `complete` for the grant's
+    mode, `upload(caseToken, grant, file, listener)` and `send(caseToken, file, listener)`,
+    which returns the completed `AttachmentGrant`. Removed: `grant`, the old `upload` and
+    `complete` signatures, and the six-argument `send`.
+  - Types: `AttachmentGrant` is the server's grant (a `long` grant id, `Status`,
+    `UploadMode`, `UploadPlan`); new `UploadLink` and `AttachmentGrantPage`;
+    `UploadReceipts` and `UploadProgress` carry an `UploadMode`. Removed:
+    `AttachmentGrantRequest`, `AttachmentCompleteRequest` and `AttachmentCompleteResult`.
+    The grant takes no content type, SHA-256 or description, and there is no
+    `DELIVERED` / note-id outcome: read the grant that complete returns.
+  - `AttachmentV2Exception`: `problemType()` and `isProblem` are replaced by `code()` and
+    `is(code)`, with codes chosen by HTTP status (`attachment/upload-mismatch` for `422`,
+    `attachment/provider-error` for `502`, `attachment/grant-terminal` for `409`,
+    `attachment/invalid-request` for `400`, and others).
+  - Two of the new codes aren't chosen by HTTP status. An interrupted thread sends nothing
+    more in `send` and `upload`, whether the interrupt was already set when `send` started or
+    arrived during a link call, an upload `PUT`, a complete or a retry wait. The code is
+    usually `client/interrupted`, with `status()` 0, but an interrupt during a call that then
+    fails and isn't retried (a link call; an upload `PUT` on its last attempt, or answered with
+    a status that isn't retried; or a complete on its last attempt or with a failure that isn't
+    retryable) surfaces that call's own code; the interrupt stays set either way. 2.0.0
+    reported an interrupt during an upload as `client/upload-unreachable` and during complete
+    as `client/connectivity`; both codes remain, for transport failures.
+    `attachment/receiver-not-allowed` is the receiver allowlist's refusal (below): `status()`
+    is 0 when the client refuses before any request, and `403` when the platform does.
+  - Removed codes, and what a caller sees instead:
+    - `attachment/grant-expired`: `attachment/grant-terminal` (`409`, the grant is abandoned
+      or expired).
+    - `attachment/grant-already-completed`: no error. Completing a completed grant returns
+      it unchanged.
+    - `attachment/upload-not-found` and `attachment/size-mismatch`:
+      `attachment/upload-mismatch` (`422`, an object or part is missing or its size is wrong).
+    - `attachment/checksum-mismatch`: nothing. The grant takes no SHA-256.
+    - `attachment/receiver-not-configured`: `attachment/not-found` on create (`404`, which
+      also means no such case).
+    - `attachment/size-exceeds-receiver-limit`: nothing per receiver. The spec caps
+      `expectedSizeBytes` at 5,000,000,000,000, and create answers a bad request with `400`,
+      `attachment/invalid-request`.
+  - `send` no longer re-grants when a grant expires before complete.
+  - Receiver allowlist: `ApplicationUserAccount` and `TsaNetApiConfiguration` gain a
+    `Set<Long> allowedReceiverCompanyIds` component, the companies the account may deliver
+    V2 attachments to. A `null` or empty set means unrestricted; a set containing `null` is
+    refused at construction. The 2.0.0 constructors, `of`, `forAccount` and the
+    `ApplicationUserAccountConfigMapper` factories compile unchanged and leave it empty.
+    Set it with `ApplicationUserAccount.withAllowedReceiverCompanyIds` or either record's
+    canonical constructor. A record pattern over either type has one more component, so a
+    2.0.0 `case ApplicationUserAccount(var id, var path, var auth)` stops compiling.
+    `equals` and `hashCode` now include the list, so records that differ only in it aren't
+    equal; records built with the 2.0.0 constructors all carry the empty set and compare as
+    before. The console's own configuration binds `allowed-receiver-company-ids`, on an
+    account entry beside `sqlite-path`, and passes it to `withAllowedReceiverCompanyIds`;
+    the mapper doesn't read it, so another app passes its list the same way. With a list set,
+    `createGrant` (and so `send`) refuses a case whose receiving company isn't on it with
+    `attachment/receiver-not-allowed`, before any grant is requested. The platform's own
+    sender allowlist answers `403`, which is reported as the same code. Details:
+    `docs/attachments-v2-client.md`.
+  - `TsaNetApiSession` gained `attachmentStorage()`, the receiving side of V2:
+    `AttachmentStorageFacade` gets, registers and tests the company's S3 or Azure Blob
+    storage, with the types `StorageConfig`, `StorageTarget` and `StorageTestResult`.
+    Callers are unaffected; an implementer or decorator of `TsaNetApiSession` must add it.
+    Details: "Receiver storage (V2)" in `connect-library/README.md`.
+  - Note types come from the server. `CaseNotesFacade.listNoteTypes()` returns the types a
+    caller may send, as `NoteTypeDto` (`code`, `displayName`), in the server's order from
+    `GET /v1/note-types`. The server can add a type without an API release, so read the list
+    at runtime rather than hard-coding codes, and match on `code`, never on `displayName`.
+    `createNote(caseToken, summary, description, priority, type)` sends the code as given.
+  - There is no default type. The four-argument `createNote` from 2.0.0 still compiles, now
+    as a default method that passes a null type, and a null type creates a note with no type:
+    neither the library nor the server picks one.
+  - A code the server doesn't offer is refused with a `400`, which reaches the caller as a
+    `ConnectApiException` with `status()` 400. It arrives as a `PROBLEM` body, type
+    `invalid-note-type`, whose `detail()` names the allowed codes (see "Errors" in
+    `connect-library/README.md`).
+  - `CaseNotesFacade` gains `listNoteTypes()` and the five-argument `createNote`, both
+    abstract. Callers are unaffected; an implementer or decorator of `CaseNotesFacade` must
+    add them.
+  - `CaseNoteDto` grows from 2.0.0's 14 components to 18: `type` (the code), `companyId`,
+    `direction` (`OUTBOUND` or `INBOUND`, relative to the account that fetched the note) and
+    `typeDisplayName` (for display only), each null when the API sent none. A null type is
+    not a public note. The 2.0.0 14-argument constructor still compiles, deprecated, and
+    leaves the four null. A 2.0.0 record pattern over `CaseNoteDto` has four fewer
+    components, so it stops compiling. The SQLite cache adds the four `case_note` columns
+    at startup; notes cached by 2.0.0 read them as null until they are fetched again.
+  - `/v1/` failures are now `PROBLEM`. The library sends
+    `Accept: application/json, application/problem+json` (tsanetgit/Connect_SDK#127); 2.0.0
+    sent `application/json` alone, so the API answered every `/v1/` failure in its legacy
+    mode. A failed `/v1/` call now carries the documented `4xx` status where 2.0.0 often saw
+    a `500` (tsanetgit/Connect-API-Code#122), with `type()` and `title()` set, and
+    `getMessage()` reads `HTTP <status> <title> (<type suffix>): <detail>` instead of
+    `HTTP <status> (legacy error): <detail>`. Code that branches on `kind() == LEGACY`, on
+    `status()`, or on the message text sees different values: sweep for it. A wrong password
+    is a `PROBLEM` too: `HTTP 401 Authentication Failed (authentication-error)`.
+  - Connect API calls go over the JDK's `java.net.http.HttpClient` instead of
+    `HttpURLConnection`, which dropped the body of a 401 answer to a `POST`
+    (tsanetgit/Connect_SDK#128). The JVM's default proxy selector and SSL context still
+    apply, so `https.proxyHost` and `javax.net.ssl.*` settings carry over. Settings only
+    `HttpURLConnection` reads do not: a default `Authenticator` (for an authenticating
+    proxy), and `HttpsURLConnection`'s default socket factory and hostname verifier. A `GET`
+    that is redirected is no longer followed: any `3xx` is `OTHER`, with the status and
+    `unexpected redirect` in the message, never the `Location`. The OAuth client-credentials
+    token call rides the same client (tsanetgit/Connect_SDK#131), so the same proxy and TLS
+    notes apply to it. A refused token call keeps its status-only message; one that can't reach
+    the token endpoint is `CONNECTIVITY`, `cannot reach the OAuth token endpoint (<class>)`, with
+    no URL or tenant in it.
+  - An interrupted call stops: `OTHER`, status `0`, `Connect API call: interrupted`, with
+    the thread left interrupted (the V2 attachment calls report it as `client/interrupted`).
+  - Idle connections are kept for reuse for up to 30 seconds on JDK 21, the JDK client's
+    `jdk.httpclient.keepalive.timeout` default, a JVM-wide setting the library leaves alone.
+    A `POST` sent on a pooled connection that something on the network path closed while it
+    sat idle fails as `CONNECTIVITY`: the JDK client can retry a `GET` there, never a `POST`.

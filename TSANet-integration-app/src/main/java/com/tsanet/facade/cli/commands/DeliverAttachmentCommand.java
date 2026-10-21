@@ -26,7 +26,7 @@ public class DeliverAttachmentCommand implements Command {
 
     @Override
     public String description() {
-        return "Deliver one file to the partner on the direct path, V2 (--id/--token, --file PATH, --description TEXT, --sha256)";
+        return "Deliver one file to the partner on the direct path, V2 (--id/--token, --file PATH)";
     }
 
     @Override

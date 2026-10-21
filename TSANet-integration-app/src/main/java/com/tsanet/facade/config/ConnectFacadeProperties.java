@@ -37,9 +37,15 @@ public record ConnectFacadeProperties(
         String sqlitePath,
         String username,
         String password,
-        AccountAuthProperties auth
+        AccountAuthProperties auth,
+        java.util.List<Long> allowedReceiverCompanyIds
     ) {
+        /** The account, with its V2 receiver allowlist ({@code allowed-receiver-company-ids}); absent or empty is unrestricted. */
         public ApplicationUserAccount toAccount() {
+            return baseAccount().withAllowedReceiverCompanyIds(allowedReceiverCompanyIds);
+        }
+
+        private ApplicationUserAccount baseAccount() {
             if (auth != null) {
                 return ApplicationUserAccountConfigMapper.fromAuthType(
                     id,

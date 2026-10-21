@@ -99,16 +99,10 @@
             </form>
             <p id="attach-status" class="status"></p>
             <h4>Direct delivery (V2)</h4>
-            <p class="muted">The file goes straight into the partner's store under the platform's instructions; the platform verifies arrival and posts the case note. Nothing passes through the Connect API.</p>
+            <p class="muted">The file goes straight into the partner's store through links the platform signs; the platform checks the upload when it completes the grant. Nothing passes through the Connect API.</p>
             <form id="attach-v2-form">
-                <label>Description
-                    <input type="text" name="description">
-                </label>
                 <label>File
                     <input type="file" name="file" required>
-                </label>
-                <label class="inline">
-                    <input type="checkbox" name="sha256"> Send a SHA-256 for verification
                 </label>
                 <button type="submit">Deliver directly (V2)</button>
             </form>

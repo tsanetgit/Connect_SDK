@@ -45,6 +45,7 @@ var requests = session.collaborationRequests().listRequests();
 | `sqlitePath` | `String` | Path to the SQLite database file (required) |
 | `username` | `String` | Optional default username for `loginWithConfiguredCredentials()` |
 | `password` | `String` | Optional default password for `loginWithConfiguredCredentials()` |
+| `allowedReceiverCompanyIds` | `Set<Long>` | Optional V2 receiver allowlist: the companies this account may deliver attachments to; empty means unrestricted. On the canonical constructor and on `ApplicationUserAccount`; `of` and `forAccount` leave it empty. See `docs/attachments-v2-client.md`. |
 
 ## Session factory (isolated caches)
 
@@ -105,6 +106,7 @@ session.webhooks();
 session.partners();
 session.attachments();
 session.attachmentsV2();
+session.attachmentStorage();
 ```
 
 Unless noted, remote operations require a prior successful `authenticate()` or `login()`. Unauthenticated calls throw `IllegalStateException: Not logged in`.
@@ -168,6 +170,9 @@ tsanet:
   accounts:
     - id: production
       sqlite-path: "${user.home}/.tsanet/production.db"
+      # Optional V2 receiver allowlist (empty or absent = unrestricted). The console app binds it to
+      # ApplicationUserAccount.withAllowedReceiverCompanyIds; another app passes it the same way.
+      allowed-receiver-company-ids: [1001, 1002]
       auth:
         type: client-credentials
         tenant-id: "..."
@@ -188,22 +193,30 @@ Legacy top-level `username` / `password` on an account entry still map to `conne
 
 Every failure the API answers, and every transport failure, reaches the caller as
 `com.tsanet.api.ConnectApiException` (unchecked). The library sends
-`Accept: application/json, application/problem+json` on every call, so the API answers with
-RFC 7807 problem details and the documented status codes instead of its legacy
-`500 {"message"}` mode; a legacy body is still classified by its content if one arrives.
+`Accept: application/json, application/problem+json` on every Connect API call, which opts a
+`/v1/` call into the API's RFC 7807 problem details: a failure answers with a problem body and the
+documented `4xx` status, classified `PROBLEM`. Without that header a `/v1/` endpoint answers in
+the API's legacy mode, a `{"message"}` body often with a `500` where a `4xx` belongs
+(tsanetgit/Connect-API-Code#122); a legacy body is still classified, as `LEGACY`, if one arrives.
+Classification goes by the body, not the status. The `/v2/` endpoints always answer with problem
+details, but the only ones the library calls are the V2 attachment and receiver storage calls,
+which report failures as `AttachmentV2Exception` instead.
 
 | Member | Meaning |
 |--------|---------|
-| `kind()` | `PROBLEM` (an RFC 7807 body), `LEGACY` (the `{"message"}` body), `CONNECTIVITY` (the API could not be reached), `OTHER` (a non-2xx with no recognizable body). |
-| `status()` | The status the API asserted: a problem body's own `status` when it carries one, otherwise the wire status; `0` for `CONNECTIVITY`. |
-| `type()`, `title()`, `detail()`, `instance()` | The problem-details fields, or null where the answer had none. For `CONNECTIVITY`, `detail()` is the failure's class name only. |
+| `kind()` | `PROBLEM` (an RFC 7807 body), `LEGACY` (the `{"message"}` body), `CONNECTIVITY` (the API could not be reached, or its answer was lost), `OTHER` (a non-2xx with no recognizable body; a redirect, which the library never follows; or a call the caller interrupted). |
+| `status()` | The status the API asserted: a problem body's own `status` when it carries one, otherwise the wire status; `0` for `CONNECTIVITY` and an interrupted call. |
+| `type()`, `title()`, `detail()`, `instance()` | The problem-details fields, or null where the answer had none. For `LEGACY`, only `detail()` is set: the body's `message`, with any `validationErrors` folded in as `[field: message]`. For `CONNECTIVITY`, `detail()` is the failure's class name only, and `title()` is `OAuth token endpoint` when the OAuth client-credentials token call is what failed. |
 | `isProblem(typeSuffix)` | `true` when `type()` ends with the given suffix, e.g. `isProblem("case-update-error")`. |
-| `getMessage()` | `HTTP <status> <title> (<type suffix>): <detail>`, built from the fields above. |
+| `getMessage()` | `HTTP <status> <title> (<type suffix>): <detail>` for `PROBLEM`, `HTTP <status> (legacy error): <detail>` for `LEGACY`, built from the fields above. |
 
-The message is value-free by construction: never the request URL, a header, or a token. A
-wrong password reads `HTTP 401 Authentication Failed`; an invalid lifecycle transition reads
-`HTTP 422 Unprocessable Entity (case-update-error): OPEN cases cannot be closed.`. Handle by
-`kind()` and `isProblem(...)`, not by parsing the message.
+The message is value-free by construction: never the request URL, a header, or a token. A note
+type the server doesn't offer reads
+`HTTP 400 Invalid Note Type (invalid-note-type): Invalid note type 'bogus'. Allowed values: partner, public, escalation, status`
+(Development, 2026-10-15). A wrong password reads
+`HTTP 401 Authentication Failed (authentication-error)`, followed by the API's detail. A legacy
+answer has no `type`, so `isProblem(...)` is `false` for it. Handle by `kind()`, `status()` and
+`isProblem(...)`, not by parsing the message.
 
 ### Collaboration requests — `session.collaborationRequests()`
 
@@ -231,7 +244,13 @@ wrong password reads `HTTP 401 Authentication Failed`; an invalid lifecycle tran
 | `listNotesForAllRequests()` | Fetches notes for every known collaboration request. |
 | `listStoredNotes()` | Returns all notes from SQLite. |
 | `listStoredNotesForRequest(caseToken)` | Returns cached notes for one request. |
-| `createNote(caseToken, summary, description, priority)` | Creates a note on the API. Validates non-empty summary/text and OpenAPI size limits (summary ≤ 500, description ≤ 5000). Refreshes the full notes list in SQLite for that request. |
+| `listNoteTypes()` | The note types a caller may send, as `NoteTypeDto(code, displayName)` in the server's display order, from `GET /v1/note-types`. The server owns the list and can add a type without an API release, so read it rather than hard-coding codes. |
+| `createNote(caseToken, summary, description, priority)` | Creates a note with no type; there is no default type. Validates non-empty summary/text and OpenAPI size limits (summary ≤ 500, description ≤ 5000). Refreshes the full notes list in SQLite for that request. |
+| `createNote(caseToken, summary, description, priority, type)` | The same, with a type code that `listNoteTypes()` returns. The library sends the code as given and doesn't check it: the server matches it ignoring case and refuses any other code, including `system`, with a 400 that reaches the caller as a `ConnectApiException`. A null type creates a note with no type. |
+
+Each `CaseNoteDto` carries the note's `type`, the lowercase code the API sent (for example `partner`, `public` or `system`), its `typeDisplayName` label, the authoring company's `companyId`, and its `direction`: `OUTBOUND` when the company of the account that fetched it wrote the note, `INBOUND` when another company did. A platform-generated note comes without `companyId` and `direction`. Each is null when the API didn't send it, and the SQLite cache stores all four. Match on `type`, never on the label, and don't treat a null or unrecognized type as public. The 14-argument constructor from before these fields is deprecated.
+
+A note whose sender set no type reads back with `type` and `typeDisplayName` null, and so does every note written before note types existed. Notes the platform writes itself come back typed: the API types its own case-event notes `partner`, and the web app's automated notes read `system`. The SDK shows the type the API sends and doesn't infer one.
 
 ### Case responses — `session.caseResponses()`
 
@@ -292,36 +311,67 @@ Case responses include approval and other comment-like activity on a collaborati
 
 ### Direct delivery (V2) — `session.attachmentsV2()`
 
-The sender's side of the V2 attachment contract: the file goes straight into the partner's
-store and nothing passes through the Connect API. Built against the draft contract in
-`tsanetgit/Connect-API-Code#147`; the platform endpoint is not live yet, and the request and
-result types here will be replaced by generated ones when the contract lands in the spec.
-The member-facing walkthrough, including the three calls without the SDK, is
+The sender's side of V2 attachment delivery: the file goes straight into the receiving
+company's storage and nothing passes through the Connect API. The Connect OpenAPI spec marks
+these operations `x-stability-level: alpha`.
+
+<!-- sync: v2-client-intro -->
+`AttachmentsV2Facade`, in `connect-library`, is a hand-written client over the
+`AttachmentGrantsApi` and data classes generated from the Attachment Grants operations in the
+Connect OpenAPI spec.
+<!-- /sync: v2-client-intro -->
+
+The member-facing walkthrough, including the calls without the SDK, is
 [`docs/attachments-v2-client.md`](../docs/attachments-v2-client.md).
 
 | Method | Description |
 |--------|-------------|
-| `send(caseToken, file, contentType, description, withSha256, listener)` | Grant, upload, complete. Abandons the grant and throws `AttachmentV2Exception` on any upload failure; on a complete-time `attachment/grant-expired` it re-grants once and uploads again. |
-| `grant(caseToken, request)` | Ask the platform for permission and upload instructions for one file. |
-| `upload(grant, file, listener)` | Execute the grant's upload block verbatim (single, multipart, resumable or relay), streaming from disk one part at a time. |
-| `complete(caseToken, grantId, request)` | Report the upload finished; the platform seals it, verifies arrival and records the outcome. |
-| `abandon(caseToken, grantId)` | Abandon a grant; any open upload session is aborted and nothing becomes visible. |
+| `send(caseToken, file, listener)` | Create a grant, upload and complete in one call, and return the completed grant. Its retries, its recovery after a failed complete, when it abandons the grant and how an interrupt stops it are in `send()`'s javadoc, which the guide's [With the SDK](../docs/attachments-v2-client.md#with-the-sdk) section carries word for word. |
+| `createGrant(caseToken, fileName, expectedSizeBytes)` | Create a grant. The receiver's storage decides its mode and plan. |
+| `getGrant(caseToken, grantId)`, `listGrants(caseToken, page, size)` | Read one grant, or a page of the case's grants. |
+| `singleUploadLink`, `s3PartLinks`, `azureBlockLinks` | Upload links for the grant's mode, at most 1,000 numbers per call. |
+| `upload(caseToken, grant, file, listener)` | Upload the file for any supported mode: links requested just before use, refreshed within 60 seconds of expiry or after a `403`, three attempts per part. Never completes or abandons. |
+| `complete(caseToken, grant, receipts)` | The complete call for the grant's mode (`completeSingle`, `completeS3Multipart`, `completeAzureBlock`). |
+| `abandon(caseToken, grantId)` | No more links, no completion, nothing announced on the case. |
 
 ```java
-AttachmentCompleteResult outcome = session.attachmentsV2().send(
+AttachmentGrant grant = session.attachmentsV2().send(
     caseToken,
     Path.of("diag.tar.gz"),
-    "application/gzip",
-    "Diagnostics from the failing node",   // optional, goes into the case note
-    true,                                  // compute and send a SHA-256
-    progress -> log.info("{} {}/{} parts, {} of {} bytes", progress.mode(),
+    progress -> log.info("{} {}/{} parts, {} of {} bytes", progress.mode().value(),
         progress.partsDone(), progress.partsTotal(), progress.bytesSent(), progress.bytesTotal()));
 ```
 
-`outcome.status()` is the platform's word, never the client's: `DELIVERED` (verified),
-`DELIVERED_UNVERIFIED` (sender-reported, the case note says so), `FAILED` or `EXPIRED`
-(nothing was announced to the partner). A client that sent every byte still reports whatever
-this says.
+The returned grant is the platform's record: `grant.completed()` is true once the platform
+has completed it. Failures carry a `code()`, for example `attachment/upload-mismatch` when
+the platform finds the upload doesn't match the grant.
+
+### Receiver storage (V2) — `session.attachmentStorage()`
+
+<!-- PROVISIONAL(tsanetgit/Connect-API-Code#170): the platform answers 404 both for no storage configuration and for one it doesn't show through these endpoints (today a MongoDB one); #170's 2026-10-05 comment asks the read to tell them apart. Once it does, this says which. -->
+
+The receiving side of V2: where files sent to this account's company land. Every call applies
+to the authenticated account's own company. No secret is sent or stored: an S3 bucket is
+reached through a role TSANet assumes, and an Azure Blob container is named by its tenant,
+storage account and container. The operations are tagged **Attachment Storage Config** in the
+Connect OpenAPI spec, which marks them `x-stability-level: alpha`.
+
+| Method | Description |
+|--------|-------------|
+| `get()` | The company's registered configuration, or empty when the platform answers `404`: for example, when nothing is registered, or when the company has a configuration this endpoint doesn't show (today, a MongoDB one; `tsanetgit/Connect-API-Code#170`), which `register` replaces. |
+| `register(target)` | Register a `StorageTarget.S3(bucket, region, roleArn, prefix)` or `StorageTarget.AzureBlob(container, tenantId, storageAccountName, prefix)`, replacing whatever was registered, of any kind. It starts untested. For S3, give the returned `externalId()` to the AWS account's admin for the role's trust policy (`sts:ExternalId`). A configuration the platform won't accept is `attachment/invalid-request`. |
+| `test()` | Ask the platform to check it can use the registered storage. A failed check is a result (`verified()` false, with the platform's `detail()`), not an exception. With nothing registered, or a configuration this endpoint doesn't show (today, a MongoDB one), it's `attachment/not-found`. |
+
+```java
+StorageConfig config = session.attachmentStorage().register(new StorageTarget.S3(
+    "acme-tsanet-inbound", "us-east-1", "arn:aws:iam::123456789012:role/tsanet-writer", null));
+log.info("Add ExternalId {} to the role's trust policy", config.externalId());
+
+StorageTestResult result = session.attachmentStorage().test();
+```
+
+Today any API user of a company can change its storage (`tsanetgit/Connect-API-Code#170`
+proposes an admin-scoped path). `register` follows the platform when that lands.
 
 ---
 
@@ -415,7 +465,8 @@ The console application (`TSANet-integration-app`) exposes CLI commands that cal
 | `respond-information` / `requests info-response` | `caseResponses().submitInformationResponse()` |
 | `notes` | `caseNotes().listNotesForAllRequests()` |
 | `notes list` / `notes-list` | `caseNotes().listNotesForRequest()` (chronological timeline for one request) |
-| `notes add` / `add-note` | `caseNotes().createNote()` (prompts for text when omitted) |
+| `notes add` / `add-note` | `caseNotes().createNote()` (prompts for text when omitted; optional `--type` with a code from `notes types`) |
+| `notes types` | `caseNotes().listNoteTypes()` (the codes `--type` takes, with their labels) |
 | `responses` | `caseResponses().listResponsesForAllRequests()` |
 | `sync` | `collaborationRequests().syncAllDetails()` |
 | `me` | `users().getCurrentUser()` |
@@ -450,10 +501,10 @@ add-attachment --token abc-case-token-xyz --description "Screenshot" --file ./sc
 stored-attachments --id 123
 ```
 
-Deliver one file on the direct path (V2, draft contract; see the facade section above):
+Deliver one file on the direct path (V2; see the facade section above):
 
 ```text
-deliver-attachment --id 123 --file ./diag.tar.gz --description "Diagnostics from the failing node" --sha256
+deliver-attachment --id 123 --file ./diag.tar.gz
 ```
 
 Analyze and set HTTPS transport configuration:
@@ -668,19 +719,35 @@ notes add --id 123
 notes add --token abc-case-token-xyz --text "Investigating on our side."
 add-note --id 123 --summary "Update" --text "Customer confirmed the issue."
 notes add --id 123 --text "Follow-up" --priority HIGH
+notes types
+notes add --id 123 --text "Follow-up" --type public
 ```
 
-After a successful post, the command prints a confirmation and the refreshed notes timeline:
+`--type` takes a code that `notes types` lists, and the CLI passes it to the server as typed; the server matches it ignoring case. Without `--type`, the note has no type.
+
+After a successful post, the command prints a confirmation and the refreshed notes timeline. The timeline shows each note's type code and direction after its author, whichever of the two the API sent, so a note with no type shows only its direction:
 
 ```text
-Note created: id=42 summary=Investigating on our side. priority=MEDIUM
+Note created: id=43 summary=Follow-up priority=MEDIUM type=public
 Notes timeline for request id=123 token=... status=ACCEPTED
- 1. [2026-01-01T12:00:00Z] engineer@example.com | Investigating on our side.
+ 1. [2026-01-01T12:00:00Z] engineer@example.com (OUTBOUND) | Investigating on our side.
+ 2. [2026-01-01T12:05:00Z] engineer@example.com (public, OUTBOUND) | Follow-up
+```
+
+`notes types` lists the codes in the server's order:
+
+```text
+Note types (4):
+ - partner (Partner)
+ - public (Public)
+ - escalation (Escalation)
+ - status (Status)
 ```
 
 Validation examples:
 
 ```text
+Failed: HTTP 400 Invalid Note Type (invalid-note-type): Invalid note type 'bogus'. Allowed values: partner, public, escalation, status
 Note text must not be empty.
 Note text exceeds maximum length of 5000 characters.
 Cannot add notes to a closed request (status=CLOSED).

@@ -38,7 +38,8 @@ public class NotesCommand implements Command {
 
     @Override
     public String description() {
-        return "Fetch or add notes: 'notes list/add --id ID' or '--token TOKEN'; '--all' for every request";
+        return "Fetch or add notes: 'notes list/add --id ID' or '--token TOKEN'; '--all' for every request;"
+            + " 'notes types' for the type codes 'notes add --type' takes";
     }
 
     @Override
@@ -46,6 +47,10 @@ public class NotesCommand implements Command {
         try {
             if (args.length > 0 && "list".equalsIgnoreCase(args[0])) {
                 notesListExecutor.execute(Arrays.copyOfRange(args, 1, args.length), cliRunContext);
+                return;
+            }
+            if (args.length > 0 && "types".equalsIgnoreCase(args[0])) {
+                EntityPrinter.printNoteTypes(cliRunContext, session.caseNotes().listNoteTypes());
                 return;
             }
             if (args.length > 0 && "add".equalsIgnoreCase(args[0])) {
@@ -62,7 +67,7 @@ public class NotesCommand implements Command {
                 return;
             }
             throw new IllegalArgumentException(
-                "Provide 'notes list/add --id ID', '--token TOKEN', or '--all'"
+                "Provide 'notes list/add --id ID', '--token TOKEN', '--all', or 'notes types'"
             );
         } catch (Exception ex) {
             System.out.println(EntityPrinter.error(cliRunContext, "Failed: " + ex.getMessage()));

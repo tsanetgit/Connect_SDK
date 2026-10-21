@@ -2,16 +2,22 @@ package com.tsanet.demo.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormTemplateDto;
+import com.tsanet.api.connectapi.dto.NoteTypeDto;
+import com.tsanet.api.facade.CaseNotesFacade;
 import com.tsanet.api.facade.CollaborationRequestsFacade;
+import java.util.List;
 import java.util.Map;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
@@ -32,6 +38,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class CollaborationRequestsControllerTest {
 
     private CollaborationRequestsFacade requests;
+    private CaseNotesFacade notes;
     private MockMvc mvc;
 
     @BeforeEach
@@ -39,6 +46,8 @@ class CollaborationRequestsControllerTest {
         requests = mock(CollaborationRequestsFacade.class);
         TsaNetApiSession session = mock(TsaNetApiSession.class);
         when(session.collaborationRequests()).thenReturn(requests);
+        notes = mock(CaseNotesFacade.class);
+        when(session.caseNotes()).thenReturn(notes);
         SessionGuard guard = mock(SessionGuard.class);
         when(guard.session()).thenReturn(session);
         mvc = MockMvcBuilders.standaloneSetup(new CollaborationRequestsController(guard))
@@ -81,5 +90,36 @@ class CollaborationRequestsControllerTest {
                 .content("{\"receiverCompanyId\":42,\"caseNumber\":\"C-1\",\"summary\":\"s\",\"description\":\"d\"}"))
             .andExpect(status().isOk());
         verify(requests).createRequest(eq(42L), eq("C-1"), eq("s"), eq("d"), eq(true));
+    }
+
+    @Test
+    void noteTypesAreTheLibrarysListInTheServersOrder() throws Exception {
+        when(notes.listNoteTypes()).thenReturn(List.of(
+            new NoteTypeDto("status", "Status"), new NoteTypeDto("partner", "Partner")));
+
+        mvc.perform(get("/api/note-types"))
+            .andExpect(status().isOk())
+            .andExpect(content().json("[{\"code\":\"status\",\"displayName\":\"Status\"},"
+                + "{\"code\":\"partner\",\"displayName\":\"Partner\"}]", true));
+    }
+
+    @Test
+    void aBlankTypeCreatesANoteWithNoType() throws Exception {
+        for (String type : List.of("\"type\":\"\",", "\"type\":\"  \",", "")) {
+            mvc.perform(post("/api/requests/tok-1/notes")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{" + type + "\"summary\":\"s\",\"description\":\"d\",\"priority\":\"LOW\"}"))
+                .andExpect(status().isOk());
+        }
+        verify(notes, org.mockito.Mockito.times(3)).createNote(eq("tok-1"), eq("s"), eq("d"), eq("LOW"), isNull());
+    }
+
+    @Test
+    void aTypeIsPassedThroughAsGiven() throws Exception {
+        mvc.perform(post("/api/requests/tok-1/notes")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"summary\":\"s\",\"description\":\"d\",\"priority\":\"LOW\",\"type\":\"PuBlic\"}"))
+            .andExpect(status().isOk());
+        verify(notes).createNote("tok-1", "s", "d", "LOW", "PuBlic");
     }
 }

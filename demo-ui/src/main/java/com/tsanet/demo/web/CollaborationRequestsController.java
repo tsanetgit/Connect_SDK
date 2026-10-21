@@ -4,6 +4,7 @@ import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.connectapi.dto.CaseResponseDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormTemplateDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
+import com.tsanet.api.connectapi.dto.NoteTypeDto;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -68,9 +69,16 @@ public class CollaborationRequestsController {
         return new CaseDetail(status, notes, responses);
     }
 
+    /** The note types the Add note form offers, in the server's order (GET /v1/note-types). */
+    @GetMapping("/api/note-types")
+    public List<NoteTypeDto> noteTypes() {
+        return guard.session().caseNotes().listNoteTypes();
+    }
+
     @PostMapping("/api/requests/{token}/notes")
     public CaseNoteDto addNote(@PathVariable String token, @RequestBody NoteBody body) {
-        return guard.session().caseNotes().createNote(token, body.summary(), body.description(), body.priority());
+        String type = body.type() == null || body.type().isBlank() ? null : body.type();
+        return guard.session().caseNotes().createNote(token, body.summary(), body.description(), body.priority(), type);
     }
 
     @PostMapping("/api/requests/{token}/approve")
@@ -111,7 +119,8 @@ public class CollaborationRequestsController {
     ) {
     }
 
-    public record NoteBody(String summary, String description, String priority) {
+    /** {@code type} is a code from {@code /api/note-types}, passed through as given; blank or absent creates a note with no type. */
+    public record NoteBody(String summary, String description, String priority, String type) {
     }
 
     /** Shared body for approve/reject/request-info; {@code text} carries nextSteps, reason, or requestedInformation. */

@@ -8,12 +8,23 @@ public record DemoProperties(
     Map<String, EnvironmentDef> environments,
     String defaultEnvironment,
     String dataDir,
-    Boolean allowInsecureHttp
+    Boolean allowInsecureHttp,
+    Boolean receiverStorageEditable
 ) {
 
     /** The operator's opt-out of the https requirement, for a local mock; null means false. */
     public boolean insecureHttpAllowed() {
         return Boolean.TRUE.equals(allowInsecureHttp);
+    }
+
+    /**
+     * Whether Settings may register a V2 receiver storage configuration; null means false. Off by
+     * default because the platform lets any API user of a company repoint its storage
+     * (tsanetgit/Connect-API-Code#170), and a hosted demo shouldn't make that one click away.
+     * Reading and testing the configuration don't depend on it.
+     */
+    public boolean receiverStorageEditingAllowed() {
+        return Boolean.TRUE.equals(receiverStorageEditable);
     }
 
     /**

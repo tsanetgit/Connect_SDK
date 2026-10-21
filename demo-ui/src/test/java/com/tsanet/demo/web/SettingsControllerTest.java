@@ -33,13 +33,15 @@ class SettingsControllerTest {
     @BeforeEach
     void setUp() {
         // One environment, no Entra tenant: OAuth mode is unavailable by config.
-        environments = new EnvironmentService(new DemoProperties(
+        DemoProperties properties = new DemoProperties(
             Map.of("beta", new DemoProperties.EnvironmentDef("Beta", "http://localhost:9", null, null)),
             "beta",
             dataDir.toString(),
-            true  // the tests point at a local http mock that is never contacted
-        ));
-        mvc = MockMvcBuilders.standaloneSetup(new SettingsController(environments))
+            true,  // the tests point at a local http mock that is never contacted
+            null
+        );
+        environments = new EnvironmentService(properties);
+        mvc = MockMvcBuilders.standaloneSetup(new SettingsController(environments, new SessionGuard(environments), properties))
             .setControllerAdvice(new ApiErrorHandler())
             .build();
     }

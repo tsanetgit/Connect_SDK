@@ -65,6 +65,7 @@ function showView(name) {
         t.classList.toggle('active', t.dataset.view === name));
     if (name === 'dashboard') loadRequests();
     if (name === 'webhooks') loadWebhooks();
+    if (name === 'settings') loadReceiverStorageIfShown();
 }
 
 // ---------- identity + environments ----------
@@ -145,6 +146,7 @@ function renderEnvSettings() {
                     ${isActive ? '' : `<button type="button" class="env-switch-btn" data-env="${esc(env.key)}">Make Active</button>`}
                 </div>
             </form>
+            <div class="receiver-storage" data-env="${esc(env.key)}" data-configured="${env.configured}"></div>
         `;
         host.appendChild(card);
     }
@@ -161,6 +163,150 @@ function renderEnvSettings() {
         btn.addEventListener('click', () => onClearEnvCredentials(btn.dataset.env)));
     host.querySelectorAll('.env-switch-btn').forEach(btn =>
         btn.addEventListener('click', () => onSwitchEnvironment(btn.dataset.env)));
+    loadReceiverStorageIfShown();
+}
+
+// ---------- V2 receiver storage (Settings) ----------
+// Where files sent to the company signed in to each environment land. Values from the API are
+// set through the DOM, never inside an attribute: esc() doesn't escape quotes.
+
+const STORAGE_FIELDS = {
+    s3: [['bucket', 'Bucket'], ['region', 'Region'], ['roleArn', 'Role ARN']],
+    azureBlob: [['container', 'Container'], ['tenantId', 'Tenant ID'], ['storageAccountName', 'Storage account']],
+};
+
+const STORAGE_VERIFICATION = {
+    PASSED: ['test passed', 'st-approved'],
+    FAILED: ['test failed', 'st-rejected'],
+    NEVER_TESTED: ['not tested', 'st-pending'],
+};
+
+// Each configured card's storage read signs in to that environment, so it runs only while Settings
+// is showing: on opening it, and when the cards re-render there. Other tabs cause no traffic.
+function loadReceiverStorageIfShown() {
+    if (document.getElementById('view-settings')?.classList.contains('hidden')) return;
+    document.querySelectorAll('#env-settings .receiver-storage').forEach(box => loadReceiverStorage(box));
+}
+
+async function loadReceiverStorage(box, resultText) {
+    if (box.dataset.configured !== 'true') {
+        box.innerHTML = `<h4>V2 receiver storage</h4>
+            <p class="muted">Save credentials for this environment to see where files sent to its company land.</p>`;
+        return;
+    }
+    box.innerHTML = '<h4>V2 receiver storage</h4><p class="muted">Loading...</p>';
+    try {
+        const status = await fetchJson(`/api/settings/${encodeURIComponent(box.dataset.env)}/receiver-storage`);
+        renderReceiverStorage(box, status);
+        if (resultText) box.querySelector('.storage-result').textContent = resultText;
+    } catch (err) {
+        box.innerHTML = '<h4>V2 receiver storage</h4><p class="muted storage-result"></p>';
+        box.querySelector('.storage-result').textContent = `Couldn't read it: ${err.message}`;
+    }
+}
+
+function receiverStorageSummary(config) {
+    if (!config) {
+        // PROVISIONAL(tsanetgit/Connect-API-Code#170): the platform answers 404 both for none and for a
+        // configuration it doesn't show here (today a MongoDB one), so the card can't tell them apart.
+        // Once #170's 2026-10-05 ask lands, the card says which.
+        return '<p>No storage shown. Either none is registered, so files can\'t be delivered to this '
+            + 'company on the direct path yet, or the company has a configuration this page can\'t show '
+            + '(today, a MongoDB one). Registering a configuration replaces either.</p>';
+    }
+    const where = config.method === 's3'
+        ? `AWS S3 bucket <code>${esc(config.bucket)}</code> in ${esc(config.region)}, through role <code>${esc(config.roleArn)}</code>`
+        : `Azure Blob container <code>${esc(config.container)}</code> in storage account `
+            + `<code>${esc(config.storageAccountName)}</code> (tenant <code>${esc(config.tenantId)}</code>)`;
+    const prefix = config.prefix ? `, prefix <code>${esc(config.prefix)}</code>` : '';
+    const [label, cls] = STORAGE_VERIFICATION[config.verification] ?? [config.verification, 'st-pending'];
+    const when = config.lastVerifiedAt ? ` ${esc(new Date(config.lastVerifiedAt).toLocaleString())}` : '';
+    const external = config.externalId
+        ? `<p>External ID for the role's trust policy (<code>sts:ExternalId</code>): <code>${esc(config.externalId)}</code></p>`
+        : '';
+    return `<p>${where}${prefix}. ${chipHtml(label, cls)}${when}</p>${external}`;
+}
+
+function renderReceiverStorage(box, status) {
+    const config = status.config;
+    const method = config?.method ?? 's3';
+    const testButton = config ? '<button type="button" class="secondary storage-test-btn">Test</button>' : '';
+    const inputs = fields => fields.map(([name, label]) =>
+        `<label>${esc(label)}<input type="text" name="${name}" autocomplete="off"></label>`).join('');
+    const editor = status.editable ? `
+        <form class="receiver-storage-form">
+            <div class="mode-row">
+                <label><input type="radio" name="method" value="s3"> AWS S3</label>
+                <label><input type="radio" name="method" value="azureBlob"> Azure Blob</label>
+            </div>
+            <div class="form-grid storage-s3">${inputs(STORAGE_FIELDS.s3)}</div>
+            <div class="form-grid storage-azureBlob">${inputs(STORAGE_FIELDS.azureBlob)}</div>
+            <div class="form-grid">${inputs([['prefix', 'Prefix (optional)']])}</div>
+            <div class="button-row">
+                <button type="submit">Save Storage</button>
+                ${testButton}
+            </div>
+        </form>`
+        : `<p class="muted">Registering storage is turned off for this demo (<code>tsanet.demo.receiver-storage-editable</code>).</p>
+           ${testButton ? `<div class="button-row">${testButton}</div>` : ''}`;
+    box.innerHTML = `<h4>V2 receiver storage</h4>${receiverStorageSummary(config)}${editor}
+        <p class="muted storage-result"></p>`;
+
+    const form = box.querySelector('.receiver-storage-form');
+    if (form) {
+        form.querySelector(`input[name="method"][value="${method}"]`).checked = true;
+        for (const [name] of [...STORAGE_FIELDS.s3, ...STORAGE_FIELDS.azureBlob, ['prefix']]) {
+            form.elements[name].value = config?.[name] ?? '';
+        }
+        showStorageFields(form);
+        form.querySelectorAll('input[name="method"]').forEach(radio =>
+            radio.addEventListener('change', () => showStorageFields(form)));
+        form.addEventListener('submit', event => onSaveReceiverStorage(event, box));
+    }
+    box.querySelector('.storage-test-btn')?.addEventListener('click', () => onTestReceiverStorage(box));
+}
+
+function showStorageFields(form) {
+    const method = form.method.value;
+    form.querySelector('.storage-s3').hidden = method !== 's3';
+    form.querySelector('.storage-azureBlob').hidden = method !== 'azureBlob';
+}
+
+async function onSaveReceiverStorage(event, box) {
+    event.preventDefault();
+    const form = event.target;
+    const method = form.method.value;
+    const body = {method, prefix: form.prefix.value};
+    for (const [name] of STORAGE_FIELDS[method]) body[name] = form.elements[name].value.trim();
+    const result = box.querySelector('.storage-result');
+    result.textContent = 'Saving...';
+    try {
+        const status = await fetchJson(`/api/settings/${encodeURIComponent(box.dataset.env)}/receiver-storage`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        });
+        renderReceiverStorage(box, status);
+        box.querySelector('.storage-result').textContent = method === 's3'
+            ? 'Saved. Add the external ID to the role\'s trust policy, then Test.'
+            : 'Saved. Test it to check TSANet can write there.';
+    } catch (err) {
+        result.textContent = `Failed: ${err.message}`;
+    }
+}
+
+async function onTestReceiverStorage(box) {
+    const result = box.querySelector('.storage-result');
+    result.textContent = 'Testing...';
+    try {
+        const test = await fetchJson(`/api/settings/${encodeURIComponent(box.dataset.env)}/receiver-storage/test`,
+            {method: 'POST'});
+        await loadReceiverStorage(box, test.verified
+            ? 'Test passed: TSANet can write to this storage.'
+            : `Test failed: ${test.detail ?? 'no reason given'}`);
+    } catch (err) {
+        result.textContent = `Failed: ${err.message}`;
+    }
 }
 
 function chipHtml(text, cls) {
@@ -328,7 +474,10 @@ function renderCase(detail) {
     renderCaseActions(dir);
     renderTimeline('case-notes', detail.notes.map(n => ({
         title: n.summary,
-        meta: `${n.creatorName ?? n.creatorUsername ?? '?'} (${n.companyName ?? '?'}) · ${n.priority ?? ''} · ${n.createdAt ?? ''}`,
+        // type label and direction exactly as the API sent them; a note without them shows neither.
+        meta: `${n.creatorName ?? n.creatorUsername ?? '?'} (${n.companyName ?? '?'}) · ${n.priority ?? ''}`
+            + [n.typeDisplayName ?? n.type, n.direction].filter(Boolean).map(v => ` · ${v}`).join('')
+            + ` · ${n.createdAt ?? ''}`,
         body: n.description,
     })), 'No notes yet.');
     renderTimeline('case-responses', detail.responses.map(r => ({
@@ -463,23 +612,42 @@ const ACTION_FORMS = {
             ['summary', 'Summary', 'text'],
             ['description', 'Description', 'textarea'],
             ['priority', 'Priority', 'select', ['LOW', 'MEDIUM', 'HIGH']],
+            ['type', 'Type', 'select', noteTypeOptions],
         ],
     },
 };
 
-function showActionForm(action) {
+// The Add note form's Type options: "No type" first, so it is the default, then the server's
+// list in its order. A blank type creates a note with no type; there is no default type.
+async function noteTypeOptions() {
+    const none = {value: '', label: 'No type'};
+    try {
+        const types = await fetchJson('/api/note-types');
+        return [none, ...types.map(t => ({value: t.code, label: t.displayName}))];
+    } catch (err) {
+        console.warn('Note types unavailable; offering only "No type".', err);
+        return [none];
+    }
+}
+
+// A select's options are a list, or an async function returning one; each option is a string
+// (value and label alike) or {value, label}.
+async function showActionForm(action) {
     const spec = ACTION_FORMS[action];
     const host = document.getElementById('action-form-host');
-    const fieldsHtml = spec.fields.map(([name, label, type, options]) => {
+    const fieldsHtml = (await Promise.all(spec.fields.map(async ([name, label, type, options]) => {
         if (type === 'textarea') {
             return `<label>${esc(label)}<textarea name="${name}" rows="3" required></textarea></label>`;
         }
         if (type === 'select') {
-            const opts = options.map(o => `<option>${esc(o)}</option>`).join('');
+            const list = typeof options === 'function' ? await options() : options;
+            const opts = list.map(o => typeof o === 'string' ? {value: o, label: o} : o)
+                // esc() leaves quotes alone, and a value sits inside a quoted attribute.
+                .map(o => `<option value="${esc(o.value).replaceAll('"', '&quot;')}">${esc(o.label)}</option>`).join('');
             return `<label>${esc(label)}<select name="${name}">${opts}</select></label>`;
         }
         return `<label>${esc(label)}<input type="${type}" name="${name}" required></label>`;
-    }).join('');
+    }))).join('');
     host.innerHTML = `
         <form class="action-form" id="current-action-form">
             <h3>${esc(spec.title)}</h3>
@@ -586,12 +754,8 @@ function renderUploadState(status, s) {
         return;
     }
     const o = s.outcome || {};
-    const verified = o.verification ? ` (${o.verification.method || 'no method'}`
-        + `${o.verification.sizeMatched === true ? ', size matched' : ''}`
-        + `${o.verification.checksumMatched === true ? ', checksum matched' : ''})` : '';
-    const note = o.noteId ? `, note ${o.noteId}` : '';
-    const message = o.message ? ` — ${o.message}` : '';
-    status.textContent = `Platform outcome: ${o.status}${verified}${note}${message}`;
+    status.textContent = `Platform outcome: grant ${o.grantId} ${String(o.status || '').toLowerCase()}`
+        + ` (${formatBytes(o.expectedSizeBytes || 0)}, ${s.mode})`;
 }
 
 document.getElementById('attach-v2-form').addEventListener('submit', async (event) => {
@@ -600,8 +764,6 @@ document.getElementById('attach-v2-form').addEventListener('submit', async (even
     const status = document.getElementById('attach-v2-status');
     const data = new FormData();
     data.append('file', form.file.files[0]);
-    if (form.description.value) data.append('description', form.description.value);
-    data.append('sha256', form.sha256.checked ? 'true' : 'false');
     status.textContent = 'Uploading to the demo...';
     try {
         const {uploadId} = await fetchJson(

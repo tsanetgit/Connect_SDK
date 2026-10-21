@@ -27,6 +27,7 @@ tsanet:
   #         username: "${TSANET_ACME_USER}"
   #         password: "${TSANET_ACME_PASSWORD}"
   #         sqlite-path: "${user.home}/.tsanet-client-demo/acme.db"
+  #         allowed-receiver-company-ids: [1001, 1002]   # optional; V2 receiver allowlist
   #
   # in an untracked application-local.yml activated with
   # --spring.profiles.active=local, or via SPRING_APPLICATION_JSON.

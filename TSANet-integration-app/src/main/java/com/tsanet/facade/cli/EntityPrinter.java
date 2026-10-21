@@ -8,6 +8,7 @@ import static com.tsanet.facade.cli.TerminalColors.RESET;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.connectapi.dto.CaseResponseDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
+import com.tsanet.api.connectapi.dto.NoteTypeDto;
 import com.tsanet.api.connectapi.dto.PartnerSelectionDto;
 import com.tsanet.api.connectapi.dto.UserContextDto;
 import com.tsanet.api.connectapi.dto.WebhookSubscriptionDto;
@@ -28,15 +29,29 @@ public final class EntityPrinter {
         println(context, GREEN, title + " (" + notes.size() + "):");
         for (CaseNoteDto note : CollaborationRequestNotesTimeline.chronological(notes)) {
             System.out.printf(
-                " - id=%s caseToken=%s token=%s status=%s priority=%s summary=%s creator=%s%n",
+                " - id=%s caseToken=%s token=%s status=%s priority=%s type=%s direction=%s summary=%s creator=%s%n",
                 note.id(),
                 note.caseToken(),
                 note.token(),
                 note.status(),
                 note.priority(),
+                note.type() != null ? note.type() : "",
+                note.direction() != null ? note.direction() : "",
                 note.summary(),
                 CollaborationRequestNotesTimeline.author(note)
             );
+        }
+    }
+
+    /** The note types {@code notes add --type} takes, in the server's order: the code, then its label. */
+    public static void printNoteTypes(CliRunContext context, List<NoteTypeDto> types) {
+        if (types.isEmpty()) {
+            println(context, BLUE, "No note types.");
+            return;
+        }
+        println(context, GREEN, "Note types (" + types.size() + "):");
+        for (NoteTypeDto type : types) {
+            System.out.printf(" - %s (%s)%n", type.code(), type.displayName());
         }
     }
 
@@ -59,10 +74,11 @@ public final class EntityPrinter {
         int index = 1;
         for (CaseNoteDto note : notes) {
             System.out.printf(
-                " %d. [%s] %s | %s%n",
+                " %d. [%s] %s%s | %s%n",
                 index++,
                 note.createdAt() != null ? note.createdAt() : "unknown",
                 CollaborationRequestNotesTimeline.author(note),
+                typeAndDirection(note),
                 note.summary() != null ? note.summary() : ""
             );
             String preview = CollaborationRequestNotesTimeline.contentPreview(note.description());
@@ -70,6 +86,14 @@ public final class EntityPrinter {
                 System.out.printf("    %s%n", preview);
             }
         }
+    }
+
+    /** " (public, OUTBOUND)", the type code and direction, with whichever of the two the API sent; empty when it sent neither. */
+    private static String typeAndDirection(CaseNoteDto note) {
+        String joined = java.util.stream.Stream.of(note.type(), note.direction())
+            .filter(value -> value != null && !value.isBlank())
+            .collect(java.util.stream.Collectors.joining(", "));
+        return joined.isEmpty() ? "" : " (" + joined + ")";
     }
 
     public static void printResponses(CliRunContext context, String title, List<CaseResponseDto> responses) {

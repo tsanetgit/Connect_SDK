@@ -39,7 +39,8 @@ class EnvironmentServiceTest {
             ),
             "beta",
             dataDir.toString(),
-            true  // the tests point at a local http mock that is never contacted
+            true,  // the tests point at a local http mock that is never contacted
+            null
         );
         service = new EnvironmentService(properties);
     }
@@ -50,6 +51,7 @@ class EnvironmentServiceTest {
             Map.of("beta", new DemoProperties.EnvironmentDef("Beta", "http://connect.example", null, null)),
             "beta",
             dataDir.toString(),
+            null,
             null
         );
 
@@ -61,6 +63,7 @@ class EnvironmentServiceTest {
             Map.of("beta", new DemoProperties.EnvironmentDef("Beta", "https://connect.example", null, null)),
             "beta",
             dataDir.toString(),
+            null,
             null
         ))).doesNotThrowAnyException();
     }

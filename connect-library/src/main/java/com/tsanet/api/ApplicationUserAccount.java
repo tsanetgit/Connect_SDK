@@ -2,9 +2,15 @@ package com.tsanet.api;
 
 import com.tsanet.api.auth.AccountAuthConfig;
 import com.tsanet.api.auth.PasswordAuthConfig;
+import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 
-public record ApplicationUserAccount(String id, String sqlitePath, AccountAuthConfig auth) {
+/**
+ * @param allowedReceiverCompanyIds the companies this account may deliver V2 attachments to;
+ *                                  empty means unrestricted
+ */
+public record ApplicationUserAccount(String id, String sqlitePath, AccountAuthConfig auth, Set<Long> allowedReceiverCompanyIds) {
     public ApplicationUserAccount {
         if (id == null || id.isBlank()) {
             throw new IllegalArgumentException("account id is required");
@@ -15,6 +21,20 @@ public record ApplicationUserAccount(String id, String sqlitePath, AccountAuthCo
         if (auth == null) {
             throw new IllegalArgumentException("account auth is required");
         }
+        if (allowedReceiverCompanyIds != null && allowedReceiverCompanyIds.stream().anyMatch(java.util.Objects::isNull)) {
+            throw new IllegalArgumentException("allowedReceiverCompanyIds must not contain null");
+        }
+        allowedReceiverCompanyIds = allowedReceiverCompanyIds == null ? Set.of() : Set.copyOf(allowedReceiverCompanyIds);
+    }
+
+    /** An account with no receiver allowlist (unrestricted). */
+    public ApplicationUserAccount(String id, String sqlitePath, AccountAuthConfig auth) {
+        this(id, sqlitePath, auth, Set.of());
+    }
+
+    /** This account with the given receiver allowlist; null or empty means unrestricted. */
+    public ApplicationUserAccount withAllowedReceiverCompanyIds(Collection<Long> companyIds) {
+        return new ApplicationUserAccount(id, sqlitePath, auth, companyIds == null ? null : new java.util.HashSet<>(companyIds));
     }
 
     public static ApplicationUserAccount passwordAccount(String id, String sqlitePath, String username, String password) {

@@ -13,7 +13,7 @@
         "Specifies JDK 21 with explicit JAVA_HOME setup for Homebrew keg-only openjdk@21",
         "Builds connect-library and demo-ui with Maven and runs the demo-ui jar",
         "States the app listens on localhost:8090 and credentials are entered in the Settings tab",
-        "Explains that through the SDK a bad login reads HTTP 401 Authentication Failed (the SDK sends the problem+json Accept header), and that only a raw client without that header sees the legacy 500"
+        "Explains that through the SDK a bad login reads HTTP 401 Authentication Failed (authentication-error) followed by the API's detail (the SDK sends the problem+json Accept header), and that only a raw client without that header sees the legacy 500"
       ]
     },
     {

@@ -41,6 +41,7 @@ public class CollaborationRequestNoteAddExecutor {
         String description = resolveDescription(args, scanner);
         String summary = CliArgs.summary(args).orElseGet(() -> deriveSummary(description));
         String priority = resolvePriority(args);
+        String type = resolveType(args);
 
         CaseNoteValidation.ValidationResult validation = CaseNoteValidation.validate(summary, description);
         if (!validation.valid()) {
@@ -53,7 +54,8 @@ public class CollaborationRequestNoteAddExecutor {
                 request.token(),
                 summary,
                 description,
-                priority
+                priority,
+                type
             );
             System.out.println(
                 EntityPrinter.info(
@@ -61,6 +63,7 @@ public class CollaborationRequestNoteAddExecutor {
                     "Note created: id=" + created.id()
                         + " summary=" + created.summary()
                         + " priority=" + created.priority()
+                        + " type=" + (created.type() != null ? created.type() : "")
                 )
             );
 
@@ -97,6 +100,15 @@ public class CollaborationRequestNoteAddExecutor {
             throw new IllegalArgumentException("Priority must be one of: LOW, MEDIUM, HIGH");
         }
         return priority;
+    }
+
+    /**
+     * The optional {@code --type}, a code that {@code notes types} lists, passed through as given:
+     * the server matches it ignoring case and refuses any other. Absent or blank creates a note
+     * with no type, as the demo-ui's blank "No type" does.
+     */
+    static String resolveType(String[] args) {
+        return CliArgs.noteType(args).filter(value -> !value.isBlank()).orElse(null);
     }
 
     static String deriveSummary(String description) {

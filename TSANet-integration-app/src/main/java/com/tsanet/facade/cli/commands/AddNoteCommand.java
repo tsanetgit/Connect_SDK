@@ -26,7 +26,8 @@ public class AddNoteCommand implements Command {
 
     @Override
     public String description() {
-        return "Add a note to a collaboration request (--id ID or --token TOKEN; prompts for text if omitted)";
+        return "Add a note to a collaboration request (--id ID or --token TOKEN; optional --type CODE"
+            + " from 'notes types', no type when omitted; prompts for text if omitted)";
     }
 
     @Override

@@ -18,4 +18,21 @@ class CollaborationRequestNoteAddExecutorTest {
             .hasSize(80)
             .endsWith("...");
     }
+
+    @Test
+    void noTypeMeansANoteWithNoType() {
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--id", "1"})).isNull();
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", ""})).isNull();
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "  "})).isNull();
+    }
+
+    @Test
+    void aTypeIsPassedThroughAsGivenForTheServerToCheck() {
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "PuBlic"}))
+            .isEqualTo("PuBlic");
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "escalation"}))
+            .isEqualTo("escalation");
+        assertThat(CollaborationRequestNoteAddExecutor.resolveType(new String[] {"--type", "not-a-type"}))
+            .isEqualTo("not-a-type");
+    }
 }

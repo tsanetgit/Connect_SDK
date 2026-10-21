@@ -21,8 +21,11 @@ import org.springframework.web.client.RestTemplate;
  * The classification, driven through the generated client on the library's own
  * {@link RestTemplate} so what is tested is what production runs. The shapes are the ones
  * recorded on tsanetgit/Connect-API-Code#122 (2026-07-10): problem+json with the documented
- * 4xx when the client sends the Accept header the library sends, and the legacy 500 body.
- * Every request path carries a marker token, and no message may carry it back.
+ * 4xx for a client that sends {@code Accept: application/json, application/problem+json}, as
+ * the library does (tsanetgit/Connect_SDK#127), and the legacy 500 body for one that doesn't.
+ * The mock server stands in for the transport; {@code TsaNetApiAcceptHeaderWiringTest} covers
+ * the wire, including the body of a 401 to a {@code POST} (tsanetgit/Connect_SDK#128). Every
+ * request path carries a marker token, and no message may carry it back.
  */
 class ConnectApiResponseErrorHandlerTest {
 
@@ -142,6 +145,70 @@ class ConnectApiResponseErrorHandlerTest {
                 assertThat(ex.detail()).isNotBlank();
                 assertThat(ex.getMessage()).doesNotContain("MARKER").doesNotContain("127.0.0.1");
             });
+    }
+
+    @Test
+    void aCallOnAnInterruptedThreadIsOtherNotConnectivityAndTheFlagStaysSet() throws Exception {
+        // Spring's JDK request turns the interrupt into an IOException caused by the
+        // InterruptedException; the caller cancelled, so it must not read as "unreachable". The
+        // server accepts the connection and never answers, so the wait is what gets interrupted,
+        // not a connect failure that could finish first.
+        Throwable thrown;
+        boolean stillInterrupted;
+        try (java.net.ServerSocket silent = new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())) {
+            ApiClient apiClient = new ApiClient(ConnectApiRestTemplates.create());
+            apiClient.setBasePath("http://127.0.0.1:" + silent.getLocalPort());
+            apiClient.setBearerToken(() -> "bearer-1");
+
+            Thread.currentThread().interrupt();
+            try {
+                thrown = org.assertj.core.api.Assertions.catchThrowable(
+                    () -> new CaseResponsesApi(apiClient).closeCollaborationRequest(TOKEN));
+            } finally {
+                stillInterrupted = Thread.interrupted();
+            }
+        }
+
+        assertThat(stillInterrupted).isTrue();
+        assertThat(thrown).isInstanceOfSatisfying(ConnectApiException.class, ex -> {
+            assertThat(ex.kind()).isEqualTo(ConnectApiException.Kind.OTHER);
+            assertThat(ex.status()).isZero();
+            assertThat(ex.detail()).isEqualTo("interrupted");
+            assertThat(ex.getMessage()).isEqualTo("Connect API call: interrupted");
+            assertThat(ex.getCause()).isInstanceOf(InterruptedException.class);
+        });
+    }
+
+    @Test
+    void aRedirectIsOtherIsNotFollowedAndDoesNotEchoTheLocation() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger hits = new java.util.concurrent.atomic.AtomicInteger();
+        com.sun.net.httpserver.HttpServer redirecting =
+            com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        redirecting.createContext("/", exchange -> {
+            hits.incrementAndGet();
+            exchange.getRequestBody().readAllBytes();
+            exchange.getResponseHeaders().add("Location", "http://elsewhere.example/" + TOKEN);
+            exchange.sendResponseHeaders(302, -1);
+            exchange.close();
+        });
+        redirecting.start();
+        try {
+            ApiClient apiClient = new ApiClient(ConnectApiRestTemplates.create());
+            apiClient.setBasePath("http://127.0.0.1:" + redirecting.getAddress().getPort());
+            apiClient.setBearerToken(() -> "bearer-1");
+
+            assertThatThrownBy(() -> new CaseResponsesApi(apiClient).closeCollaborationRequest(TOKEN))
+                .isInstanceOfSatisfying(ConnectApiException.class, ex -> {
+                    assertThat(ex.kind()).isEqualTo(ConnectApiException.Kind.OTHER);
+                    assertThat(ex.status()).isEqualTo(302);
+                    assertThat(ex.getMessage())
+                        .isEqualTo("HTTP 302 from the Connect API: " + ConnectApiResponseErrorHandler.UNEXPECTED_REDIRECT)
+                        .doesNotContain("MARKER").doesNotContain("elsewhere");
+                });
+            assertThat(hits).hasValue(1);
+        } finally {
+            redirecting.stop(0);
+        }
     }
 
     @Test

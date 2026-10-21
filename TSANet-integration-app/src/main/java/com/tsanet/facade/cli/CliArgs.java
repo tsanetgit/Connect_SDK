@@ -112,6 +112,10 @@ public final class CliArgs {
         return valueAfter(args, "--priority");
     }
 
+    public static Optional<String> noteType(String[] args) {
+        return valueAfter(args, "--type");
+    }
+
     public static Optional<Long> requestId(String[] args) {
         Optional<String> id = valueAfter(args, "--id");
         if (id.isEmpty()) {

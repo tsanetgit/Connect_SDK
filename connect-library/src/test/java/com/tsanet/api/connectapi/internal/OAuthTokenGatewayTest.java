@@ -39,4 +39,99 @@ class OAuthTokenGatewayTest {
         assertThat(token.expiresInSeconds()).isEqualTo(7200);
         server.verify();
     }
+
+    @Test
+    void aRefusedTokenCallOnTheSharedClientStaysStatusOnlyNotAConnectApiException() throws Exception {
+        // The token call rides the session's JDK client through transport(), not create(): an
+        // Entra refusal must not be classified by the Connect API's error handler, and its body
+        // (which names the app) must not reach the message.
+        com.sun.net.httpserver.HttpServer entra =
+            com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        java.util.concurrent.atomic.AtomicReference<String> userAgent = new java.util.concurrent.atomic.AtomicReference<>();
+        entra.createContext("/", exchange -> {
+            userAgent.set(exchange.getRequestHeaders().getFirst("User-Agent"));
+            exchange.getRequestBody().readAllBytes();
+            byte[] body = ("{\"error\":\"invalid_client\",\"error_description\":\"AADSTS7000215: app client-id-MARKER\","
+                + "\"title\":\"t\",\"type\":\"x\"}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(401, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        entra.start();
+        try {
+            String tokenUrl = "http://127.0.0.1:" + entra.getAddress().getPort() + "/tenant/oauth2/v2.0/token";
+            OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
+
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> gateway.fetchClientCredentialsToken(
+                new ClientCredentialsAuthConfig("tenant", tokenUrl, "client-id", "client-secret", "api://audience", null)));
+            assertThat(thrown)
+                .isExactlyInstanceOf(IllegalStateException.class)
+                .hasMessage("OAuth client-credentials request failed: HTTP 401");
+            // Not only the message: a logged stack trace prints every cause's message, and Spring's
+            // response exception names the token URL (the tenant) and quotes Entra's body (the app).
+            for (Throwable t = thrown; t != null; t = t.getCause() == t ? null : t.getCause()) {
+                assertThat(String.valueOf(t.getMessage()))
+                    .doesNotContain("MARKER").doesNotContain("/tenant/").doesNotContain("127.0.0.1");
+            }
+            // The JDK client sends "Java-http-client/<version>"; HttpURLConnection sends
+            // "Java/<version>". Pins the token call to the session's transport (tsanetgit/Connect_SDK#131).
+            assertThat(userAgent.get()).startsWith("Java-http-client/");
+        } finally {
+            entra.stop(0);
+        }
+    }
+
+    @Test
+    void anUnreachableTokenEndpointIsConnectivityNamingNeitherTheUrlNorTheTenant() throws Exception {
+        int closedPort;
+        try (java.net.ServerSocket probe = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            closedPort = probe.getLocalPort();
+        }
+        String tokenUrl = "http://127.0.0.1:" + closedPort + "/TENANT-MARKER/oauth2/v2.0/token";
+        OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
+
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> gateway.fetchClientCredentialsToken(
+            new ClientCredentialsAuthConfig("TENANT-MARKER", tokenUrl, "client-id", "client-secret", "api://audience", null)));
+
+        assertThat(thrown).isInstanceOfSatisfying(com.tsanet.api.ConnectApiException.class, ex -> {
+            assertThat(ex.kind()).isEqualTo(com.tsanet.api.ConnectApiException.Kind.CONNECTIVITY);
+            assertThat(ex.title()).isEqualTo(com.tsanet.api.ConnectApiException.TOKEN_ENDPOINT);
+            assertThat(ex.getMessage()).isEqualTo("cannot reach the OAuth token endpoint (" + ex.detail() + ")");
+        });
+        // Not only the message: nothing in the cause chain may carry the URL either, since a
+        // logged stack trace prints every cause's message.
+        for (Throwable t = thrown; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            assertThat(String.valueOf(t.getMessage()))
+                .doesNotContain("TENANT-MARKER").doesNotContain("127.0.0.1").doesNotContain(String.valueOf(closedPort));
+        }
+    }
+
+    @Test
+    @org.junit.jupiter.api.Timeout(value = 30, threadMode = org.junit.jupiter.api.Timeout.ThreadMode.SEPARATE_THREAD)
+    void aTokenCallOnAnInterruptedThreadIsOtherAndTheFlagStaysSet() throws Exception {
+        // HttpURLConnection ignores interrupts, so on that transport this call would wait on the
+        // silent listener forever; the timeout, on its own thread, turns that regression into a failure.
+        Throwable thrown;
+        boolean stillInterrupted;
+        try (java.net.ServerSocket silent = new java.net.ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())) {
+            String tokenUrl = "http://127.0.0.1:" + silent.getLocalPort() + "/TENANT-MARKER/oauth2/v2.0/token";
+            OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
+
+            Thread.currentThread().interrupt();
+            try {
+                thrown = org.assertj.core.api.Assertions.catchThrowable(() -> gateway.fetchClientCredentialsToken(
+                    new ClientCredentialsAuthConfig("TENANT-MARKER", tokenUrl, "client-id", "client-secret", "api://audience", null)));
+            } finally {
+                stillInterrupted = Thread.interrupted();
+            }
+        }
+
+        assertThat(stillInterrupted).isTrue();
+        assertThat(thrown).isInstanceOfSatisfying(com.tsanet.api.ConnectApiException.class, ex -> {
+            assertThat(ex.kind()).isEqualTo(com.tsanet.api.ConnectApiException.Kind.OTHER);
+            assertThat(ex.detail()).isEqualTo("interrupted");
+            assertThat(ex.getCause()).isInstanceOf(InterruptedException.class);
+        });
+    }
 }

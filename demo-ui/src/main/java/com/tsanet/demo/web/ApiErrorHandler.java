@@ -4,6 +4,7 @@ import com.tsanet.api.ConnectApiException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -25,12 +26,13 @@ public class ApiErrorHandler {
     }
 
     /**
-     * The SDK's classified answer: the upstream status passes through (502 when the API could
-     * not be reached), and the page gets the API's own title and detail plus the problem type.
+     * The SDK's classified answer: the status is {@link #upstreamStatus} (the upstream error status
+     * passes through; 502 when the API could not be reached or the status isn't one), and the page
+     * gets the API's own title and detail plus the problem type.
      */
     @ExceptionHandler(ConnectApiException.class)
     public ResponseEntity<Map<String, String>> handleConnectApi(ConnectApiException e) {
-        int status = e.kind() == ConnectApiException.Kind.CONNECTIVITY || e.status() < 400 ? 502 : e.status();
+        HttpStatusCode status = upstreamStatus(e.kind() == ConnectApiException.Kind.CONNECTIVITY, e.status());
         Map<String, String> body = new LinkedHashMap<>();
         body.put("error", e.title() != null ? e.title() : e.getMessage());
         if (e.detail() != null) {
@@ -41,6 +43,17 @@ public class ApiErrorHandler {
         }
         body.put("kind", e.kind().name());
         return ResponseEntity.status(status).body(body);
+    }
+
+    /**
+     * The status demo-ui answers for a Connect API failure the SDK has classified (a
+     * {@link ConnectApiException}, or a V2 {@code AttachmentV2Exception}): the platform's own status
+     * passes through, and a call that couldn't reach it, or failed without a platform error status
+     * (anything outside 400 to 599), is a 502. An unclassified {@link RestClientResponseException}
+     * keeps its own 502 below.
+     */
+    static HttpStatusCode upstreamStatus(boolean unreachable, int status) {
+        return unreachable || status < 400 || status > 599 ? HttpStatus.BAD_GATEWAY : HttpStatusCode.valueOf(status);
     }
 
     @ExceptionHandler(RestClientResponseException.class)

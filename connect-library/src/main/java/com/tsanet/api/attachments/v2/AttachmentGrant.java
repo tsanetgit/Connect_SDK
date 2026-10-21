@@ -1,69 +1,70 @@
 package com.tsanet.api.attachments.v2;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
 
 /**
- * A grant: permission plus upload instructions for one file on one case, from the
- * {@code AttachmentGrantDTO} schema of the V2 contract draft (tsanetgit/Connect-API-Code#147).
- * The client executes {@link Upload} verbatim and never branches on the receiver.
+ * A grant: permission to deliver one file on one case straight into the receiving company's
+ * storage, mapped from the generated {@code AttachmentGrantDTO}. A grant carries no upload
+ * links. The {@link #mode()} and {@link #plan()} say which link and complete calls apply and
+ * how the file is split, and both are fixed for the grant's life.
  *
- * <p>{@code toString} on every record that carries a URL or headers is redacted: signed URLs
- * and the headers block are credentials, and a record's default {@code toString} would put
- * them into any log line or exception message that interpolates the grant.
+ * @param grantId           the platform's id for the grant
+ * @param status            where the grant stands
+ * @param fileName          the file's name as the partner will see it
+ * @param expectedSizeBytes the exact byte count the upload must match
+ * @param createdAt         when the grant was created
+ * @param expiresAt         after this the grant can no longer be completed
+ * @param mode              how the file is uploaded
+ * @param plan              the part (S3) or block (Azure) layout; null for {@link UploadMode#SINGLE}
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
 public record AttachmentGrant(
-    UUID grantId,
+    long grantId,
+    Status status,
     String fileName,
+    long expectedSizeBytes,
+    OffsetDateTime createdAt,
     OffsetDateTime expiresAt,
-    Receiver receiver,
-    Upload upload,
-    Verification verification
+    UploadMode mode,
+    UploadPlan plan
 ) {
-    @Override
-    public String toString() {
-        return "AttachmentGrant[grantId=" + grantId + ", fileName=" + fileName + ", expiresAt=" + expiresAt
-            + ", receiver=" + receiver + ", upload=" + upload + ", verification=" + verification + "]";
+
+    /** True once the platform has completed the grant. */
+    public boolean completed() {
+        return status == Status.COMPLETED;
     }
 
-    /** What the platform echoes about the receiver so a client can fail fast. */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Receiver(Long companyId, String targetKind, Long maxSizeBytes) {
+    /** The grant's lifecycle, from the spec's {@code AttachmentGrantStatus}. */
+    public enum Status {
+        OPEN, COMPLETED, ABANDONED, EXPIRED
     }
 
     /**
-     * The upload instructions. {@code mode} is one of {@code single}, {@code multipart},
-     * {@code resumable}, {@code relay}; {@code headers} are sent verbatim on every request.
+     * How a grant's file is uploaded, from the spec's {@code AttachmentUploadMode}. This client
+     * uploads {@link #SINGLE}, {@link #S3_MULTIPART} and {@link #AZURE_BLOCK}; the spec documents
+     * {@link #GCS_RESUMABLE} as not available in the current release.
      */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Upload(String mode, String method, String url, Map<String, String> headers, List<Part> parts) {
-        public Upload {
-            headers = headers == null ? Map.of() : Map.copyOf(headers);
-            parts = parts == null ? List.of() : List.copyOf(parts);
+    public enum UploadMode {
+        SINGLE("single"),
+        S3_MULTIPART("s3Multipart"),
+        AZURE_BLOCK("azureBlock"),
+        GCS_RESUMABLE("gcsResumable");
+
+        private final String value;
+
+        UploadMode(String value) {
+            this.value = value;
         }
 
-        @Override
-        public String toString() {
-            return "Upload[mode=" + mode + ", method=" + method + ", url=<redacted>, headers="
-                + headers.keySet() + ", parts=" + parts.size() + "]";
-        }
-    }
-
-    /** One presigned part URL in multipart mode; sizes are fixed by the platform. */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Part(int partNumber, String url, long sizeBytes) {
-        @Override
-        public String toString() {
-            return "Part[partNumber=" + partNumber + ", url=<redacted>, sizeBytes=" + sizeBytes + "]";
+        /** The spec's wire value, for example {@code s3Multipart}. */
+        public String value() {
+            return value;
         }
     }
 
-    /** What complete will be able to prove: {@code platform}, {@code receiver_reported} or {@code none}. */
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record Verification(String mode) {
+    /**
+     * The split of a file into numbered parts (S3 multipart) or blocks (Azure). Numbers run from
+     * 1 to {@code count}; every one is {@code sizeBytes} long except the last, which holds the rest.
+     */
+    public record UploadPlan(int count, long sizeBytes) {
     }
 }
