@@ -188,8 +188,10 @@ with the previous sha tag. Logs: `aws logs tail <LOG_GROUP> --region <REGION> --
 The container filesystem is ephemeral: re-enter member credentials in Settings after every
 deploy. `TSANET_DEMO_CREDENTIALS_LOCKED=true` (a plain entry in the container's `environment` list,
 `"environment":[{"name":"TSANET_DEMO_CREDENTIALS_LOCKED","value":"true"}]`, beside `secrets`) turns
-Settings into a read-only "signed in as" view with the environment switch and refuses credential
-saves and clears. On this deployment it is not yet usable as intended: the lock is read at startup,
+Settings into a read-only "Signed in as" view with the environment switch and refuses credential
+saves and clears. <!-- PROVISIONAL(tsanetgit/Connect_SDK#152): the two sentences that follow describe the
+hosted gap; once credentials are seeded at startup, replace them with the lock-on procedure. -->
+On this deployment it is not yet usable as intended: the lock is read at startup,
 so turning it on is an `update-express-gateway-service` call, which redeploys and empties the data
 dir, leaving a locked demo with nothing to sign in as. It becomes usable once credentials survive
 a deploy (seeded from SSM at startup, or a persistent data dir), tracked on

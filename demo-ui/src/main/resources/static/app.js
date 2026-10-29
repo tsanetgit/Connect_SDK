@@ -116,7 +116,7 @@ function renderEnvSettings() {
                 <span class="env-name">${esc(env.label)}</span>
                 <span class="env-url">${esc(env.apiBaseUrl)}</span>
                 ${env.configured
-                    ? chipHtml(`signed in as ${env.username} (${env.mode === 'oauth' ? 'OAuth' : 'password'})`, 'st-approved')
+                    ? chipHtml(`Signed in as ${env.username} (${env.mode === 'oauth' ? 'OAuth' : 'password'})`, 'st-approved')
                     : chipHtml('no credentials', 'st-pending')}
                 <span class="spacer"></span>
                 ${isActive ? chipHtml('ACTIVE', 'outbound') : ''}
