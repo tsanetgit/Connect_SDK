@@ -97,10 +97,13 @@ you pay for Fargate, the load balancer and logs while the service exists (there 
 
 **Auth gate** is mandatory on any hosted deploy. Put the gate values and the Entra values in
 SSM Parameter Store as SecureStrings and let the task read them as secrets, so nothing sits in
-plaintext in the service configuration:
+plaintext in the service configuration. The two `GUEST` values are optional: set them to give
+members a second login with the same rights. Without a guest login, delete those two names from
+the loop (SSM refuses an empty SecureString) and the two matching `secrets` entries below. To
+keep the default guest username (`guest`), delete only the `GUEST_USER` name and entry.
 
 ```bash
-for v in TSANET_DEMO_AUTH_USER TSANET_DEMO_AUTH_PASSWORD TSANET_DEMO_ENTRA_TENANT TSANET_DEMO_ENTRA_AUDIENCE_BETA TSANET_DEMO_ENTRA_AUDIENCE_DEV; do
+for v in TSANET_DEMO_AUTH_USER TSANET_DEMO_AUTH_PASSWORD TSANET_DEMO_AUTH_GUEST_USER TSANET_DEMO_AUTH_GUEST_PASSWORD TSANET_DEMO_ENTRA_TENANT TSANET_DEMO_ENTRA_AUDIENCE_BETA TSANET_DEMO_ENTRA_AUDIENCE_DEV; do
   aws ssm put-parameter --region <REGION> --name "/connect-sdk-demo/$v" --type SecureString --value "<value>" --overwrite
 done
 ```
@@ -139,6 +142,8 @@ readable from `describe-express-gateway-service`):
   "secrets": [
     {"name": "TSANET_DEMO_AUTH_USER", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_USER"},
     {"name": "TSANET_DEMO_AUTH_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_PASSWORD"},
+    {"name": "TSANET_DEMO_AUTH_GUEST_USER", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_USER"},
+    {"name": "TSANET_DEMO_AUTH_GUEST_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_PASSWORD"},
     {"name": "TSANET_DEMO_ENTRA_TENANT", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_TENANT"},
     {"name": "TSANET_DEMO_ENTRA_AUDIENCE_BETA", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_BETA"},
     {"name": "TSANET_DEMO_ENTRA_AUDIENCE_DEV", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_DEV"}
@@ -181,7 +186,14 @@ with the previous sha tag. Logs: `aws logs tail <LOG_GROUP> --region <REGION> --
 (the group name is in `describe-express-gateway-service` under `awsLogsConfiguration`).
 
 The container filesystem is ephemeral: re-enter member credentials in Settings after every
-deploy. The gate password lives only in SSM and your local untracked notes.
+deploy. The gate passwords live only in SSM and your local untracked notes. Rotating either
+password is a new SSM value plus the same `update-express-gateway-service` call, which starts a
+new deployment even when the container settings are unchanged (observed: an update with an
+identical container block started a new deployment; the app reads both logins once at startup,
+and ECS resolves secrets when a task starts). A gate configuration the app refuses (a guest
+password with no operator password, or the same username for both logins) exits the task at
+startup, so the deployment never reaches `SUCCESSFUL` in `list-service-deployments`; the reason
+is the `APPLICATION FAILED TO START` block in `aws logs tail <LOG_GROUP>`.
 
 **Turning it off:** there is no pause. Delete the service with
 `aws ecs delete-express-gateway-service --service-arn <SERVICE_ARN>` when the demo is not

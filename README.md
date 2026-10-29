@@ -76,4 +76,8 @@ The `demo-ui` module (adopted from `shawn-tsanet/connect-sdk-demo` in
 
 The root `Dockerfile` builds the demo-ui runtime image; the jar is built outside
 docker first (see the Dockerfile header). A hosted deploy must set
-`TSANET_DEMO_AUTH_PASSWORD`, or the app runs with no auth gate.
+`TSANET_DEMO_AUTH_PASSWORD`, or the app runs with no auth gate. An optional
+second login for members, with the same rights, comes from
+`TSANET_DEMO_AUTH_GUEST_USER` (default `guest`) and
+`TSANET_DEMO_AUTH_GUEST_PASSWORD`; it is active only when that password is set
+(`tsanetgit/Connect_SDK#148`).
