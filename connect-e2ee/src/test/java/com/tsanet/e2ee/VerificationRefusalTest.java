@@ -9,6 +9,7 @@ import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jose.util.Base64URL;
 import com.tsanet.api.connectapi.dto.CaseCustomFieldDto;
+import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
 import com.tsanet.e2ee.E2eeProfile.Receipt;
 import com.tsanet.e2ee.Verification.Refused;
@@ -75,11 +76,15 @@ class VerificationRefusalTest {
 
     /** Re-signs a manifest for these values with A's key: same iss, aud, ref, iat and jti as the example. */
     private String resign(Map<String, String> valuesByName, String ver, KeyOperations signer) throws Exception {
+        return resign(valuesByName, ver, signer, iat);
+    }
+
+    private String resign(Map<String, String> valuesByName, String ver, KeyOperations signer, long signedIat) throws Exception {
         Map<String, Object> payload = v.map("example1_case_create", "manifest_payload");
         List<Manifest.FieldDigest> digests = new ArrayList<>();
         valuesByName.forEach((name, value) -> digests.add(new Manifest.FieldDigest(name, Manifest.digest(value))));
         return Manifest.sign(new Manifest.Claims(ver, (String) payload.get("iss"), (String) payload.get("aud"),
-            (String) payload.get("ref"), iat, (String) payload.get("jti"), digests), signer);
+            (String) payload.get("ref"), signedIat, (String) payload.get("jti"), digests), signer);
     }
 
     private Map<String, String> originalValues() {
@@ -312,7 +317,48 @@ class VerificationRefusalTest {
         assertThat(refused.reason()).contains("recipient");
     }
 
+    @Test
+    void anOutOfRangeIatIsRefusedNotThrown() throws Exception {
+        String manifest = resign(originalValues(), Profile.VERSION, v.memberAKeys(), Long.MAX_VALUE);
+
+        assertThat(refusal(memberB.verifyCase(withContent(original.summary(), original.description(), manifest),
+            Receipt.FIRST_RECEIPT)).step()).isEqualTo(Step.FIRST_RECEIPT);
+    }
+
+    @Test
+    void aJweCarryingAnUnprotectedHeaderIsRefusedAtFields() throws Exception {
+        // A parameter the protected header doesn't have: Nimbus itself already refuses a repeated one,
+        // so only this module's own check refuses a header that wasn't authenticated.
+        String withUnprotected = original.summary().replaceFirst("^\\{", "{\"unprotected\":{\"cty\":\"text/plain\"},");
+        Map<String, String> values = originalValues();
+        values.put(Profile.PROBLEM_SUMMARY, withUnprotected);
+        String manifest = resign(values, Profile.VERSION, v.memberAKeys());
+
+        Refused<?> refused = refusal(memberB.verifyCase(
+            withContent(withUnprotected, original.description(), manifest), Receipt.STORED_READ));
+        assertThat(refused.step()).isEqualTo(Step.FIELDS);
+        assertThat(refused.field()).isEqualTo(Profile.PROBLEM_SUMMARY);
+    }
+
+    @Test
+    void aNoteByACompanyThatIsNotAPartyIsRefused() {
+        CaseNoteDto note = v.noteRecord();
+        CaseNoteDto byOutsider = Vectors.noteRecord(note.summary(), note.description(), note.manifest(), 3000L);
+
+        assertThat(memberB.verifyNote(byOutsider, original, Receipt.STORED_READ)).isInstanceOf(Refused.class);
+    }
+
     // ---- tsanetgit/Connect-API-Code#214 ----
+
+    @Test
+    void anUndecodableCharacterReferenceIsRefusedNotThrown() {
+        String hostile = "{&#34;protected&#34;:&#34;x&#x110000;&#-1;&#34;}";
+
+        Refused<?> refused = refusal(memberB.verifyCase(
+            withContent(original.summary(), hostile, original.manifest()), Receipt.STORED_READ));
+        assertThat(refused.step()).isEqualTo(Step.FIELDS);
+        assertThat(refused.field()).isEqualTo(Profile.PROBLEM_DESCRIPTION);
+    }
 
     @Test
     void aDescriptionTheApiSanitizedStillVerifies() {

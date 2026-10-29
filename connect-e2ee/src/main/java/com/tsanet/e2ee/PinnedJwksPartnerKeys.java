@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class PinnedJwksPartnerKeys implements PartnerKeys {
     private static final Duration FETCH_TIMEOUT = Duration.ofSeconds(10);
+    private static final int MAX_JWKS_BYTES = 64 * 1024;
 
     private final Map<String, URI> jwksUrls;
     private final Duration cacheLifetime;
@@ -75,16 +76,22 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
 
     private JWKSet fetch(URI url, String companyId) throws IOException {
         HttpRequest request = HttpRequest.newBuilder(url).timeout(FETCH_TIMEOUT).GET().build();
-        HttpResponse<String> response;
+        HttpResponse<java.io.InputStream> response;
         try {
-            response = http.send(request, HttpResponse.BodyHandlers.ofString());
+            response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted fetching the JWKS for company " + companyId);
         }
-        if (response.statusCode() != 200) {
-            throw new IOException("The JWKS for company " + companyId + " answered " + response.statusCode());
+        try (java.io.InputStream body = response.body()) {
+            if (response.statusCode() != 200) {
+                throw new IOException("The JWKS for company " + companyId + " answered " + response.statusCode());
+            }
+            byte[] bytes = body.readNBytes(MAX_JWKS_BYTES + 1);
+            if (bytes.length > MAX_JWKS_BYTES) {
+                throw new IOException("The JWKS for company " + companyId + " is larger than " + MAX_JWKS_BYTES + " bytes");
+            }
+            return Jwks.parsePublic(new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
         }
-        return Jwks.parsePublic(response.body());
     }
 }

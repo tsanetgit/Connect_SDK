@@ -9,7 +9,10 @@ package com.tsanet.e2ee;
  * signed. Until #214 stores encrypted values as received, a protected value that starts with
  * {@code {&#34;} is HTML-decoded before its digest is checked and before it is parsed, as the Power
  * App does ({@code tsanetgit/MS_Power_App}, {@code PayloadFieldMap.cs}). That restores the
- * transmitted value exactly. Once #214 ships, this class and its two call sites go.
+ * transmitted value exactly. Once #214 ships, this class and its calls in {@link E2eeProfile} go.
+ *
+ * <p>It runs on platform data before anything is authenticated, so it never throws: a reference it
+ * can't decode is left as it is, and the digest check then refuses the value.
  */
 final class SanitizerCompat {
     private static final String SANITIZED_JWE_PREFIX = "{&#34;";
@@ -50,10 +53,10 @@ final class SanitizerCompat {
     private static Integer decodeEntity(String entity) {
         try {
             if (entity.startsWith("#x") || entity.startsWith("#X")) {
-                return Integer.parseInt(entity.substring(2), 16);
+                return validCodePoint(Integer.parseInt(entity.substring(2), 16));
             }
             if (entity.startsWith("#")) {
-                return Integer.parseInt(entity.substring(1));
+                return validCodePoint(Integer.parseInt(entity.substring(1)));
             }
         } catch (NumberFormatException notANumber) {
             return null;
@@ -66,5 +69,9 @@ final class SanitizerCompat {
             case "apos" -> (int) '\'';
             default -> null;
         };
+    }
+
+    private static Integer validCodePoint(int codePoint) {
+        return Character.isValidCodePoint(codePoint) ? codePoint : null;
     }
 }

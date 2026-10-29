@@ -39,9 +39,9 @@
     </properties>
 
     <!-- Where `mvn deploy` publishes. The workflow deploys the root pom (this file is
-         the parent, so consumers need it resolvable) plus connect-library and
-         attachment-receiver only, via reactor selection
-         (-pl .,connect-library,attachment-receiver); the app and demo modules
+         the parent, so consumers need it resolvable) plus connect-library,
+         attachment-receiver and connect-e2ee only, via reactor selection
+         (-pl .,connect-library,attachment-receiver,connect-e2ee); the app and demo modules
          are never published. The server id `github` is wired to credentials by the
          publish workflow's setup-java step. -->
     <distributionManagement>

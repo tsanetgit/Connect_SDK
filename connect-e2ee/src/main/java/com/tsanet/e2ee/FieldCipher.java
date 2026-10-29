@@ -124,7 +124,10 @@ final class FieldCipher {
         } catch (ParseException notJson) {
             throw new FieldCipherException("not a JWE in general JSON serialization");
         }
-        if (!json.containsKey("recipients") || json.containsKey("encrypted_key") || json.containsKey("aad")) {
+        // The binding must come from the authenticated protected header only, so a top-level
+        // unprotected header, a flattened per-recipient header or extra AAD is refused.
+        if (!json.containsKey("recipients") || json.containsKey("encrypted_key") || json.containsKey("aad")
+            || json.containsKey("unprotected") || json.containsKey("header")) {
             throw new FieldCipherException("not a JWE in the profile's general JSON serialization");
         }
         JWEObjectJSON jwe;

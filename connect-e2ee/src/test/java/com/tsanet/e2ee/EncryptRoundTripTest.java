@@ -135,6 +135,21 @@ class EncryptRoundTripTest {
     }
 
     @Test
+    void aPartnerPublishingTwoEncryptionKeysIsRefused() throws Exception {
+        com.nimbusds.jose.jwk.JWKSet two = new com.nimbusds.jose.jwk.JWKSet(java.util.List.of(
+            v.rsa("memberB_enc").toPublicJWK(),
+            new com.nimbusds.jose.jwk.gen.RSAKeyGenerator(2048).keyID("old").keyUse(com.nimbusds.jose.jwk.KeyUse.ENCRYPTION)
+                .generate().toPublicJWK()));
+        PartnerKeys keys = company -> company.equals(Vectors.MEMBER_B) ? two : v.partnerKeys().publicKeys(company);
+        E2eeProfile sender = new E2eeProfile(Vectors.MEMBER_A, v.memberAKeys(), keys,
+            new InMemoryReplayGuard(java.time.Duration.ofMinutes(10), java.time.Duration.ofMinutes(2), Vectors.clockAt(NOW)),
+            Vectors.clockAt(NOW));
+
+        assertThatThrownBy(() -> sender.encryptCase(new CasePlaintext("A-1", "s", "d", Map.of(), List.of()), Vectors.MEMBER_B))
+            .isInstanceOf(E2eeException.class).hasMessageContaining("more than one encryption key");
+    }
+
+    @Test
     void resultsKeepContentOutOfToString() throws Exception {
         EncryptedCase sent = memberA.encryptCase(
             new CasePlaintext("A-1", "secret summary", "secret description", answers(), List.of()), Vectors.MEMBER_B);

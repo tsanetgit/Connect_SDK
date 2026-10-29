@@ -52,8 +52,9 @@ The working steps, in order:
   the merge. The tag `gateway-v0.1.0-certified` keeps that commit reachable now
   that the branch is deleted. The pin is the record of what was certified, not
   the commit to build today.
-- Releases are cut from `main` as GitHub Releases; each publishes `connect-library` and,
-  from 2.0.0, `attachment-receiver` to GitHub Packages. Current version and notes:
+- Releases are cut from `main` as GitHub Releases; each publishes `connect-library`, from
+  2.0.0 `attachment-receiver`, and from the first release that carries it `connect-e2ee`, to
+  GitHub Packages. Current version and notes:
   <https://github.com/tsanetgit/Connect_SDK/releases/latest>.
 
 An alternative to the sibling clone, for consumers who need a hermetic build, is

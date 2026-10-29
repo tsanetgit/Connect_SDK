@@ -49,6 +49,8 @@ class SupportingPiecesTest {
         assertThat(SanitizerCompat.restore(jwe)).isSameAs(jwe);
         assertThat(SanitizerCompat.restore("Tom &#34;the cat&#34;")).as("plaintext is never touched").isEqualTo("Tom &#34;the cat&#34;");
         assertThat(SanitizerCompat.restore(null)).isNull();
+        assertThat(SanitizerCompat.restore("{&#34;x&#x110000;&#-1;&#99999999999;"))
+            .as("references it can't decode stay as they are").isEqualTo("{\"x&#x110000;&#-1;&#99999999999;");
     }
 
     @Test
@@ -68,6 +70,7 @@ class SupportingPiecesTest {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         serve(server, "/a.json", () -> { fetches.incrementAndGet(); return Jwks.publicJson(new JWKSet(v.ec("memberA_sig"))); });
         serve(server, "/leak.json", () -> new JWKSet(v.ec("memberA_sig")).toString(false));
+        serve(server, "/huge.json", () -> "{\"keys\":[" + " ".repeat(70 * 1024) + "]}");
         server.start();
         try {
             String base = "http://127.0.0.1:" + server.getAddress().getPort();
@@ -78,7 +81,8 @@ class SupportingPiecesTest {
                 public Instant instant() { return now[0]; }
             };
             PinnedJwksPartnerKeys keys = new PinnedJwksPartnerKeys(
-                Map.of("1042", URI.create(base + "/a.json"), "666", URI.create(base + "/leak.json")),
+                Map.of("1042", URI.create(base + "/a.json"), "666", URI.create(base + "/leak.json"),
+                    "888", URI.create(base + "/huge.json")),
                 Duration.ofMinutes(5), HttpClient.newHttpClient(), clock);
 
             assertThat(keys.publicKeys("1042").getKeyByKeyId(v.ec("memberA_sig").getKeyID())).isNotNull();
@@ -90,6 +94,7 @@ class SupportingPiecesTest {
 
             assertThatThrownBy(() -> keys.publicKeys("666")).isInstanceOf(IOException.class).hasMessageContaining("private");
             assertThatThrownBy(() -> keys.publicKeys("777")).isInstanceOf(IOException.class).hasMessageContaining("777");
+            assertThatThrownBy(() -> keys.publicKeys("888")).isInstanceOf(IOException.class).hasMessageContaining("larger");
         } finally {
             server.stop(0);
         }

@@ -167,7 +167,8 @@ public final class E2eeProfile {
         for (JWK key : publicKeysForEncrypting(companyId).getKeys()) {
             if (key instanceof RSAKey rsa && isEncryptionKey(rsa)) {
                 if (match != null) {
-                    throw new E2eeException("Company " + companyId + " publishes more than one encryption key");
+                    throw new E2eeException("Company " + companyId
+                        + " publishes more than one encryption key; a member publishes only its current one");
                 }
                 match = rsa;
             }
@@ -386,7 +387,13 @@ public final class E2eeProfile {
 
         // Step 4.
         if (receipt == Receipt.FIRST_RECEIPT) {
-            ReplayGuard.Result result = replayGuard.check(claims.iss(), claims.jti(), Instant.ofEpochSecond(claims.iat()));
+            Instant iat;
+            try {
+                iat = Instant.ofEpochSecond(claims.iat());
+            } catch (java.time.DateTimeException outOfRange) {
+                return refuse(Step.FIRST_RECEIPT, "iat out of range");
+            }
+            ReplayGuard.Result result = replayGuard.check(claims.iss(), claims.jti(), iat);
             if (result != ReplayGuard.Result.FIRST) {
                 return refuse(Step.FIRST_RECEIPT, switch (result) {
                     case REPLAYED -> "jti already seen";
