@@ -449,10 +449,18 @@ class VerificationRefusalTest {
             jwe -> jwe.remove("iv"),
             jwe -> jwe.remove("tag"),
             jwe -> jwe.put("iv", Base64URL.encode(new byte[16]).toString()),
-            jwe -> ((Map<String, Object>) ((List<Object>) jwe.get("recipients")).get(0)).remove("encrypted_key"))) {
-            assertThat(refusal(summaryEditedAndResigned(edit, Receipt.STORED_READ, memberB)).field())
-                .isEqualTo(Profile.PROBLEM_SUMMARY);
+            jwe -> jwe.put("tag", Base64URL.encode(new byte[12]).toString()))) {
+            // Refused when the JWE is parsed, at FIELDS: without the length checks a wrong-length iv or tag
+            // would still be refused, but later, at DECRYPT.
+            Refused<?> refused = refusal(summaryEditedAndResigned(edit, Receipt.STORED_READ, memberB));
+            assertThat(refused.step()).isEqualTo(Step.FIELDS);
+            assertThat(refused.field()).isEqualTo(Profile.PROBLEM_SUMMARY);
         }
+        Refused<?> noKey = refusal(summaryEditedAndResigned(
+            jwe -> ((Map<String, Object>) ((List<Object>) jwe.get("recipients")).get(0)).remove("encrypted_key"),
+            Receipt.STORED_READ, memberB));
+        assertThat(noKey.step()).isEqualTo(Step.DECRYPT);
+        assertThat(noKey.field()).isEqualTo(Profile.PROBLEM_SUMMARY);
     }
 
     @Test
