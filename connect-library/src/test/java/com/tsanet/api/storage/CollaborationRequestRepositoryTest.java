@@ -131,6 +131,23 @@ class CollaborationRequestRepositoryTest {
         });
     }
 
+    /**
+     * A FROZEN copy of the stored JSON shape, on purpose: the round-trip tests write and read with the
+     * same record, so a renamed CaseCustomFieldDto component would pass them while every cached row
+     * read back as null. This literal is what this version writes; changing it needs a migration.
+     */
+    @Test
+    void itReadsTheStoredCustomFieldsShape() {
+        jdbcTemplate.update(
+            "INSERT INTO collaboration_request (id, status, summary, submit_company_id, receive_company_id, token,"
+                + " fetched_at, custom_fields_json) VALUES (1, 'OPEN', 's', 1, 2, 'tok1', 'x',"
+                + " '[{\"id\":9,\"fieldName\":\"F\",\"value\":\"\"},{\"id\":10,\"fieldName\":\"G\",\"value\":null}]')");
+
+        assertThat(repository.findAll()).singleElement()
+            .extracting(CollaborationRequestStatusDto::customFields)
+            .isEqualTo(java.util.Arrays.asList(new CaseCustomFieldDto(9L, "F", ""), new CaseCustomFieldDto(10L, "G", null)));
+    }
+
     @Test
     void anUnreadableCustomFieldsRowReadsNotKnownAndTheRestStillRead() {
         repository.saveAll(List.of(

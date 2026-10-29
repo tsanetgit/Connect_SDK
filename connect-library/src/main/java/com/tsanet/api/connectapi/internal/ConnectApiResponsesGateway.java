@@ -18,7 +18,6 @@ import com.tsanet.api.generated.model.CaseResponseDTO;
 import com.tsanet.api.generated.model.CollaborationRequestStatusDTO;
 import com.tsanet.api.storage.CaseResponseStorageService;
 import com.tsanet.api.storage.CollaborationRequestStorageService;
-import java.time.OffsetDateTime;
 import java.util.Collections;
 import java.util.List;
 
@@ -207,29 +206,7 @@ public class ConnectApiResponsesGateway {
     }
 
     private CollaborationRequestStatusDto toCollaborationRequestDto(CollaborationRequestStatusDTO dto) {
-        String status = dto.getStatus() != null ? dto.getStatus().getValue() : null;
-        return new CollaborationRequestStatusDto(
-            dto.getId(),
-            status,
-            dto.getSummary(),
-            dto.getSubmitCompanyName(),
-            dto.getSubmitCompanyId(),
-            dto.getReceiveCompanyName(),
-            dto.getReceiveCompanyId(),
-            dto.getToken(),
-            formatDateTime(dto.getCreatedAt()),
-            formatDateTime(dto.getUpdatedAt()),
-            dto.getTestCase(),
-            dto.getManifest(),
-            dto.getEncrypted(),
-            dto.getSubmitterCaseNumber(),
-            dto.getDescription(),
-            OpenApiMapping.caseCustomFields(dto.getCustomFields())
-        );
-    }
-
-    private static String formatDateTime(OffsetDateTime value) {
-        return value != null ? value.toString() : null;
+        return OpenApiMapping.collaborationRequest(dto);
     }
 
     private void requireLogin() {
