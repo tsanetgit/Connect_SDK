@@ -76,8 +76,7 @@ obsolete, are not offered to members, and there are no external deployments to k
 for. Never point a member at an older version. The current release **requires Jackson 3**
 (`tools.jackson.core:jackson-databind`) and the Spring Boot 4.1 line; a service still on
 Jackson 2 or Spring Boot 3 has to move to that runtime before it can take the library.
-**2.0.0 changes what a failure looks like** (see Upgrading) and also publishes
-`attachment-receiver`. The
+What changed in each release, including how a failure looks, is under Upgrading. The
 library works outside Spring Boot; from 1.0.0 `java.time` support comes from Jackson 3's
 databind itself, so no `jsr310` module is declared or needed.
 
@@ -380,7 +379,9 @@ Watch the release notes on each release.
     A `POST` sent on a pooled connection that something on the network path closed while it
     sat idle fails as `CONNECTIVITY`: the JDK client can retry a `GET` there, never a `POST`.
 - **3.1.0** adds optional end-to-end encryption (`tsanetgit/Connect_SDK#140`); the runtime line
-  (Spring Boot 4.1, Jackson 3, JDK 21) is unchanged from 3.0.0. Callers need no change.
+  (Spring Boot 4.1, Jackson 3, JDK 21) is unchanged from 3.0.0. Calls compile and behave as
+  before; the exceptions are a record pattern over the two changed records and an implementer
+  of the two changed facades, both below.
   - New artifact `com.tsanet:connect-e2ee`, same repository and version: encrypts and signs a
     case or note for a create, and verifies and decrypts one on a read, to the `tsanet-e2ee-1`
     profile. Only a connector that uses E2EE adds it; it brings `com.nimbusds:nimbus-jose-jwt`.
@@ -392,9 +393,14 @@ Watch the release notes on each release.
     and custom-field values are sent unstripped, and the note length limits don't apply.
   - `CollaborationRequestStatusDto` gains `manifest`, `encrypted`, `submitterCaseNumber`,
     `description` and `customFields` (`CaseCustomFieldDto(id, fieldName, value)`); `CaseNoteDto`
-    gains `manifest` and `encrypted`. The earlier constructors are deprecated and still work.
+    gains `manifest` and `encrypted`. The earlier constructors are deprecated and still work
+    (a build with `-Werror` on deprecation sees them). A record pattern over either type has
+    the new components, so a 3.0.0 `case CaseNoteDto(...)` or `case CollaborationRequestStatusDto(...)`
+    stops compiling.
     The records' `equals` and `hashCode` cover the new components, so a record cached before
     the upgrade doesn't equal a fresh read of the same case.
-  - The SQLite cache gains the new columns on its first open, with no manual step. It now
+  - The SQLite cache gains the new columns on its first open, with no manual step. A case or
+    note cached by 3.0.0 reads the new components as null ("not known") until it is fetched
+    again; a fresh read of a case with no answers reads `customFields` as empty. It now
     holds each case's description and custom-field answers as well as its summary; run
     `CacheRetention.sweep` if closed and rejected cases shouldn't stay on disk.
