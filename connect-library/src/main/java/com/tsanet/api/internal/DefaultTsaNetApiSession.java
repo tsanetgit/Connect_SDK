@@ -13,6 +13,7 @@ import com.tsanet.api.connectapi.dto.CollaborationRequestFormDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormTemplateDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
 import com.tsanet.api.connectapi.dto.CommunicationSyncSnapshot;
+import com.tsanet.api.connectapi.dto.E2eeFields;
 import com.tsanet.api.connectapi.dto.PartnerSelectionDto;
 import com.tsanet.api.connectapi.dto.UserContextDto;
 import com.tsanet.api.connectapi.dto.NormalizedHttpsAttachmentConfigDto;
@@ -387,10 +388,11 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         String caseNumber,
         String summary,
         String description,
-        boolean testSubmission
+        boolean testSubmission,
+        E2eeFields e2ee
     ) {
         CollaborationRequestFormTemplateDto template = getCreateFormByCompanyId(receiverCompanyId);
-        return createRequest(template, caseNumber, summary, description, Collections.emptyMap(), testSubmission);
+        return createRequest(template, caseNumber, summary, description, Collections.emptyMap(), testSubmission, e2ee);
     }
 
     @Override
@@ -400,7 +402,8 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         String summary,
         String description,
         Map<Long, String> customFieldValues,
-        boolean testSubmission
+        boolean testSubmission,
+        E2eeFields e2ee
     ) {
         CollaborationRequestDTO form = formGateway.getFormByDocumentId(formTemplate.documentId());
         long storageCompanyId = formTemplate.receiverCompanyId() != null
@@ -414,7 +417,8 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
             summary,
             description,
             customFieldValues,
-            testSubmission
+            testSubmission,
+            e2ee
         );
     }
 
@@ -426,10 +430,11 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         String summary,
         String description,
         Map<Long, String> customFieldValues,
-        boolean testSubmission
+        boolean testSubmission,
+        E2eeFields e2ee
     ) {
         storeFormMetadata(storageCompanyId, departmentId, form);
-        FormTemplateMapper.applyCustomFieldValues(form, customFieldValues);
+        FormTemplateMapper.applyCustomFieldValues(form, customFieldValues, e2ee != null && e2ee.encrypted());
 
         CollaborationRequestFormValidation.ValidationResult validation =
             CollaborationRequestFormValidation.validateRequiredApiFields(form.getCustomFields());
@@ -441,6 +446,10 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         form.setProblemSummary(summary);
         form.setProblemDescription(description);
         form.setTestSubmission(testSubmission);
+        if (e2ee != null) {
+            form.setManifest(e2ee.manifest());
+            form.setEncrypted(e2ee.encrypted());
+        }
         if (form.getPriority() == null) {
             form.setPriority(CasePriority.MEDIUM);
         }
@@ -536,8 +545,15 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     }
 
     @Override
-    public CaseNoteDto createNote(String caseToken, String summary, String description, String priority, String type) {
-        return notesGateway.createNote(caseToken, summary, description, priority, type);
+    public CaseNoteDto createNote(
+        String caseToken,
+        String summary,
+        String description,
+        String priority,
+        String type,
+        E2eeFields e2ee
+    ) {
+        return notesGateway.createNote(caseToken, summary, description, priority, type, e2ee);
     }
 
     @Override

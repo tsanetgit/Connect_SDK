@@ -81,7 +81,9 @@ public class ConnectApiCollaborationGateway {
             dto.getToken(),
             formatDateTime(dto.getCreatedAt()),
             formatDateTime(dto.getUpdatedAt()),
-            dto.getTestCase()
+            dto.getTestCase(),
+            dto.getManifest(),
+            dto.getEncrypted()
         );
     }
 

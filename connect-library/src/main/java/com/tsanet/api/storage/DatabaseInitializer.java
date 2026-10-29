@@ -16,7 +16,9 @@ public final class DatabaseInitializer {
             created_at TEXT,
             updated_at TEXT,
             test_case INTEGER,
-            fetched_at TEXT NOT NULL
+            fetched_at TEXT NOT NULL,
+            manifest TEXT,
+            encrypted INTEGER
         )
         """;
 
@@ -40,7 +42,9 @@ public final class DatabaseInitializer {
             type TEXT,
             company_id INTEGER,
             direction TEXT,
-            type_display_name TEXT
+            type_display_name TEXT,
+            manifest TEXT,
+            encrypted INTEGER
         )
         """;
 
@@ -157,11 +161,15 @@ public final class DatabaseInitializer {
     public static void createSchema(JdbcTemplate jdbcTemplate) {
         jdbcTemplate.execute(COLLABORATION_REQUEST_TABLE);
         ensureColumn(jdbcTemplate, "collaboration_request", "test_case", "INTEGER");
+        ensureColumn(jdbcTemplate, "collaboration_request", "manifest", "TEXT");
+        ensureColumn(jdbcTemplate, "collaboration_request", "encrypted", "INTEGER");
         jdbcTemplate.execute(CASE_NOTE_TABLE);
         ensureColumn(jdbcTemplate, "case_note", "type", "TEXT");
         ensureColumn(jdbcTemplate, "case_note", "company_id", "INTEGER");
         ensureColumn(jdbcTemplate, "case_note", "direction", "TEXT");
         ensureColumn(jdbcTemplate, "case_note", "type_display_name", "TEXT");
+        ensureColumn(jdbcTemplate, "case_note", "manifest", "TEXT");
+        ensureColumn(jdbcTemplate, "case_note", "encrypted", "INTEGER");
         jdbcTemplate.execute(CASE_RESPONSE_TABLE);
         jdbcTemplate.execute(USER_CONTEXT_TABLE);
         jdbcTemplate.execute(WEBHOOK_SUBSCRIPTION_TABLE);

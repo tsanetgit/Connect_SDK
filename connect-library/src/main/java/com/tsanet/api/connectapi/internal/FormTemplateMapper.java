@@ -33,6 +33,18 @@ public final class FormTemplateMapper {
     }
 
     public static void applyCustomFieldValues(CollaborationRequestDTO form, java.util.Map<Long, String> values) {
+        applyCustomFieldValues(form, values, false);
+    }
+
+    /**
+     * @param encrypted whether the values are ciphertext; if so they are set exactly as given, not
+     *     stripped, because the sender's manifest digests cover the exact value
+     */
+    public static void applyCustomFieldValues(
+        CollaborationRequestDTO form,
+        java.util.Map<Long, String> values,
+        boolean encrypted
+    ) {
         if (form.getCustomFields() == null || values == null || values.isEmpty()) {
             return;
         }
@@ -42,7 +54,7 @@ public final class FormTemplateMapper {
             }
             String provided = values.get(field.getFieldId());
             if (provided != null) {
-                field.setValue(provided.strip());
+                field.setValue(encrypted ? provided : provided.strip());
             }
         }
     }

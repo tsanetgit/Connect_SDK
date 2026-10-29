@@ -28,8 +28,8 @@ public class CaseNoteRepository {
             INSERT INTO case_note (
                 id, case_id, case_token, company_name, creator_username, creator_email,
                 creator_name, summary, description, priority, status, token, created_at, updated_at, fetched_at,
-                type, company_id, direction, type_display_name
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                type, company_id, direction, type_display_name, manifest, encrypted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 case_id = excluded.case_id,
                 case_token = excluded.case_token,
@@ -48,7 +48,9 @@ public class CaseNoteRepository {
                 type = excluded.type,
                 company_id = excluded.company_id,
                 direction = excluded.direction,
-                type_display_name = excluded.type_display_name
+                type_display_name = excluded.type_display_name,
+                manifest = excluded.manifest,
+                encrypted = excluded.encrypted
             """,
             notes,
             notes.size(),
@@ -72,6 +74,8 @@ public class CaseNoteRepository {
                 ps.setObject(17, note.companyId());
                 ps.setString(18, note.direction());
                 ps.setString(19, note.typeDisplayName());
+                ps.setString(20, note.manifest());
+                ps.setObject(21, note.encrypted() == null ? null : (note.encrypted() ? 1 : 0));
             }
         );
     }
@@ -81,7 +85,7 @@ public class CaseNoteRepository {
             """
             SELECT id, case_id, case_token, company_name, creator_username, creator_email,
                    creator_name, summary, description, priority, status, token, created_at, updated_at,
-                   type, company_id, direction, type_display_name
+                   type, company_id, direction, type_display_name, manifest, encrypted
             FROM case_note
             ORDER BY created_at, id
             """,
@@ -94,7 +98,7 @@ public class CaseNoteRepository {
             """
             SELECT id, case_id, case_token, company_name, creator_username, creator_email,
                    creator_name, summary, description, priority, status, token, created_at, updated_at,
-                   type, company_id, direction, type_display_name
+                   type, company_id, direction, type_display_name, manifest, encrypted
             FROM case_note
             WHERE case_token = ?
             ORDER BY created_at, id
@@ -123,7 +127,9 @@ public class CaseNoteRepository {
             rs.getString("type"),
             nullableLong(rs, "company_id"),
             rs.getString("direction"),
-            rs.getString("type_display_name")
+            rs.getString("type_display_name"),
+            rs.getString("manifest"),
+            nullableBoolean(rs, "encrypted")
         );
     }
 
@@ -131,5 +137,11 @@ public class CaseNoteRepository {
     private static Long nullableLong(ResultSet rs, String column) throws SQLException {
         long value = rs.getLong(column);
         return rs.wasNull() ? null : value;
+    }
+
+    /** NULL means "not known": a note cached before the column existed. */
+    private static Boolean nullableBoolean(ResultSet rs, String column) throws SQLException {
+        int value = rs.getInt(column);
+        return rs.wasNull() ? null : value != 0;
     }
 }

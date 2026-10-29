@@ -10,6 +10,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 
 import com.tsanet.api.ConnectApiException;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
+import com.tsanet.api.connectapi.dto.E2eeFields;
 import com.tsanet.api.connectapi.dto.NoteTypeDto;
 import com.tsanet.api.generated.api.CaseNotesApi;
 import com.tsanet.api.generated.invoker.ApiClient;
@@ -91,6 +92,56 @@ class ConnectApiNotesGatewayWireTest {
         assertThat(new JSONObject(sentBodies.get(0)).getJSONObject("type").getString("code")).isEqualTo("PuBlic");
         assertThat(created.type()).isEqualTo("public");
         assertThat(created.typeDisplayName()).isEqualTo("Public");
+        server.verify();
+    }
+
+    @Test
+    void anEncryptedNoteIsSentByteForByteWithItsManifestAndReadsBackTheSame() throws Exception {
+        // Leading and trailing whitespace and a length past both plaintext caps: the library must
+        // neither strip nor refuse a value the caller marked as ciphertext.
+        String summary = " " + "s".repeat(1300) + "\n";
+        String description = "\t" + "d".repeat(6000) + " ";
+        String manifest = "eyJhbGciOiJFUzI1NiJ9.eyJ2ZXIiOiJ0c2FuZXQtZTJlZS0xIn0.c2lnLV9-";
+        String created = new JSONObject().put("id", 5).put("caseId", 1).put("token", "n5").put("summary", summary)
+            .put("description", description).put("manifest", manifest).put("encrypted", true).toString();
+        expectCreate(created);
+
+        CaseNoteDto note = gateway.createNote("tok-1", summary, description, "LOW", null,
+            new E2eeFields(manifest, true));
+
+        JSONObject body = new JSONObject(sentBodies.get(0));
+        assertThat(body.getString("summary")).isEqualTo(summary);
+        assertThat(body.getString("description")).isEqualTo(description);
+        assertThat(body.getString("manifest")).isEqualTo(manifest);
+        assertThat(body.getBoolean("encrypted")).isTrue();
+        assertThat(note.manifest()).isEqualTo(manifest);
+        assertThat(note.encrypted()).isTrue();
+        assertThat(storageService.findByCaseToken("tok-1"))
+            .singleElement()
+            .satisfies(stored -> {
+                assertThat(stored.summary()).isEqualTo(summary);
+                assertThat(stored.manifest()).isEqualTo(manifest);
+                assertThat(stored.encrypted()).isTrue();
+            });
+        server.verify();
+    }
+
+    @Test
+    void aNoteWithoutE2eeFieldsSendsTheDefaultsAndStaysStripped() throws Exception {
+        // Pins what every create already sent before the fields were exposed: "encrypted": false and a
+        // null manifest, the generated model's defaults. tsanetgit/Connect_SDK#137 asked for both to be
+        // left out instead; the PR records keeping the defaults as a decision for review.
+        expectCreate("{\"id\":6,\"token\":\"n6\",\"summary\":\"s\",\"encrypted\":false}");
+
+        CaseNoteDto note = gateway.createNote("tok-1", " s ", " d ", "LOW");
+
+        JSONObject body = new JSONObject(sentBodies.get(0));
+        assertThat(body.getString("summary")).isEqualTo("s");
+        assertThat(body.getBoolean("encrypted")).isFalse();
+        assertThat(body.has("manifest")).as("manifest is sent as an explicit null: %s", sentBodies.get(0)).isTrue();
+        assertThat(body.isNull("manifest")).isTrue();
+        assertThat(note.encrypted()).isFalse();
+        assertThat(note.manifest()).isNull();
         server.verify();
     }
 
