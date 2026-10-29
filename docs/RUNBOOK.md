@@ -12,8 +12,10 @@ Commands use placeholders for anything environment-specific. Substitute your own
 | `<DEMO_REPO>` | This repo's checkout, i.e. `<REPO_ROOT>/Connect_SDK` |
 | `<JAVA_21_HOME>` | Your JDK 21 install (e.g. Homebrew keg-only `openjdk@21`) |
 | `<AWS_ACCOUNT_ID>`, `<REGION>` | Your AWS account and region (deploy default region: `us-west-2`) |
-| `<AWS_CLI_PROFILE>` | The AWS CLI profile/user with App Runner + ECR + logs access |
-| `<SERVICE_ARN>`, `<SERVICE_URL>` | Your provisioned App Runner service ARN and public URL |
+| `<AWS_CLI_PROFILE>` | The AWS CLI profile/user with ECS + ECR + IAM + SSM + logs access |
+| `<SERVICE_ARN>` | Your ECS Express Mode service ARN (`arn:aws:ecs:<REGION>:<AWS_ACCOUNT_ID>:service/default/connect-sdk-demo`) |
+| `<EXECUTION_ROLE_ARN>`, `<INFRA_ROLE_ARN>` | The task execution role and the Express Mode infrastructure role (section 6) |
+| `<LOG_GROUP>` | The CloudWatch log group Express Mode creates for the service |
 | `<ECR_REGISTRY>` | `<AWS_ACCOUNT_ID>.dkr.ecr.<REGION>.amazonaws.com` |
 
 Keep your real values in a local, untracked file (e.g. `docs/RUNBOOK.local.md`) or your `.env` — never commit them.
@@ -86,77 +88,108 @@ ngrok http 8090
 
 Copy the `https://*.ngrok-free.dev` URL it prints. Caveats (free tier): visitors see a one-click interstitial page first, and the URL changes every restart. Kill with Ctrl+C when the call is done — don't leave the tunnel up unattended.
 
-## 6. Optional: hosted on AWS
+## 6. Optional: hosted on AWS (ECS Express Mode)
 
-Decision is on-demand App Runner (see [aws-hosting-options.md](aws-hosting-options.md)). The Dockerfile and Basic-auth gate are built and verified.
+App Runner stopped accepting new customers on 2026-04-30, so a new hosted demo goes on
+**Amazon ECS Express Mode**: one Fargate task behind a managed Application Load Balancer with
+TLS, created from the same image this repo's Dockerfile builds. Express Mode itself is free;
+you pay for Fargate, the load balancer and logs while the service exists (there is no pause).
 
-**Auth gate** — the app is open when `TSANET_DEMO_AUTH_PASSWORD` is unset (local use). Any hosted deploy MUST set it:
+**Auth gate** is mandatory on any hosted deploy. Put the gate values and the Entra values in
+SSM Parameter Store as SecureStrings and let the task read them as secrets, so nothing sits in
+plaintext in the service configuration:
 
 ```bash
-TSANET_DEMO_AUTH_USER=<pick>  TSANET_DEMO_AUTH_PASSWORD=<pick>
+for v in TSANET_DEMO_AUTH_USER TSANET_DEMO_AUTH_PASSWORD TSANET_DEMO_ENTRA_TENANT TSANET_DEMO_ENTRA_AUDIENCE_BETA TSANET_DEMO_ENTRA_AUDIENCE_DEV; do
+  aws ssm put-parameter --region <REGION> --name "/connect-sdk-demo/$v" --type SecureString --value "<value>" --overwrite
+done
 ```
 
-Visitors then get a browser password prompt before anything loads. `/healthz` stays open for App Runner health checks.
+**One-time setup** (needs admin): an ECR repository `connect-sdk-demo`, a default VPC with
+public subnets in `<REGION>`, and two roles per the ECS guide
+(https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express-service-getting-started.html):
+`ecsTaskExecutionRole` (trust `ecs-tasks.amazonaws.com`, managed policy
+`AmazonECSTaskExecutionRolePolicy`, plus an inline policy allowing `ssm:GetParameters` on
+`arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/*`) and
+`ecsInfrastructureRoleForExpressServices` (trust `ecs.amazonaws.com`, managed policy
+`AmazonECSInfrastructureRoleforExpressGatewayServices`). Wait a minute after creating roles
+before the first create call: IAM is eventually consistent, and a create that runs too early
+fails with "infrastructure role doesn't have enough permission".
 
-**Build + test the image locally** (jar must be built first, step 1 — the Docker build only packages it):
+**Build, push, create.** Build the jar (step 1), then:
 
 ```bash
 cd <DEMO_REPO>
+SHA=$(git rev-parse --short HEAD)
 docker build --platform linux/amd64 -t connect-sdk-demo .
-docker run --rm -p 8090:8090 -e TSANET_DEMO_AUTH_USER=<pick> -e TSANET_DEMO_AUTH_PASSWORD=<pick> connect-sdk-demo
+aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <ECR_REGISTRY>
+docker tag connect-sdk-demo:latest <ECR_REGISTRY>/connect-sdk-demo:latest
+docker tag connect-sdk-demo:latest "<ECR_REGISTRY>/connect-sdk-demo:${SHA}"
+docker push <ECR_REGISTRY>/connect-sdk-demo:latest
+docker push "<ECR_REGISTRY>/connect-sdk-demo:${SHA}"
 ```
 
-(`--platform linux/amd64` is required for App Runner — it does not run arm64 images.)
+`primary-container.json` (pin the sha tag, not `latest`, so the running build is always
+readable from `describe-express-gateway-service`):
 
-**Operating a provisioned service** (normally kept PAUSED — paused = no compute billing):
+```json
+{
+  "image": "<ECR_REGISTRY>/connect-sdk-demo:<SHA>",
+  "containerPort": 8090,
+  "secrets": [
+    {"name": "TSANET_DEMO_AUTH_USER", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_USER"},
+    {"name": "TSANET_DEMO_AUTH_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_PASSWORD"},
+    {"name": "TSANET_DEMO_ENTRA_TENANT", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_TENANT"},
+    {"name": "TSANET_DEMO_ENTRA_AUDIENCE_BETA", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_BETA"},
+    {"name": "TSANET_DEMO_ENTRA_AUDIENCE_DEV", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_DEV"}
+  ]
+}
+```
 
-- Service URL: `<SERVICE_URL>` (gate user + password are per-deploy; keep them in your local untracked notes)
-- Resume before a demo (takes ~1 min), pause after:
-  ```bash
-  aws apprunner resume-service --service-arn <SERVICE_ARN>
-  aws apprunner pause-service  --service-arn <SERVICE_ARN>
-  ```
-- Ship a new build: rebuild the jar (step 1), then
-  ```bash
-  docker build --platform linux/amd64 -t connect-sdk-demo .
-  aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <ECR_REGISTRY>
-  docker tag connect-sdk-demo:latest <ECR_REGISTRY>/connect-sdk-demo:latest
-  docker push <ECR_REGISTRY>/connect-sdk-demo:latest
-  aws apprunner start-deployment --service-arn <SERVICE_ARN>
-  ```
-- The AWS CLI session may expire (roughly daily) — re-authenticate your `<AWS_CLI_PROFILE>` before any of the above.
-- Container filesystem is ephemeral: re-enter member credentials in Settings after every deploy/resume.
+```bash
+aws ecs create-express-gateway-service --region <REGION> \
+  --service-name connect-sdk-demo \
+  --execution-role-arn <EXECUTION_ROLE_ARN> \
+  --infrastructure-role-arn <INFRA_ROLE_ARN> \
+  --primary-container file://primary-container.json \
+  --cpu 256 --memory 512 \
+  --health-check-path /healthz \
+  --scaling-target '{"minTaskCount":1,"maxTaskCount":1}'
+```
 
-### Managing the service in the AWS Console
+On a brand-new account the first call may fail with "Unable to assume the service linked role";
+that call creates `AWSServiceRoleForECS`, and a retry half a minute later goes through. Watch the
+first deployment (about 12 minutes, it provisions the load balancer and alarms):
 
-Everything lives in the App Runner console in your deploy region (check the
-region picker; other regions show no services):
-`https://<REGION>.console.aws.amazon.com/apprunner/home?region=<REGION>#/services`
-→ click your service.
+```bash
+aws ecs list-service-deployments --region <REGION> --cluster default --service connect-sdk-demo
+```
 
-Sign in with your deploy profile (`<AWS_CLI_PROFILE>`) — its policies cover App
-Runner, ECR, and logs; access-denied banners on unrelated pages are expected.
-Root/admin is only needed for IAM changes.
+The public URL is in `describe-express-gateway-service` under
+`activeConfigurations[].ingressPaths[].endpoint` (`https://<name>-<suffix>.ecs.<REGION>.on.aws`).
+It is minted per service: deleting and recreating the service changes it. Expect `/healthz` 200
+and `/` 401 (the gate).
 
-| Action | Where |
-|---|---|
-| Pause / Resume | **Actions** menu (same effect as the CLI commands above) |
-| Deploy latest image from ECR | **Deploy** button (= `start-deployment`) |
-| Startup/lifecycle events, Spring Boot output | **Logs** tab (Event logs / Application logs via CloudWatch) |
-| Traffic, latency, instance count | **Metrics** tab |
-| Gate env vars, CPU/memory, health check | **Configuration** tab → Edit (any change triggers a redeploy) |
-| Public URL | "Default domain" on the service overview |
+**Ship a new build:** push the new sha tag, point `primary-container.json` at it, then
 
-Container images are managed separately: Console → **ECR** → repositories →
-`connect-sdk-demo` (same region). App Runner pulls `:latest` on each deploy.
+```bash
+aws ecs update-express-gateway-service --region <REGION> --service-arn <SERVICE_ARN> --primary-container file://primary-container.json
+```
 
-> **Do not delete the service** to turn it off — the public URL is minted per
-> service, so delete + recreate changes the URL everywhere it's been shared.
-> Pause is the off switch. This matters doubly now: App Runner stopped
-> accepting new customers 2026-04-30 (existing services stay operational), so
-> a deleted service may not be recreatable — see the deprecation note in
-> [aws-hosting-options.md](aws-hosting-options.md). Successor when needed:
-> ECS Express Mode, fed by the same ECR image.
+Express Mode runs a canary deployment with 5XX rollback alarms. Rollback is the same update
+with the previous sha tag. Logs: `aws logs tail <LOG_GROUP> --region <REGION> --since 30m`
+(the group name is in `describe-express-gateway-service` under `awsLogsConfiguration`).
+
+The container filesystem is ephemeral: re-enter member credentials in Settings after every
+deploy. The gate password lives only in SSM and your local untracked notes.
+
+**Turning it off:** there is no pause. Delete the service with
+`aws ecs delete-express-gateway-service --service-arn <SERVICE_ARN>` when the demo is not
+needed for a while, and recreate it (new URL) when it is. The image stays in ECR.
+
+**Existing App Runner services** (created before the 2026-04-30 cutoff) keep working; the
+earlier version of this section, with pause/resume and `start-deployment`, is in this file's
+git history.
 
 ## 7. Shutdown
 
