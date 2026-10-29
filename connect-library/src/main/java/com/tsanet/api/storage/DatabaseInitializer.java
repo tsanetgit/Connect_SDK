@@ -18,7 +18,10 @@ public final class DatabaseInitializer {
             test_case INTEGER,
             fetched_at TEXT NOT NULL,
             manifest TEXT,
-            encrypted INTEGER
+            encrypted INTEGER,
+            submitter_case_number TEXT,
+            description TEXT,
+            custom_fields_json TEXT
         )
         """;
 
@@ -163,6 +166,9 @@ public final class DatabaseInitializer {
         ensureColumn(jdbcTemplate, "collaboration_request", "test_case", "INTEGER");
         ensureColumn(jdbcTemplate, "collaboration_request", "manifest", "TEXT");
         ensureColumn(jdbcTemplate, "collaboration_request", "encrypted", "INTEGER");
+        ensureColumn(jdbcTemplate, "collaboration_request", "submitter_case_number", "TEXT");
+        ensureColumn(jdbcTemplate, "collaboration_request", "description", "TEXT");
+        ensureColumn(jdbcTemplate, "collaboration_request", "custom_fields_json", "TEXT");
         jdbcTemplate.execute(CASE_NOTE_TABLE);
         ensureColumn(jdbcTemplate, "case_note", "type", "TEXT");
         ensureColumn(jdbcTemplate, "case_note", "company_id", "INTEGER");
