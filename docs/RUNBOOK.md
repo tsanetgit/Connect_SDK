@@ -186,7 +186,15 @@ with the previous sha tag. Logs: `aws logs tail <LOG_GROUP> --region <REGION> --
 (the group name is in `describe-express-gateway-service` under `awsLogsConfiguration`).
 
 The container filesystem is ephemeral: re-enter member credentials in Settings after every
-deploy. The gate passwords live only in SSM and your local untracked notes. Rotating either
+deploy. `TSANET_DEMO_CREDENTIALS_LOCKED=true` (a plain entry in the container's `environment` list,
+`"environment":[{"name":"TSANET_DEMO_CREDENTIALS_LOCKED","value":"true"}]`, beside `secrets`) turns
+Settings into a read-only "signed in as" view with the environment switch and refuses credential
+saves and clears. On this deployment it is not yet usable as intended: the lock is read at startup,
+so turning it on is an `update-express-gateway-service` call, which redeploys and empties the data
+dir, leaving a locked demo with nothing to sign in as. It becomes usable once credentials survive
+a deploy (seeded from SSM at startup, or a persistent data dir), tracked on
+`tsanetgit/Connect_SDK#152`. Until then run the hosted demo unlocked, or lock a local run whose
+data dir persists. The gate passwords live only in SSM and your local untracked notes. Rotating either
 password is a new SSM value plus the same `update-express-gateway-service` call, which starts a
 new deployment even when the container settings are unchanged (observed: an update with an
 identical container block started a new deployment; the app reads both logins once at startup,

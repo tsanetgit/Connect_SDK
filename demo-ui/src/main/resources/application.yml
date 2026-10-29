@@ -32,6 +32,10 @@ tsanet:
     # signed-in company. Reading and testing it are always available. Off by default: the platform
     # lets any API user of a company repoint its storage (tsanetgit/Connect-API-Code#170).
     receiver-storage-editable: ${TSANET_DEMO_RECEIVER_STORAGE_EDITABLE:false}
+    # Locks the stored member credentials: Settings shows who each environment is signed in as
+    # and the save / clear endpoints refuse (tsanetgit/Connect_SDK#152). For a hosted demo whose
+    # credentials the operator pre-loads, so visitors only switch environments. Off by default.
+    credentials-locked: ${TSANET_DEMO_CREDENTIALS_LOCKED:false}
     # Production is connect2.tsanet.org — deliberately NOT listed here.
     # entra-tenant-id / entra-audience enable the OAuth client-credentials
     # login mode for an environment. Tenant is shared; audiences differ per

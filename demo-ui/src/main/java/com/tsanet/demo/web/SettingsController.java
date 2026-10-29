@@ -52,7 +52,20 @@ public class SettingsController {
                 );
             })
             .toList();
-        return new SettingsStatus(environments.activeEnvironment(), envs);
+        return new SettingsStatus(environments.activeEnvironment(), envs, properties.credentialChangesLocked());
+    }
+
+    /**
+     * Refuses a credential change while {@code tsanet.demo.credentials-locked} is on. Checked
+     * before the controller's own field checks and the environment lookup, so every well-formed save
+     * or clear on a locked demo answers 403 (a body Spring cannot bind still fails earlier, with no
+     * state touched); hiding the page's form alone wouldn't stop a direct call.
+     */
+    private void requireCredentialsUnlocked() {
+        if (properties.credentialChangesLocked()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Credentials are managed by the operator of this demo (tsanet.demo.credentials-locked)");
+        }
     }
 
     @PostMapping("/api/settings/environment")
@@ -67,6 +80,7 @@ public class SettingsController {
 
     @PostMapping("/api/settings/{env}/credentials")
     public SettingsStatus saveCredentials(@PathVariable String env, @RequestBody SaveCredentialsBody body) {
+        requireCredentialsUnlocked();
         boolean oauth = CredentialsStore.MODE_OAUTH.equals(body.mode());
         if (oauth) {
             if (isBlank(body.clientId()) || isBlank(body.clientSecret())) {
@@ -108,6 +122,7 @@ public class SettingsController {
     @DeleteMapping("/api/settings/{env}/credentials")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void clearCredentials(@PathVariable String env) {
+        requireCredentialsUnlocked();
         try {
             environments.credentialsFor(env).clear();
         } catch (IllegalArgumentException e) {
@@ -255,6 +270,7 @@ public class SettingsController {
     ) {
     }
 
-    public record SettingsStatus(String activeEnvironment, List<EnvironmentStatus> environments) {
+    /** {@code credentialsLocked} mirrors {@code tsanet.demo.credentials-locked}, so the page needn't guess. */
+    public record SettingsStatus(String activeEnvironment, List<EnvironmentStatus> environments, boolean credentialsLocked) {
     }
 }

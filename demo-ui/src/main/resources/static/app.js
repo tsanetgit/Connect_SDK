@@ -108,7 +108,23 @@ function renderEnvSettings() {
         const isActive = env.key === state.settings.activeEnvironment;
         const card = document.createElement('div');
         card.className = 'env-card' + (isActive ? ' active-env' : '');
-        card.innerHTML = `
+        const locked = state.settings.credentialsLocked === true;
+        // Locked: who the demo is signed in as, the switch, and no form (tsanetgit/Connect_SDK#152).
+        // Unlocked: the markup below is unchanged from before the lock existed.
+        card.innerHTML = locked ? `
+            <div class="env-head">
+                <span class="env-name">${esc(env.label)}</span>
+                <span class="env-url">${esc(env.apiBaseUrl)}</span>
+                ${env.configured
+                    ? chipHtml(`signed in as ${env.username} (${env.mode === 'oauth' ? 'OAuth' : 'password'})`, 'st-approved')
+                    : chipHtml('no credentials', 'st-pending')}
+                <span class="spacer"></span>
+                ${isActive ? chipHtml('ACTIVE', 'outbound') : ''}
+            </div>
+            <p class="muted">Credentials are managed by the operator of this demo.</p>
+            ${isActive ? '' : `<div class="button-row"><button type="button" class="env-switch-btn" data-env="${esc(env.key)}">Make Active</button></div>`}
+            <div class="receiver-storage" data-env="${esc(env.key)}" data-configured="${env.configured}"></div>
+        ` : `
             <div class="env-head">
                 <span class="env-name">${esc(env.label)}</span>
                 <span class="env-url">${esc(env.apiBaseUrl)}</span>
