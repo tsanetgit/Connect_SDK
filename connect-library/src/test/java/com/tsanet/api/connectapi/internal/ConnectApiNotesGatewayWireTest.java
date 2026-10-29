@@ -160,6 +160,20 @@ class ConnectApiNotesGatewayWireTest {
     }
 
     @Test
+    void anOmittedEncryptedReadsFalseAndOnlyAnExplicitNullReadsNull() {
+        // The generated read model starts encrypted at false (the spec's default), so a value the API
+        // leaves out reads false; null comes only from an explicit null (or a row cached before the field).
+        server.expect(requestTo(LIST_NOTES)).andExpect(method(HttpMethod.GET))
+            .andRespond(withSuccess("[{\"id\":7,\"caseId\":1,\"token\":\"n7\"},"
+                + "{\"id\":8,\"caseId\":1,\"token\":\"n8\",\"encrypted\":null}]", MediaType.APPLICATION_JSON));
+
+        assertThat(gateway.getNotes("tok-1")).extracting(CaseNoteDto::encrypted).containsExactly(false, null);
+        assertThat(storageService.findByCaseToken("tok-1")).extracting(CaseNoteDto::encrypted)
+            .containsExactly(false, null);
+        server.verify();
+    }
+
+    @Test
     void listNoteTypesKeepsTheServersOrder() {
         server.expect(requestTo(BASE + "/v1/note-types")).andExpect(method(HttpMethod.GET))
             .andRespond(withSuccess("[{\"code\":\"status\",\"displayName\":\"Status\"},"

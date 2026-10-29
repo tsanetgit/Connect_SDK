@@ -20,8 +20,9 @@ public record CollaborationRequestStatusDto(
 ) {
     /**
      * Compatibility constructor from before {@code manifest} and {@code encrypted} existed;
-     * leaves both null. A null {@code encrypted} means "not known" (the API sent no value, or a
-     * row was cached before the field existed), never "not encrypted".
+     * leaves both null. A null {@code encrypted} means "not known" (an explicit null from the API, or
+     * a row cached before the field existed), never "not encrypted"; a value the API leaves out
+     * reads false, the spec's default.
      *
      * @deprecated pass {@code manifest} and {@code encrypted} explicitly; scheduled for removal at
      *     the next release boundary.

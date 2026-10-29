@@ -14,8 +14,9 @@ package com.tsanet.api.connectapi.dto;
  *                  sent no type. For display only, never for matching
  * @param manifest  the end-to-end encryption manifest exactly as the API returned it; null when
  *                  the note has none. Opaque to the library: never parsed or verified here
- * @param encrypted whether the sender marked the note's text as encrypted; null when not known
- *                  (the API sent no value, or the note was cached before this field existed)
+ * @param encrypted whether the sender marked the note's text as encrypted. An omitted value reads
+ *                  false (the spec's default); null means not known: the API sent an explicit null,
+ *                  or the note was cached before this field existed
  */
 public record CaseNoteDto(
     Long id,
@@ -41,8 +42,9 @@ public record CaseNoteDto(
 ) {
     /**
      * Compatibility constructor from before {@code manifest} and {@code encrypted} existed;
-     * leaves both null. A null {@code encrypted} means "not known" (the API sent no value, or a
-     * row was cached before the field existed), never "not encrypted".
+     * leaves both null. A null {@code encrypted} means "not known" (an explicit null from the API, or
+     * a row cached before the field existed), never "not encrypted"; a value the API leaves out
+     * reads false, the spec's default.
      *
      * @deprecated pass {@code manifest} and {@code encrypted} explicitly; scheduled for removal at
      *     the next release boundary.
