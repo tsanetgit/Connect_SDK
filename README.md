@@ -6,8 +6,10 @@ Modules: `connect-library` (the Java client for the TSANet Connect API),
 `TSANet-integration-app` (console app), `TSANet-integration-demo` (demo scenarios),
 `attachment-receiver` (the storage half of receiving files: the streaming storage SPI and
 its four cloud adapters — the HTTPS endpoint that accepts the push is being built in
-`tsanetgit/Connect_Gateway`'s attachments-only profile, not here), and `demo-ui` (the branded
-web demo over the SDK facades).
+`tsanetgit/Connect_Gateway`'s attachments-only profile, not here), `connect-e2ee` (optional
+end-to-end encryption of cases and notes over `connect-library`; see
+[`connect-e2ee/README.md`](connect-e2ee/README.md)), and `demo-ui` (the branded web demo over
+the SDK facades).
 
 ## Building
 

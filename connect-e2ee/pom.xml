@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.tsanet</groupId>
+        <artifactId>tsanet-client-parent</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>connect-e2ee</artifactId>
+    <name>connect-e2ee</name>
+    <description>
+        Optional end-to-end encryption for TSANet Connect cases and notes, to the tsanet-e2ee-1
+        profile: encrypts and signs protected fields for a create, and verifies and decrypts
+        them on a read. Built on connect-library, which only carries the fields; a consumer that
+        doesn't add this module sees no change and gets no JOSE dependency.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.tsanet</groupId>
+            <artifactId>connect-library</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+            <version>10.10</version>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+</project>
