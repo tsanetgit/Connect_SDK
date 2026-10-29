@@ -121,4 +121,39 @@ class ConnectApiResponsesGatewayTest {
         assertThat(result.status()).isEqualTo("CLOSED");
         verify(caseResponsesApi).closeCollaborationRequest("tok-close");
     }
+
+    @Test
+    void aLifecycleCallCarriesTheE2eeFieldsItWasAnswered() {
+        String manifest = "eyJhbGciOiJFUzI1NiJ9.eyJ2ZXIiOiJ0c2FuZXQtZTJlZS0xIn0.c2lnLV9-";
+        CollaborationRequestStatusDTO closed = GatewayTestSupport.sampleCollaborationRequest("tok-close-e2ee")
+            .manifest(manifest)
+            .encrypted(true);
+        closed.setStatus(CaseStatus.CLOSED);
+        when(caseResponsesApi.closeCollaborationRequest("tok-close-e2ee")).thenReturn(closed);
+        when(collaborationRequestsApi.getCollaborationRequestByToken("tok-close-e2ee", false)).thenReturn(closed);
+
+        CollaborationRequestStatusDto result = gateway.closeCollaborationRequest("tok-close-e2ee");
+
+        assertThat(result.manifest()).isEqualTo(manifest);
+        assertThat(result.encrypted()).isTrue();
+    }
+
+    @Test
+    void aLifecycleCallCarriesTheCaseContentItWasAnswered() {
+        CollaborationRequestStatusDTO closed = GatewayTestSupport.sampleCollaborationRequest("tok-close-content")
+            .submitterCaseNumber("A-1")
+            .description("Body")
+            .customFields(new java.util.ArrayList<>(java.util.List.of(
+                new com.tsanet.api.generated.model.CaseCustomFieldStatusDTO().id(7L).fieldName("F").value("v"))));
+        closed.setStatus(CaseStatus.CLOSED);
+        when(caseResponsesApi.closeCollaborationRequest("tok-close-content")).thenReturn(closed);
+        when(collaborationRequestsApi.getCollaborationRequestByToken("tok-close-content", false)).thenReturn(closed);
+
+        CollaborationRequestStatusDto result = gateway.closeCollaborationRequest("tok-close-content");
+
+        assertThat(result.submitterCaseNumber()).isEqualTo("A-1");
+        assertThat(result.description()).isEqualTo("Body");
+        assertThat(result.customFields())
+            .containsExactly(new com.tsanet.api.connectapi.dto.CaseCustomFieldDto(7L, "F", "v"));
+    }
 }

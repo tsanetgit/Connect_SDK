@@ -1,6 +1,7 @@
 package com.tsanet.api.facade;
 
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
+import com.tsanet.api.connectapi.dto.E2eeFields;
 import com.tsanet.api.connectapi.dto.NoteTypeDto;
 import java.util.List;
 
@@ -31,5 +32,25 @@ public interface CaseNotesFacade {
      * reaches the caller as a {@link com.tsanet.api.ConnectApiException}. A null type creates a
      * note with no type.
      */
-    CaseNoteDto createNote(String caseToken, String summary, String description, String priority, String type);
+    default CaseNoteDto createNote(String caseToken, String summary, String description, String priority, String type) {
+        return createNote(caseToken, summary, description, priority, type, null);
+    }
+
+    /**
+     * As {@link #createNote(String, String, String, String, String)}, plus the end-to-end
+     * encryption fields.
+     *
+     * @param e2ee the manifest and encrypted flag, sent exactly as given; null sends the defaults
+     *     every create sent before ({@code "encrypted": false}, no manifest). When
+     *     {@code encrypted} is true, {@code summary} and {@code description} are expected to be
+     *     ciphertext already: they are sent unstripped, and the plaintext length caps don't apply.
+     */
+    CaseNoteDto createNote(
+        String caseToken,
+        String summary,
+        String description,
+        String priority,
+        String type,
+        E2eeFields e2ee
+    );
 }

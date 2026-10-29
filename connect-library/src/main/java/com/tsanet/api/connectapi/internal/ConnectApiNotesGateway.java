@@ -5,6 +5,7 @@ import static com.tsanet.api.connectapi.internal.OpenApiMapping.enumValue;
 
 import com.tsanet.api.connectapi.CaseNoteValidation;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
+import com.tsanet.api.connectapi.dto.E2eeFields;
 import com.tsanet.api.connectapi.dto.NoteTypeDto;
 import com.tsanet.api.generated.api.CaseNotesApi;
 import com.tsanet.api.generated.model.CaseNoteDTO;
@@ -63,19 +64,43 @@ public class ConnectApiNotesGateway {
      * {@code "type": null}, which the server stores as no type.
      */
     public CaseNoteDto createNote(String caseToken, String summary, String description, String priority, String type) {
+        return createNote(caseToken, summary, description, priority, type, null);
+    }
+
+    /**
+     * As {@link #createNote(String, String, String, String, String)}, plus the end-to-end
+     * encryption fields. A null {@code e2ee} sends the generated model's defaults, as every create
+     * did before: {@code "encrypted": false} and no manifest. Otherwise both are sent exactly as
+     * given, and when {@code encrypted} is true the summary and description are sent unstripped
+     * and the length caps are skipped (see {@link CaseNoteValidation#validate(String, String, boolean)}).
+     */
+    public CaseNoteDto createNote(
+        String caseToken,
+        String summary,
+        String description,
+        String priority,
+        String type,
+        E2eeFields e2ee
+    ) {
         requireLogin();
 
-        CaseNoteValidation.ValidationResult validation = CaseNoteValidation.validate(summary, description);
+        boolean encrypted = e2ee != null && e2ee.encrypted();
+        CaseNoteValidation.ValidationResult validation = CaseNoteValidation.validate(summary, description, encrypted);
         if (!validation.valid()) {
             throw new IllegalArgumentException(validation.message());
         }
 
+        // Ciphertext is sent byte for byte: the sender's manifest digests cover the exact value.
         CaseNoteTemplateDTO template = new CaseNoteTemplateDTO();
-        template.setSummary(summary.strip());
-        template.setDescription(description.strip());
+        template.setSummary(encrypted ? summary : summary.strip());
+        template.setDescription(encrypted ? description : description.strip());
         template.setPriority(NotePriority.fromValue(priority));
         if (type != null) {
             template.setType(new NoteTypeReferenceDTO().code(type));
+        }
+        if (e2ee != null) {
+            template.setManifest(e2ee.manifest());
+            template.setEncrypted(e2ee.encrypted());
         }
 
         CaseNoteDTO created = caseNotesApi.createNote(caseToken, template);
@@ -106,7 +131,9 @@ public class ConnectApiNotesGateway {
             dto.getType() == null ? null : dto.getType().getCode(),
             dto.getCompanyId(),
             enumValue(dto.getDirection()),
-            dto.getType() == null ? null : dto.getType().getDisplayName()
+            dto.getType() == null ? null : dto.getType().getDisplayName(),
+            dto.getManifest(),
+            dto.getEncrypted()
         );
     }
 

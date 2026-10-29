@@ -1,0 +1,292 @@
+{
+  "_about": "Addendum D worked example, profile tsanet-e2ee-1, regenerated 2026-10-23. Throwaway test keys only: never use them anywhere else.",
+  "keys": {
+    "memberA_enc": {
+      "kty": "RSA",
+      "use": "enc",
+      "alg": "RSA-OAEP-256",
+      "kid": "https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-enc/39f3baea0d4d92781d34d0ec5a7d1311",
+      "n": "pN5ziy547Z_Cyug9BZA5wRTVGbFzbAoOvXso4e9A3vr_GKceIGA4oBhafLzMjzw99OxKwDY9LFz5OFZggCQlHA8Gadp9-KugxkC8kA7qTHUX7nNcl3J7j0RH4smi8lBFFuqRZ4kkitO0mVzKwMK4x-G1xJhImgkRhYv0MuNvXq8I6TTgRjjuInQMoBhcZhwxJRLC5ainjmGE8iWPx1lGrR6WTnXoWeeOiNtTAB0XI_qg1Xa32vTrRg3r2cFotXbgophnZnUMNFGC2TOWpoxBooJzFwFMzeXbUjqw6G6kCsd7I-m716Y9zGf0k087aYcyFU8S2VgNUj_SB0ee2mNppw",
+      "e": "AQAB",
+      "d": "DnBK5zAJOCpLKXEAUxnn7PBxnz_qr1YMJ2z_ThYhdMW_jH2qRkSXAPJRDmaMdajddjMxcrbtUZLM4rGx3tcLhvML6T5Q1PPW7zXhLa6Yt1xz3Zatz7efeZMNxp9JDXaZLmIZnNsmX6Ady2aUfSAwhZTPUenSRecwaSUyHDjN2plOZmfWAd3S9acMMo7QlfxSKzKUkx2I6KqJznAaqjBcletth85ptpB5dJowtDe3sAI7Z6b3xX0ZK72VPY_yUsfnd7Rmm_0MAvJcF9R2UySpoggUuJjv_0ZZgeTF1ipxdjZVcJfx5JfFYOT00Dr4L1kW9pWGcAQnlGjuzFasbnF25Q",
+      "p": "6OaOQ7If7RrGIugB_ve_crRGxJD7dC4CaHFeuzFIcxbVV6XeJPZZQoKXdcVCN7WDX96wsneBE9tw0kjw54qK1hgfXSo3KJlJMEavp7ENifSGAcyVmnxe8ujmu69742e94ZpKuB7yukbfZusym_x1wDwhJ6QdIY615yRWOvvSldM",
+      "q": "tTiLErN2E4qW4dHSpqJDIoHNRlsvChwKs3atlJcAT6NmGvF6GeuK5_-XJZ__ByP7are7iu6v6jObS1Ybu6HeW_WMc162imv7XRFi_LEp2P1TXOYq_tNlYD_VoaOJko4J3E_SEEDYW3XoSOozfFTb0Vu7wYY_a-2fDNb33iqHlF0",
+      "dp": "HvBRwcht2U-PNp_fdAFxW0l7hS1FWh-qjjlRPkjDuRY1bRlJs1tObDlw6WI087WXKCsrCeo6KWsjR6wM5JVQ8DPwJq4u-aOzR0h8mSg6BjOHgcGttgIDkv1BeXlMWd80KD4Y4vCpiflUQBXKeVJGSi0yslNo00Zj_7qiAd_mD6U",
+      "dq": "YaeaqfUzR8yDCiV7kngWHV49NBCnBJef3J2zZEMK09-FgjdmSNl4_RPqa0gQsdReA2AHHBMLkPVGVg6M20ua-4sSqIj9bRJLXhekc-80Uc4RQhp2SOO52WgMwxHRbLxF7AbHeCK5dG_RQJmULQe9fNAmGV8yhgKClvSwlXPto7E",
+      "qi": "B4cJQtJ--B3GIp0Z5hPDqRHfBqwgq3LiRFwEd3VmcEoH2IiFvtcRFOdDb4hkXyKb71LWj0-1yVmYKVAQvxok4uqSZ2l713UYNg3qjNrSBIkIKoa4e3sixjh8ekBb70FVmwns_hbVaiINcXPDStANqWmnpNJTtddRH0MwR0mSUUk"
+    },
+    "memberB_enc": {
+      "kty": "RSA",
+      "use": "enc",
+      "alg": "RSA-OAEP-256",
+      "kid": "https://member-b-kv.vault.azure.net/keys/tsanet-e2ee-enc/1727a7355d226fa41f15ba7718e6743f",
+      "n": "njUgD9bTDn6Hh88Yzm1Sxwng08-fB1ZIWar9uRRfwUGAPB9aw6562MIlcxmtbYOBrBsppd6Iwxoz7iqWFoGE1YEqppfGdvjcqFWU39dvDSzWbCGeOKAVY4NPGWqOHfmgDb0PaYlc8MxpSTjOVL6Ts9bl2pODZzsxkLP0T0OhUNVFmEJy9w87vPudvrB1kd7ktfB6KlE6_PulfwsIRnStfXoQ_9EwYEiwCudapdBGcdq5VTi8CvEPMnDEHyKUcNCrJN9IBHNUYclqEEmybLoh7sZs0QFjcPfiiMOJoB1BkzM2Dj5CwvfPUyQ_wcKz5mXucv8cQ2g6_D0757DUIjesdw",
+      "e": "AQAB",
+      "d": "CvJ9jpsFto1T-BHKN-w0F0iXs8c8XmosTlE9hmx0xg8v9PkR4QrEB6lngEZGlU1fq62jNCAx6LvnbkpfhgqU3VXJnb11IsZex5BJBg-ZDVBWGEnyFotGXVNLAVKnXkcMOeckTnJXab_f0lXSzJysdzL52Uqk8aRLgJM8VIjrxT5OeT6ZeEcYaJX4Y8o1xM35M_UGrb6ZkxhzdPSPo_yM4Qe0hxSl3UBjcwGBPEOqBXxw2bjLqfVo6FO0rstJOeLjN_lzvcr4YeBKO7sQG_0NHZazdspm5mNnqMcsuCCJbuMb6aY8NP00hAfqNZXvz9ZFFHAze_hiFI3w3wYU_AigAQ",
+      "p": "23LbIbtnFipOrrkYpuiCn0PIJnM5yDrHP3JFw_xwOf2LakgBYUA_Qo28vPwcyoiaUTtpDTQDJfbrAj8zPgRk_xb-DOrGkNepHeU5UFJdwUAymaQ3iGs5Q03xKZQaBVBdUQNIlOO9w402mJdohrFYYZHcl3wpw0vIe2WCz91HyIU",
+      "q": "uI78-HUsXbhQv-Pl2Ss2tNIg40z8tmejgzqC8VrgqQ5BDBOuTdtL-AHKP1ZT50P7ynZtko4YM2y-9Vi1-0r2aomuPzUaOL_1jKaiz8T5Bmdk7UCFmUznoqvKc7MBmVNq9mMYtBO6SJtKhspYEMCUoKl7XJt6MMPwUREkXv0Sb8s",
+      "dp": "Cno0XirtZBCHCy6JL8bgHayFzNgphRbRVoUlMZNG5G3njx56-mKv4oST404CLeVRwNkeTeQS1mgwlj3gO3DIRamaXZGEA3xYdbXxA5W7JjPjdpRxllDQPhdlkT-h8mkA25JVj85DzCdc2PI5qlyjRJ1LM-xYrhtbKhERqsz81WU",
+      "dq": "YSh9Sjs9KPVwJSTPir0yJoz8XUzZORlkPiBecLrbzIPBgJ8XwsrwulYO57sFnpjug85GrsF5QhE8kiKqYuk6wilK_uFwtXFwziOnUGOsiU-DFVdDPcn7o2p2wOP6soH0rFLM3XgJOFHwMPdy1xba551xYPZEpElySOsST6NAwnM",
+      "qi": "Ck2a0d_blB6fjIt0wpyw0lXin9jY77vQIOfflMByElEZABgTyvhxv13a93vOsfhbAudqg7ZNO4Pt2fQXJgF1P8BCIsEvRgiv-AikRUFgcoIr_y8PHEfpwFex4JK-sujrWfibx2KCCgL6GxGW3wia66x27b4KPg7NLM-YqRhT5b8"
+    },
+    "memberA_sig": {
+      "kty": "EC",
+      "use": "sig",
+      "alg": "ES256",
+      "kid": "https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-sig/b529568df8a91b0b204557f8feeb9228",
+      "crv": "P-256",
+      "x": "G21w9uFGkTbTkXsc4U-2hiVe6_JT9sHvXRh3vUFoneQ",
+      "y": "7I_pJlq4uTLjGmEP9DYRQT2AzxPqZDHm-pZEZloWQz4",
+      "d": "M68MrFmlCOvLr3l9R8bEsf04QMfq7czVgGFw4ViGUNI"
+    }
+  },
+  "jwks": {
+    "memberA": {
+      "keys": [
+        {
+          "kty": "RSA",
+          "use": "enc",
+          "alg": "RSA-OAEP-256",
+          "kid": "https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-enc/39f3baea0d4d92781d34d0ec5a7d1311",
+          "n": "pN5ziy547Z_Cyug9BZA5wRTVGbFzbAoOvXso4e9A3vr_GKceIGA4oBhafLzMjzw99OxKwDY9LFz5OFZggCQlHA8Gadp9-KugxkC8kA7qTHUX7nNcl3J7j0RH4smi8lBFFuqRZ4kkitO0mVzKwMK4x-G1xJhImgkRhYv0MuNvXq8I6TTgRjjuInQMoBhcZhwxJRLC5ainjmGE8iWPx1lGrR6WTnXoWeeOiNtTAB0XI_qg1Xa32vTrRg3r2cFotXbgophnZnUMNFGC2TOWpoxBooJzFwFMzeXbUjqw6G6kCsd7I-m716Y9zGf0k087aYcyFU8S2VgNUj_SB0ee2mNppw",
+          "e": "AQAB"
+        },
+        {
+          "kty": "EC",
+          "use": "sig",
+          "alg": "ES256",
+          "kid": "https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-sig/b529568df8a91b0b204557f8feeb9228",
+          "crv": "P-256",
+          "x": "G21w9uFGkTbTkXsc4U-2hiVe6_JT9sHvXRh3vUFoneQ",
+          "y": "7I_pJlq4uTLjGmEP9DYRQT2AzxPqZDHm-pZEZloWQz4"
+        }
+      ]
+    },
+    "memberB": {
+      "keys": [
+        {
+          "kty": "RSA",
+          "use": "enc",
+          "alg": "RSA-OAEP-256",
+          "kid": "https://member-b-kv.vault.azure.net/keys/tsanet-e2ee-enc/1727a7355d226fa41f15ba7718e6743f",
+          "n": "njUgD9bTDn6Hh88Yzm1Sxwng08-fB1ZIWar9uRRfwUGAPB9aw6562MIlcxmtbYOBrBsppd6Iwxoz7iqWFoGE1YEqppfGdvjcqFWU39dvDSzWbCGeOKAVY4NPGWqOHfmgDb0PaYlc8MxpSTjOVL6Ts9bl2pODZzsxkLP0T0OhUNVFmEJy9w87vPudvrB1kd7ktfB6KlE6_PulfwsIRnStfXoQ_9EwYEiwCudapdBGcdq5VTi8CvEPMnDEHyKUcNCrJN9IBHNUYclqEEmybLoh7sZs0QFjcPfiiMOJoB1BkzM2Dj5CwvfPUyQ_wcKz5mXucv8cQ2g6_D0757DUIjesdw",
+          "e": "AQAB"
+        }
+      ]
+    }
+  },
+  "example1_case_create": {
+    "plaintext_request": {
+      "documentId": 5521,
+      "internalCaseNumber": "A-2026-004417",
+      "priority": "HIGH",
+      "testSubmission": false,
+      "problemSummary": "Replication lag over 20 minutes after upgrading the storage driver",
+      "problemDescription": "Since the driver upgrade on 6 Oct, replication between the primary and the DR site lags by 20 to 35 minutes during the nightly batch window. Rolling back the driver on one node clears the lag on that node only. Logs and the support bundle will follow as attachments.",
+      "customFields": [
+        {
+          "fieldId": 101,
+          "label": "Product version",
+          "type": "TEXT",
+          "required": true,
+          "value": "7.4.2"
+        },
+        {
+          "fieldId": 102,
+          "label": "Customer environment",
+          "type": "TEXTAREA",
+          "required": false,
+          "value": "Two-site cluster, 6 nodes per site, async replication over a 10 Gbps link"
+        },
+        {
+          "fieldId": 103,
+          "label": "Severity",
+          "type": "SELECT",
+          "required": true,
+          "value": "Production degraded"
+        },
+        {
+          "fieldId": 104,
+          "label": "Partner case reference",
+          "type": "TEXT",
+          "required": false,
+          "value": ""
+        },
+        {
+          "fieldId": 105,
+          "label": "Maintenance window",
+          "type": "TEXT",
+          "required": false,
+          "value": null
+        }
+      ]
+    },
+    "encrypted_request": {
+      "documentId": 5521,
+      "internalCaseNumber": "A-2026-004417",
+      "priority": "HIGH",
+      "testSubmission": false,
+      "problemSummary": "{\"protected\":\"eyJlbmMiOiJBMjU2R0NNIiwidHNhX3ZlciI6InRzYW5ldC1lMmVlLTEiLCJ0c2FfanRpIjoiNGY2YzJiOGUtOWQxNy00YTNlLWIyYzUtN2U4MWYwYTRkOWIzIiwidHNhX2ZsZCI6InByb2JsZW1TdW1tYXJ5In0\",\"recipients\":[{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-b-kv.vault.azure.net/keys/tsanet-e2ee-enc/1727a7355d226fa41f15ba7718e6743f\"},\"encrypted_key\":\"E97gCPTgxUEXXfgKQLdhl0UUs3zG4qjuJokKNrf7NW-5cjQxLmDeqNpV--yvdAhLv26NT3Jb4HrdyAxaRWQQi4P5BHO_g3pyX0dXRia9gY0zu3q7k3yZ3hQ4OybqrxggA5pWb-H4cRyun7-sJpiJ8xI8_W5JURdduHdhSUKbwml6xfIVmGyGbke_PmqzSiDPPQWCHni1BXi3gNuwAAwNyAFVdJzO5padiU_SWcQN-6JVZ8MEt1-WiSidotKHycK47BmF9CHLLHOz43guaN0b46zbYwXLvUbIKbUJxvG_1HhDClZSfkrnJ5GzZB9TOsD8JWJTiGYXW8_exnfCxQVFxw\"},{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-enc/39f3baea0d4d92781d34d0ec5a7d1311\"},\"encrypted_key\":\"QS8jDdaPafJpjhg4UYdaKbr-AOvgrC0S67ZsAPNuib6Pc9KtwY8B6yTBNjfyo4Tx6JpHYLx6kXtrTL87rejnLRcAGtTup-spUY_zoO003O42fC3skmjMv4mbcmmtmEGvim0GN1bEMUu32gK-n-4V8mcC34ORJllML85ALBU9xGFgWPJoI3cQMsyt2I9Nve503VGA0sm2EvCJH6ikcLo7kt1-2ksyBuiAe9-Gi2AKFArHrgJVFY200tkaUomhC1cwu6i_UATTsdNOGHuKh1fGEI-vheirGFptf-1nqV7t2RpsdtimwtxkO7eFEdLvz4IoyltHFJvsBzRf5n0wQA68Vw\"}],\"iv\":\"_MqNDMYf35Ds6d5e\",\"ciphertext\":\"k268-FJAFRM6wVbMKCE8-9qAkOM5aEvNtMGTEdBlqiZfkpQXZENhTmDHtc1iSHcf6xCXaW-zLkWj7YfBp5VHajnp\",\"tag\":\"Q8Mo6EeFyzHbJhdaKKVHgw\"}",
+      "problemDescription": "{\"protected\":\"eyJlbmMiOiJBMjU2R0NNIiwidHNhX3ZlciI6InRzYW5ldC1lMmVlLTEiLCJ0c2FfanRpIjoiNGY2YzJiOGUtOWQxNy00YTNlLWIyYzUtN2U4MWYwYTRkOWIzIiwidHNhX2ZsZCI6InByb2JsZW1EZXNjcmlwdGlvbiJ9\",\"recipients\":[{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-b-kv.vault.azure.net/keys/tsanet-e2ee-enc/1727a7355d226fa41f15ba7718e6743f\"},\"encrypted_key\":\"favEjtyiW0q8hcy8SUB86UooHFIgj2MNPQt5k5SUwApn66kTCxTU8PGxmkJTr-g19EtzRsS3KvR2mXs3rlgBzuBJ7_-JNwDU258prj8IMf9_lGt68qg9yHe1UY25J9v_djixewjW7rUYIkCw6AJ_s4ldoX3WeEv3eMfLlZCbJIZE9jwO9wyzTRmAZvGaDM8fzwAWyjmyV0Dl1MhMzx-ywN0zalMlwxO_5fno7gDXqIxTZXxIDjemDp0nKbBa8fY99Qczyuodly_IW8x8O2aC9pDFosZhDG2Lv5YyUhf_ZpaWK1oBpAnM0vdVIuytz_BdZ-yYPl6hC22jtnF1kxWRVQ\"},{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-enc/39f3baea0d4d92781d34d0ec5a7d1311\"},\"encrypted_key\":\"MEAuU79ELh1fZSm3GQAyaXxmAKddys6lcaBSlBbDBv5ZFC35Rr-OSUtcjmbFaOP9QUVSavaWaoK9L7J8RZrJFfXz9eAuJWH8vF9u_9q8d_26-mGUYrbweWpSIVX-2P3ESPPI4GlE6LJLf2vUjoN0IzX6xiLQM805-y6-643MdnhCNUrWiHl-U_V2XGmRh0SqjWa-kWLlDZwCUTafsFo4h12FkbFPXXpnErSOlGg_vl_JDunhBiCgt1qmRsj_3FkEwnq2IVmIzHaYqEXDMHiQgMp4UI8fp_37DGmV2p8JPAv63MwZwPWBWv572_CzTeMZMdYgOhwSMS5DTBpH-bpaNA\"}],\"iv\":\"Zi59XnrsFqDFq-uR\",\"ciphertext\":\"3lAScok7M542IHfJgmQM4O_VcrSN8BJ0-5zrb1o9D3U1P_7ID0phzVZ2Hf36eeW3oDrcrsuV9hEC5Yw8X8g32KyAwXvunoOe17X8Mma0nyJqoJ5dpeiyktnIBH6fOE6QbD6JWNlkRfpBcxIrlZChKFbJOuhBB-DeAmfWvmOS8Krq6DGiL6JZ-PCRJO3_xXInXOFxJUrWY7tG1Pgqw73Acrmbk85Bs9uIaAkXffknm9tM6EglXNW-HzC5sYfPbPUQUiLyalrsz8hxvXDFtbl36lWukO1vLM6ySNIv2Wfrto5TFq-NV-9zr-QD2xqbIDJor0kZK5C2d99SySuhYENbWLWECvuQm_HBMZ4\",\"tag\":\"1NgkEYLrN5hUAcggpXIOkw\"}",
+      "customFields": [
+        {
+          "fieldId": 101,
+          "label": "Product version",
+          "type": "TEXT",
+          "required": true,
+          "value": "{\"protected\":\"eyJlbmMiOiJBMjU2R0NNIiwidHNhX3ZlciI6InRzYW5ldC1lMmVlLTEiLCJ0c2FfanRpIjoiNGY2YzJiOGUtOWQxNy00YTNlLWIyYzUtN2U4MWYwYTRkOWIzIiwidHNhX2ZsZCI6ImN1c3RvbUZpZWxkcy8xMDEvdmFsdWUifQ\",\"recipients\":[{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-b-kv.vault.azure.net/keys/tsanet-e2ee-enc/1727a7355d226fa41f15ba7718e6743f\"},\"encrypted_key\":\"hJ8x7zgWrpuUxCZnDJn6VYe3JaoYZA9YJeVqf9qZ7NaXl3f485uX0R9aH-X4szsLGg7qhK4kKqSlk6tBnQ-G89PBHlQh_zLEMhnh5YDBVjB4LP6gZ-AKOuffiTIh0T_12_NaPk7TR3s0uv4Pz9ae1nPP9ntkcXs2uCZq0lmbz_GVTaedtTIs-0ut7v8Ub8aTCip48G8fMuXof5ShOsmkan-E3Etd86jxSpAgNu1fARVgmP8Qt1_uYIQdVwlwpfQduQSf7EI5stFA6HCVTaYY4jIzFSxNAdr7DyL4tgZULEux_u1UIqUA8sahGN4jGNpEGDkTHL8IqUFK1o6FByk80w\"},{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-enc/39f3baea0d4d92781d34d0ec5a7d1311\"},\"encrypted_key\":\"iVJ3so38jmlJZ-C09U1udKG_PlK48ii6lZi9T7I2vQv3OBF61l9KXysORwlWbEkN01UMrLXO3Tt7J1VLQfH17Lx4H4Nmb-73d_XrPEnA-ChP8oTCpmACSdLnJU_51C5-rbmN4KRW3tXDK_nAt8aVsQf2100U9iptag1Ci9EPrh1SNNZWfBbcMdMEDtqHcdX3gfilIk6zB4Y0P-8OKbb8WJpocfjIMqle-PXEZGK1Pwle9GTGSaXB-81fOgUO93eyJeGndsmHD7lqYZGcZm6LcUuHbypCBWVhEteyti55KAEaihr2DydTT0OEhl8e0PzGv0Jf5bstJYpmvXLGEF25EQ\"}],\"iv\":\"3XZesSTjH16UeK7R\",\"ciphertext\":\"xVyGBV0\",\"tag\":\"wTJEtqK-yjJ90Yr8XHv0xA\"}"
+        },
+        {
+          "fieldId": 102,
+          "label": "Customer environment",
+          "type": "TEXTAREA",
+          "required": false,
+          "value": "{\"protected\":\"eyJlbmMiOiJBMjU2R0NNIiwidHNhX3ZlciI6InRzYW5ldC1lMmVlLTEiLCJ0c2FfanRpIjoiNGY2YzJiOGUtOWQxNy00YTNlLWIyYzUtN2U4MWYwYTRkOWIzIiwidHNhX2ZsZCI6ImN1c3RvbUZpZWxkcy8xMDIvdmFsdWUifQ\",\"recipients\":[{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-b-kv.vault.azure.net/keys/tsanet-e2ee-enc/1727a7355d226fa41f15ba7718e6743f\"},\"encrypted_key\":\"KA_ZjmdJwKRQ13rl3CHinWpwQhBTzpL3lbM-qKkBCjbVIpcgNi3so2WkiY_K1UydM6GP5mOKt0VXexGabsfUiHmOJ-X1M7aXDK7-ctLtndS-JSof1tU9nSftSKiRXdlKluTUuWcYTU-2LAm7TqnWhXfwy570hx3JOZOgCWkzLKnf8ZcBdlrBZ4WGuiI9DRkFdADxA1Y6ND_bBWc_l2DcaE_wQ9jckZ4uX4sw9JNDQYwZbsLPqeRMCPYIo3kyyGAmWYQwTQLNKrsGoJ3jAOpyoC97I0Myt4Y1XhaDATHO5K-oHqKHD6cchwzTMoiH0ngRMbvowQNzi52f_cBebKNSXg\"},{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-enc/39f3baea0d4d92781d34d0ec5a7d1311\"},\"encrypted_key\":\"clTetFet876ygtlK56eGGQkppBn6zAWRKVbtTwFVeIPKokFXMJLEgOBd7XxvX2Rt7TtRvxc8OxfowSXFMgxeqzSLr1RuuiMAI4_WrZX-8lC2sA-atd--F-WFRhOeowhDEdhacCRJxMSEqWzpKauQdGX2VL9rrvPLk4WH0iHzO6WL5U2XmE-0mnL-FeZ3-R7T26Vh-dVe-yNn7jIKQB0FCex8HmhIHR0Y2DuWHXjyMYobFLLR6gyHEvkozjAiQ-D9G0BgSTVZxMBOsPMO-nIrIs7JLXyuvlqg-i450YCBwJ5b9R-lDJSLuJL91E-A9Ue6afZDMYZZb6TK2AsIVYUf_A\"}],\"iv\":\"ZM07gL0hz5VuQHHe\",\"ciphertext\":\"Cdv3i4hRmN0MZ38guwQOUruFvBwAvw_7nYnM6z1h_vcUEsqDluLG5NRjghw5SfD68i14aobRJLyD8iPknS1MxwspY3YHo9yRag\",\"tag\":\"Xzx6wOBK9fhtNEFjSdMEug\"}"
+        },
+        {
+          "fieldId": 103,
+          "label": "Severity",
+          "type": "SELECT",
+          "required": true,
+          "value": "{\"protected\":\"eyJlbmMiOiJBMjU2R0NNIiwidHNhX3ZlciI6InRzYW5ldC1lMmVlLTEiLCJ0c2FfanRpIjoiNGY2YzJiOGUtOWQxNy00YTNlLWIyYzUtN2U4MWYwYTRkOWIzIiwidHNhX2ZsZCI6ImN1c3RvbUZpZWxkcy8xMDMvdmFsdWUifQ\",\"recipients\":[{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-b-kv.vault.azure.net/keys/tsanet-e2ee-enc/1727a7355d226fa41f15ba7718e6743f\"},\"encrypted_key\":\"mVJnmknlTv62AbTF9N_SVLJFUrQNXrJ2t2FAl-H51AJf6sZsPqwT-5Y4kK7IoEf4gS0TjyS8PK1t-PWrbgHNKhl0jOiIPP7JmG4uM2Cu8WnU9Wjo7SA9dYpzJSgk6ThZehtfn3MYWkHqYataBdH4AMzJYsANDdEkMNlwqNu01cTf_s-Du-UNacEryExJMtlA0sZi_tAsTio4jr7nX9-jgLuenrbg2DLv_M--CgT_XBPbRNb9ARqMawpJ3I8fyqt9ys7FsPPvmcbQvk1HehzlB6d1G7xNR6mgT9TyKZ9-Br3QRnc4OzMeH4DlcY0EL32lDtwuboExxqd8t-PgYD9-0g\"},{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-enc/39f3baea0d4d92781d34d0ec5a7d1311\"},\"encrypted_key\":\"UjLoHw2s4VRRB-PUYrO-XAwR7gga7NN77Zaw-7TS7daS-m1aPlCyorCoinc19S56CELRdyCQrGTkl1rHesZg-aZZgr99CV1MQhyZaAShb9n5LhWE_wiOuIZzo7Hpf-o0WnrlwbbpSlx86no2VXzx87cbgdtWoAjVXWbek4RVKM0Lb7c7P_cMxliN28tNLq96vvEZo3swRRuB_KDQBGnj8uiUejHUpp6pnrS6L_ry6OS3UzvoCqcOt064e7uI7cd8RxB1IpGPsB_Q1Y64h9TXb0dDOx-mjgjxoQC8CkhVNuZDOjGzPzDHjzP5dE0Pt9lM0qpUZVszG5pgC8xusk4W2w\"}],\"iv\":\"Lyp9VS_Si5SGTpJo\",\"ciphertext\":\"KoDZmqk3glZX_e1un6nOu88UIw\",\"tag\":\"oHJSDtcWMR11Mwi0PlhQ5w\"}"
+        },
+        {
+          "fieldId": 104,
+          "label": "Partner case reference",
+          "type": "TEXT",
+          "required": false,
+          "value": "{\"protected\":\"eyJlbmMiOiJBMjU2R0NNIiwidHNhX3ZlciI6InRzYW5ldC1lMmVlLTEiLCJ0c2FfanRpIjoiNGY2YzJiOGUtOWQxNy00YTNlLWIyYzUtN2U4MWYwYTRkOWIzIiwidHNhX2ZsZCI6ImN1c3RvbUZpZWxkcy8xMDQvdmFsdWUifQ\",\"recipients\":[{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-b-kv.vault.azure.net/keys/tsanet-e2ee-enc/1727a7355d226fa41f15ba7718e6743f\"},\"encrypted_key\":\"LohUlgOUkX9YASKosLqACLcXrXtDBWT1thYHTQGLYV-_oIgRy0npKWXrllE5P1mQiBWySxLU2031A0a6b9f0LExCeNli0HZSUNyHdd5BpAd04lYsISjZ-H160RVtrX0SCJ16MwzyNZRLzLD8ugk8WYEPIw9f74hS0VKpD8aqZTf9R3kJKuB-JmHJHLyWO8UfI232eds2tvV2fKmtwDDnSIkwOUYRwvyQwZHJ2HWpMxF3Oowqmb7tWwQlcixl-D1omCDVOEO1OTH0JrGmnbs4rrPf1MXnS9ezqj3E8w_dCjmcqk4BPEirpRe8F7zJ-kZtORvs5i7X1-SbYKVJ8hweEg\"},{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-enc/39f3baea0d4d92781d34d0ec5a7d1311\"},\"encrypted_key\":\"SeZ7H8Jzd-JdldpkqoJRzHVtLUSdOT65El1lopSMNodOyxA1pzVOksjfX3cygZUpf20tV3awuR3unysrKpe1BGuIlIQVrZ9Vkw0AdTw-4MN4rjgFsyyw5ouwXA5owlo40c55D3NPI-0JU4NKh8Z6E1Bq8SUlU0Gdi1dCGJnxs-UzDBQOEY6RZ_2qdic1QN4fG6mcDOQI_jMqq46OAg1ZmJjWBuG8tUxvxBQNkcILHT-kpsL1RVfjqhbHC_UOxY9GTkvPvtgnOwYNhFJTz5scz_dvRdncoPIAVWLbGWRPkMCAVNljewCjjCace0084jVUjgZujeyKivYX3eZoaZTuCw\"}],\"iv\":\"YFbtn9eNK8GsKFcw\",\"ciphertext\":\"\",\"tag\":\"Hn1y6KVF5KcatbSEvswIlQ\"}"
+        },
+        {
+          "fieldId": 105,
+          "label": "Maintenance window",
+          "type": "TEXT",
+          "required": false,
+          "value": null
+        }
+      ],
+      "encrypted": true,
+      "manifest": "eyJhbGciOiJFUzI1NiIsImtpZCI6Imh0dHBzOi8vbWVtYmVyLWEta3YudmF1bHQuYXp1cmUubmV0L2tleXMvdHNhbmV0LWUyZWUtc2lnL2I1Mjk1NjhkZjhhOTFiMGIyMDQ1NTdmOGZlZWI5MjI4IiwidHlwIjoidHNhbmV0LW1hbmlmZXN0K2p3cyJ9.eyJ2ZXIiOiJ0c2FuZXQtZTJlZS0xIiwiaXNzIjoiMTA0MiIsImF1ZCI6IjIwODciLCJyZWYiOiJBLTIwMjYtMDA0NDE3IiwiaWF0IjoxNzkyNzY0MDAwLCJqdGkiOiI0ZjZjMmI4ZS05ZDE3LTRhM2UtYjJjNS03ZTgxZjBhNGQ5YjMiLCJmaWVsZHMiOlt7Im5hbWUiOiJwcm9ibGVtU3VtbWFyeSIsImFsZyI6IlMyNTYiLCJkaWciOiJ1ZGtGSDVBM2stSS1tZGJra2w4YjROR1JvMHBXbGhCaDdzYkhPU2M2TjJjIn0seyJuYW1lIjoicHJvYmxlbURlc2NyaXB0aW9uIiwiYWxnIjoiUzI1NiIsImRpZyI6IkFJZ0RIcEdMNnNvaTFBMVBubE5URElEMG5WNG5ReFB1cmVyZ2FlcDE1V3cifSx7Im5hbWUiOiJjdXN0b21GaWVsZHMvMTAxL3ZhbHVlIiwiYWxnIjoiUzI1NiIsImRpZyI6Im15VEh2TjYyZ1BKZ1hXQmZzRHJzMjhDb3pIcm9XTjJwSGF0Y3NHNEp0WDgifSx7Im5hbWUiOiJjdXN0b21GaWVsZHMvMTAyL3ZhbHVlIiwiYWxnIjoiUzI1NiIsImRpZyI6Ii1qTE5wWW9IeWstTk5qZFd1amxHRGU1VTk2VTRPaXRMX1VibVIzaC1MOG8ifSx7Im5hbWUiOiJjdXN0b21GaWVsZHMvMTAzL3ZhbHVlIiwiYWxnIjoiUzI1NiIsImRpZyI6IlJ5bk42VjVrQ3lzamMyS3NaSFM1SWhIUlVsSUthZV9GMHN5dEZrbFNxZ1EifSx7Im5hbWUiOiJjdXN0b21GaWVsZHMvMTA0L3ZhbHVlIiwiYWxnIjoiUzI1NiIsImRpZyI6Im4wWkZ2eUprVFE3eWFoLTdaOUdZRFpDVHotT2JXMjNDbDZtd0ZnbWttTHcifV19.Sk-Pd0Okmhcf9YgVT96kOTdqph-vqBOZ6YdHES9JMxAL4NuBn0DaYvdPosnno6wJzz2m7bzSIZ94DN2ZHvaO6Q"
+    },
+    "manifest_header": {
+      "alg": "ES256",
+      "kid": "https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-sig/b529568df8a91b0b204557f8feeb9228",
+      "typ": "tsanet-manifest+jws"
+    },
+    "manifest_payload": {
+      "ver": "tsanet-e2ee-1",
+      "iss": "1042",
+      "aud": "2087",
+      "ref": "A-2026-004417",
+      "iat": 1792764000,
+      "jti": "4f6c2b8e-9d17-4a3e-b2c5-7e81f0a4d9b3",
+      "fields": [
+        {
+          "name": "problemSummary",
+          "alg": "S256",
+          "dig": "udkFH5A3k-I-mdbkkl8b4NGRo0pWlhBh7sbHOSc6N2c"
+        },
+        {
+          "name": "problemDescription",
+          "alg": "S256",
+          "dig": "AIgDHpGL6soi1A1PnlNTDID0nV4nQxPurergaep15Ww"
+        },
+        {
+          "name": "customFields/101/value",
+          "alg": "S256",
+          "dig": "myTHvN62gPJgXWBfsDrs28CozHroWN2pHatcsG4JtX8"
+        },
+        {
+          "name": "customFields/102/value",
+          "alg": "S256",
+          "dig": "-jLNpYoHyk-NNjdWujlGDe5U96U4OitL_UbmR3h-L8o"
+        },
+        {
+          "name": "customFields/103/value",
+          "alg": "S256",
+          "dig": "RynN6V5kCysjc2KsZHS5IhHRUlIKae_F0sytFklSqgQ"
+        },
+        {
+          "name": "customFields/104/value",
+          "alg": "S256",
+          "dig": "n0ZFvyJkTQ7yah-7Z9GYDZCTz-ObW23Cl6mwFgmkmLw"
+        }
+      ]
+    }
+  },
+  "example2_note_create": {
+    "plaintext_request": {
+      "summary": "Driver rollback on node 3 confirmed the lag",
+      "description": "Rolled back the storage driver on node 3 only. Lag on that node dropped to under 30 seconds within one batch cycle; the other five nodes still lag by about 25 minutes. Happy to run a debug build on node 4 if you have one.",
+      "priority": "HIGH"
+    },
+    "encrypted_request": {
+      "summary": "{\"protected\":\"eyJlbmMiOiJBMjU2R0NNIiwidHNhX3ZlciI6InRzYW5ldC1lMmVlLTEiLCJ0c2FfanRpIjoiYTgzZDVlMWYtMGM2Yi00ZjkyLThlNDctZDJiOWM2MWYzYTA1IiwidHNhX2ZsZCI6InN1bW1hcnkifQ\",\"recipients\":[{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-b-kv.vault.azure.net/keys/tsanet-e2ee-enc/1727a7355d226fa41f15ba7718e6743f\"},\"encrypted_key\":\"mLQ0sBUV9ilXr3UM83OD8VqIPlKkMuUGJf1kWZMAvul4ggSR9cVtpXWh1SYrom8dgjVlWaxZv3hb1LmHh4WUBn4ih7hjJn6R410q3KHq63wLzuxwFnOdOlPNQfHcu29J2BRxBjOnjdLep5xwnip-tkrG2IutqEQgpWr9NF3kp7wJvNqXCeGWhfuohAdbafMO8F2hCTFJ7cfriDD-__GkVc5YHuCifRMoZFWKDwKxjb15aejPYyouj0kBE9XEi7tkbcL7qP8TOd58JFLekxy-sxeguwoitd5S7i3yaUvmSgg53pUJP0E9plLyJV4X3akCwyGZ6DFetNqIFhO08-xe1A\"},{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-enc/39f3baea0d4d92781d34d0ec5a7d1311\"},\"encrypted_key\":\"n7_wHbhiKrsvfEvtAgVF0NFU2OfCMHbmU0C6BmX0puGLav54Z6G72gKSVuJpsN_iziNGqgOIxe_2NTMsAzA9mWyg7gqG7AncxGyVxeZILku0gBJT1BwdAEO-CWzzQMfUX81Xye0g0XttJXdIcyCGNK9J64I5JK4xql193BeX1HzIA1MY_m_Aqs5gOmHxZNFctuN-94kF6mAIc_2vlJusrvqQNBOtRDQwO2DDk_FigTDh7XtLdBIFW_AarCTaXeSg6Dl4mQ7dLBO4dn5rS37W08-JLbWGsLL4bxHnEAApHhLT0MEIAx_CSscBi_xVXCladW52eA8vunwQKtALreU3KQ\"}],\"iv\":\"xwhZcWneZfk3xGix\",\"ciphertext\":\"Afre7Ajzw1rDlV5FuNshYFOF_FUDV59gYWTLnwgYzWZBX07FlATDc32v8A\",\"tag\":\"n1zPEfpZNPQFmGOAKxvSsw\"}",
+      "description": "{\"protected\":\"eyJlbmMiOiJBMjU2R0NNIiwidHNhX3ZlciI6InRzYW5ldC1lMmVlLTEiLCJ0c2FfanRpIjoiYTgzZDVlMWYtMGM2Yi00ZjkyLThlNDctZDJiOWM2MWYzYTA1IiwidHNhX2ZsZCI6ImRlc2NyaXB0aW9uIn0\",\"recipients\":[{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-b-kv.vault.azure.net/keys/tsanet-e2ee-enc/1727a7355d226fa41f15ba7718e6743f\"},\"encrypted_key\":\"U9lAM6HYi_VJ2n_NNY2CkRtaRDcQ8iYHmvFhN5mYwl9c4KxyxiRDqtkm7kR1umDJ9uFrhQF7rO0gaZU-ofhNVYoF9HFtjZqOi6ajoj0g-pkGtaHjmXok54KVPPhs0zWlTNXNIEK3O2KRRWuKT-fmKIr-EqWDie02Oe4zp0sgHlF__DwfWLK1bW2jy-lGKQUYswya7M3PiTpiXJMD3DMZOjqPIUS5rx6NBqQ2coFnglg_6QoEnEXwh0FrYP9xs8lVBFDAgNenXqG8NH9nxkBFZvPrjpWmsUokeZ6vS29v8uteoALVQfL51UBdVi1SHIMgqQmy_AOJJoraGLKKHAGVHA\"},{\"header\":{\"alg\":\"RSA-OAEP-256\",\"kid\":\"https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-enc/39f3baea0d4d92781d34d0ec5a7d1311\"},\"encrypted_key\":\"RyaW53yAluB5YHa25QRie0xGoXdK4Nks13_aaxYxNhtl1NcSrgzEslxmadeoMh7Vn-O2Hpm9Am0KNiAPSuLhONSZTLaGFNyeUmsSfwPFWdIJCQIJXr4fNdduvKEbEUR0EBGcdeWmxfRycyPMZx1TwNjCiI4ps4KzZdHFAFclIOeWPrQN8KW6lxk1Ild_C29-KBOzwHCMeM2nr9gO3FaSopNPh68GpI_lHxJNySy2FbUMOlYjhA00gueEUNxv6BxXuUXbv05cvb4cy3TSMDGzrAe2Tm6_yOlphsvhFSaCc7wMxt4us1zIYCyqB3Cgyi9hj_WLsp9SELXKISi7BDT8nA\"}],\"iv\":\"6zS66rZaRBrgWnyh\",\"ciphertext\":\"7ArUmsDyzacs9YbMkgimequZ6UwgRWZ_EO_3NJU8KNAm_F48eH9wmO6flHdBbezi7npsYMIEevbrFy64TQ0qU5hZtS2PR8Zzr91l7xUgly38lPTVBC305N0eP4aMdfUSInI8JG-tt1qTgDHQd_2GTOBA_BnI03_kOzN33vMMiiS8EFNZmXV8Mo8NNnKpOs4Uz6I3nKH9qU45T92_s6KphsPAxHoGX-UkwOkVTqQN1GuvhhSf3e0ItCBbcX8bYQ1_QtX6JdYMVPEDFdY7Kc5D97VDXmVZhx-c-xnsBjA\",\"tag\":\"FtaW36nEe72U9K0YPGy9gw\"}",
+      "priority": "HIGH",
+      "encrypted": true,
+      "manifest": "eyJhbGciOiJFUzI1NiIsImtpZCI6Imh0dHBzOi8vbWVtYmVyLWEta3YudmF1bHQuYXp1cmUubmV0L2tleXMvdHNhbmV0LWUyZWUtc2lnL2I1Mjk1NjhkZjhhOTFiMGIyMDQ1NTdmOGZlZWI5MjI4IiwidHlwIjoidHNhbmV0LW1hbmlmZXN0K2p3cyJ9.eyJ2ZXIiOiJ0c2FuZXQtZTJlZS0xIiwiaXNzIjoiMTA0MiIsImF1ZCI6IjIwODciLCJyZWYiOiJBLTIwMjYtMDA0NDE3IiwiaWF0IjoxNzkyNzY3NjAwLCJqdGkiOiJhODNkNWUxZi0wYzZiLTRmOTItOGU0Ny1kMmI5YzYxZjNhMDUiLCJmaWVsZHMiOlt7Im5hbWUiOiJzdW1tYXJ5IiwiYWxnIjoiUzI1NiIsImRpZyI6Im95d3J3WW40V3BuV3plWm9rVmVMVUZkMEM5UXdiQlFjbVdvRE1FWjRVc2cifSx7Im5hbWUiOiJkZXNjcmlwdGlvbiIsImFsZyI6IlMyNTYiLCJkaWciOiJvUHVudDFyeDY1ZlhDRWgwdkg1QkNZSF9MTm1Kc2JnbnJkd0pNaDdUckhvIn1dfQ.4CW9QQy-C18Z0f8nBbrhkUGxsMCfzGGUdRQ__J-nhOLkZThTiFLmkAJFFzfodNzn8IrYEE2UIzkrK6Avpe5smQ"
+    },
+    "manifest_header": {
+      "alg": "ES256",
+      "kid": "https://member-a-kv.vault.azure.net/keys/tsanet-e2ee-sig/b529568df8a91b0b204557f8feeb9228",
+      "typ": "tsanet-manifest+jws"
+    },
+    "manifest_payload": {
+      "ver": "tsanet-e2ee-1",
+      "iss": "1042",
+      "aud": "2087",
+      "ref": "A-2026-004417",
+      "iat": 1792767600,
+      "jti": "a83d5e1f-0c6b-4f92-8e47-d2b9c61f3a05",
+      "fields": [
+        {
+          "name": "summary",
+          "alg": "S256",
+          "dig": "oywrwYn4WpnWzeZokVeLUFd0C9QwbBQcmWoDMEZ4Usg"
+        },
+        {
+          "name": "description",
+          "alg": "S256",
+          "dig": "oPunt1rx65fXCEh0vH5BCYH_LNmJsbgnrdwJMh7TrHo"
+        }
+      ]
+    }
+  },
+  "sizes": {
+    "problemSummary": {
+      "plaintext_chars": 66,
+      "transmitted_chars": 1335,
+      "as_json_string_bytes": 1383
+    },
+    "problemDescription": {
+      "plaintext_chars": 266,
+      "transmitted_chars": 1607,
+      "as_json_string_bytes": 1655
+    },
+    "customFields/101/value": {
+      "plaintext_chars": 5,
+      "transmitted_chars": 1265,
+      "as_json_string_bytes": 1313
+    },
+    "customFields/104/value (empty)": {
+      "plaintext_chars": 0,
+      "transmitted_chars": 1258,
+      "as_json_string_bytes": 1306
+    },
+    "note summary": {
+      "plaintext_chars": 43,
+      "transmitted_chars": 1296,
+      "as_json_string_bytes": 1344
+    },
+    "note description": {
+      "plaintext_chars": 221,
+      "transmitted_chars": 1538,
+      "as_json_string_bytes": 1586
+    },
+    "manifest_case": 1244,
+    "manifest_note": 698,
+    "request_body_plain": 1083,
+    "request_body_encrypted": 10314
+  }
+}

@@ -18,6 +18,15 @@ public final class CaseNoteValidation {
     }
 
     public static ValidationResult validate(String summary, String description) {
+        return validate(summary, description, false);
+    }
+
+    /**
+     * @param encrypted whether the summary and description are ciphertext. An encrypted value is
+     *     opaque and far longer than its plaintext (one JWE is over 1,200 characters even for an
+     *     empty string), so only the not-empty checks apply; the length caps are for plaintext.
+     */
+    public static ValidationResult validate(String summary, String description, boolean encrypted) {
         if (summary == null || summary.isBlank()) {
             return ValidationResult.invalid("Note summary must not be empty.");
         }
@@ -31,6 +40,9 @@ public final class CaseNoteValidation {
         }
         if (trimmedDescription.isEmpty()) {
             return ValidationResult.invalid("Note text must not be empty.");
+        }
+        if (encrypted) {
+            return ValidationResult.ok();
         }
         if (trimmedSummary.length() > MAX_SUMMARY_LENGTH) {
             return ValidationResult.invalid(

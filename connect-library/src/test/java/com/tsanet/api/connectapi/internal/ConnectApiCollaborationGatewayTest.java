@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.tsanet.api.connectapi.dto.CaseCustomFieldDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
+import com.tsanet.api.generated.model.CaseCustomFieldStatusDTO;
 import com.tsanet.api.generated.api.CollaborationRequestsApi;
 import com.tsanet.api.generated.model.CollaborationRequestDTO;
 import com.tsanet.api.generated.model.CollaborationRequestStatusDTO;
@@ -74,6 +76,65 @@ class ConnectApiCollaborationGatewayTest {
         assertThat(storageService.findAll()).singleElement().extracting(CollaborationRequestStatusDto::token)
             .isEqualTo("tok-abc");
         verify(collaborationRequestsApi).getCollaborationRequestByToken("tok-abc", false);
+    }
+
+    @Test
+    void itCarriesTheE2eeFieldsFromAReadIntoTheDtoAndTheCacheUnchanged() {
+        String manifest = "eyJhbGciOiJFUzI1NiJ9.eyJ2ZXIiOiJ0c2FuZXQtZTJlZS0xIn0.c2lnLV9-";
+        CollaborationRequestStatusDTO apiDto = GatewayTestSupport.sampleCollaborationRequest("tok-e2ee")
+            .manifest(manifest)
+            .encrypted(true);
+        when(collaborationRequestsApi.getCollaborationRequestByToken("tok-e2ee", false)).thenReturn(apiDto);
+
+        CollaborationRequestStatusDto request = gateway.getCollaborationRequestByToken("tok-e2ee");
+
+        assertThat(request.manifest()).isEqualTo(manifest);
+        assertThat(request.encrypted()).isTrue();
+        assertThat(storageService.findAll()).singleElement().satisfies(stored -> {
+            assertThat(stored.manifest()).isEqualTo(manifest);
+            assertThat(stored.encrypted()).isTrue();
+        });
+    }
+
+    @Test
+    void itCarriesTheCaseContentFromAReadIntoTheDtoAndTheCacheUnchanged() {
+        CollaborationRequestStatusDTO apiDto = GatewayTestSupport.sampleCollaborationRequest("tok-content")
+            .submitterCaseNumber("A-2026-004417")
+            .description("{\"recipients\":[]}")
+            .customFields(new java.util.ArrayList<>(java.util.Arrays.asList(
+                new CaseCustomFieldStatusDTO().id(501L).fieldName("Product").value("{\"x\":1}"),
+                new CaseCustomFieldStatusDTO().id(502L).fieldName("Blank").value(""),
+                new CaseCustomFieldStatusDTO().id(503L).fieldName("None").value(null))));
+        when(collaborationRequestsApi.getCollaborationRequestByToken("tok-content", false)).thenReturn(apiDto);
+
+        CollaborationRequestStatusDto request = gateway.getCollaborationRequestByToken("tok-content");
+
+        List<CaseCustomFieldDto> expected = java.util.Arrays.asList(
+            new CaseCustomFieldDto(501L, "Product", "{\"x\":1}"),
+            new CaseCustomFieldDto(502L, "Blank", ""),
+            new CaseCustomFieldDto(503L, "None", null));
+        assertThat(request.submitterCaseNumber()).isEqualTo("A-2026-004417");
+        assertThat(request.description()).isEqualTo("{\"recipients\":[]}");
+        assertThat(request.customFields()).containsExactlyElementsOf(expected);
+        assertThat(storageService.findAll()).singleElement().satisfies(stored -> {
+            assertThat(stored.submitterCaseNumber()).isEqualTo("A-2026-004417");
+            assertThat(stored.description()).isEqualTo("{\"recipients\":[]}");
+            assertThat(stored.customFields()).containsExactlyElementsOf(expected);
+        });
+    }
+
+    @Test
+    void omittedCustomFieldsReadEmptyAndOnlyAnExplicitNullReadsNull() {
+        // The generated read model starts customFields as an empty list, so an omitted array reads
+        // empty; null comes only from an explicit null (or a row cached before the field existed).
+        CollaborationRequestStatusDTO omitted = GatewayTestSupport.sampleCollaborationRequest("tok-omit");
+        CollaborationRequestStatusDTO explicitNull = GatewayTestSupport.sampleCollaborationRequest("tok-null")
+            .customFields(null);
+        when(collaborationRequestsApi.getCollaborationRequestByToken("tok-omit", false)).thenReturn(omitted);
+        when(collaborationRequestsApi.getCollaborationRequestByToken("tok-null", false)).thenReturn(explicitNull);
+
+        assertThat(gateway.getCollaborationRequestByToken("tok-omit").customFields()).isEmpty();
+        assertThat(gateway.getCollaborationRequestByToken("tok-null").customFields()).isNull();
     }
 
     @Test

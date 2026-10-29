@@ -193,6 +193,7 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 - No inbound webhook receiver (subscriptions management only)
 - No multi-user/session handling — one shared SDK session per server instance
 - No case assignment, SLA, or reporting views — outside the SDK's surface
+- No end-to-end encryption: the demo sends and shows cases in plaintext. A connector that needs it adds the optional `connect-e2ee` module (`connect-e2ee/README.md`)
 
 ## 10. References
 
