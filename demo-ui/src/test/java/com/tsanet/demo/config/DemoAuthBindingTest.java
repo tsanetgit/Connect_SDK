@@ -27,7 +27,11 @@ class DemoAuthBindingTest {
     static class Bound {
     }
 
-    private final ApplicationContextRunner runner = new ApplicationContextRunner().withUserConfiguration(Bound.class);
+    // The operator password is pinned blank so a developer's exported
+    // TSANET_DEMO_AUTH_PASSWORD cannot reach these tests through relaxed binding.
+    private final ApplicationContextRunner runner = new ApplicationContextRunner()
+        .withUserConfiguration(Bound.class)
+        .withPropertyValues("tsanet.demo.auth.password=");
 
     @Test
     void nothingSetBindsToTheDefaultsWithTheGateOff() {
@@ -81,6 +85,7 @@ class DemoAuthBindingTest {
 
         assertThatThrownBy(() -> app.run(
                 "--spring.main.banner-mode=off",
+                "--tsanet.demo.auth.password=",
                 "--tsanet.demo.auth.guest.password=s3cret-guest-pw"))
             .isInstanceOf(Exception.class);
 

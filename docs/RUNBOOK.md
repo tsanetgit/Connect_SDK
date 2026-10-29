@@ -99,7 +99,8 @@ you pay for Fargate, the load balancer and logs while the service exists (there 
 SSM Parameter Store as SecureStrings and let the task read them as secrets, so nothing sits in
 plaintext in the service configuration. The two `GUEST` values are optional: set them to give
 members a second login with the same rights. Without a guest login, delete those two names from
-the loop (SSM refuses an empty SecureString) and the two matching `secrets` entries below.
+the loop (SSM refuses an empty SecureString) and the two matching `secrets` entries below. To
+keep the default guest username (`guest`), delete only the `GUEST_USER` name and entry.
 
 ```bash
 for v in TSANET_DEMO_AUTH_USER TSANET_DEMO_AUTH_PASSWORD TSANET_DEMO_AUTH_GUEST_USER TSANET_DEMO_AUTH_GUEST_PASSWORD TSANET_DEMO_ENTRA_TENANT TSANET_DEMO_ENTRA_AUDIENCE_BETA TSANET_DEMO_ENTRA_AUDIENCE_DEV; do
