@@ -187,11 +187,12 @@ with the previous sha tag. Logs: `aws logs tail <LOG_GROUP> --region <REGION> --
 The container filesystem is ephemeral: re-enter member credentials in Settings after every
 deploy. The gate passwords live only in SSM and your local untracked notes. Rotating either
 password is a new SSM value plus the same `update-express-gateway-service` call, which starts a
-new deployment even when the container settings are unchanged: the app reads both logins once
-at startup, and ECS resolves secrets when a task starts. A gate configuration the app refuses
-(a guest password with no operator password, or the same username for both logins) shows up as
-a failed deployment that rolls back to the previous tasks; the reason is the
-`APPLICATION FAILED TO START` block in `aws logs tail <LOG_GROUP>`.
+new deployment even when the container settings are unchanged (observed: an update with an
+identical container block started a new deployment; the app reads both logins once at startup,
+and ECS resolves secrets when a task starts). A gate configuration the app refuses (a guest
+password with no operator password, or the same username for both logins) exits the task at
+startup, so the deployment never reaches `SUCCESSFUL` in `list-service-deployments`; the reason
+is the `APPLICATION FAILED TO START` block in `aws logs tail <LOG_GROUP>`.
 
 **Turning it off:** there is no pause. Delete the service with
 `aws ecs delete-express-gateway-service --service-arn <SERVICE_ARN>` when the demo is not

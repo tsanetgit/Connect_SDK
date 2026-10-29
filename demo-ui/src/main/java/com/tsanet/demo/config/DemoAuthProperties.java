@@ -11,7 +11,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * TSANET_DEMO_AUTH_GUEST_PASSWORD) lets the operator hand members a login that
  * is not their own and rotate it on its own. It has the same rights as the
  * operator: the gate is the demo's only perimeter (tsanetgit/Connect_SDK#148).
- * Both values are read once at startup, so rotating either login means a
+ * Both logins are read once at startup, so rotating either one means a
  * restart (on a hosted deploy, a redeploy that picks up the new secret).
  *
  * <p>Two combinations are refused at startup rather than silently honored: a
