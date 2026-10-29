@@ -149,9 +149,10 @@ public class CollaborationRequestRepository {
     }
 
     /**
-     * A row whose JSON can't be read (a damaged cache, or one written in a shape this version doesn't
-     * know) reads as null, "not known", rather than failing every list read that includes it. The
-     * JSON is bound to {@link CaseCustomFieldDto}'s component names, so renaming one needs a migration.
+     * A row whose JSON is malformed or wrongly typed (a damaged cache) reads as null, "not known",
+     * rather than failing every list read that includes it. An unknown key is ignored, not refused:
+     * the JSON is bound to {@link CaseCustomFieldDto}'s component names, so a renamed component would
+     * read old rows' answers as null, and renaming one needs a migration.
      */
     private static List<CaseCustomFieldDto> readStoredCustomFields(String json) {
         if (json == null) {

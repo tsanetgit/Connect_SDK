@@ -10,7 +10,8 @@ import java.util.List;
  *                            on create); null when the API sent none
  * @param description         the problem description ({@code problemDescription} on create),
  *                            exactly as the API returned it; ciphertext when {@code encrypted}
- * @param customFields        the custom-field answers in the API's order; empty when the API sent
+ * @param customFields        the custom-field answers in the order the API sent them, which it doesn't
+ *                            promise to keep between reads, so match by id or name; empty when the API sent
  *                            none or left the field out, null when not known (an explicit null from
  *                            the API, or a record cached before this field existed)
  */
