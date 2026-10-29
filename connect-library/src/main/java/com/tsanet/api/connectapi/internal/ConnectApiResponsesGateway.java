@@ -221,7 +221,10 @@ public class ConnectApiResponsesGateway {
             formatDateTime(dto.getUpdatedAt()),
             dto.getTestCase(),
             dto.getManifest(),
-            dto.getEncrypted()
+            dto.getEncrypted(),
+            dto.getSubmitterCaseNumber(),
+            dto.getDescription(),
+            OpenApiMapping.caseCustomFields(dto.getCustomFields())
         );
     }
 

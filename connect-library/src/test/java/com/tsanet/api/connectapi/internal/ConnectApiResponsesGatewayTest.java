@@ -137,4 +137,23 @@ class ConnectApiResponsesGatewayTest {
         assertThat(result.manifest()).isEqualTo(manifest);
         assertThat(result.encrypted()).isTrue();
     }
+
+    @Test
+    void aLifecycleCallCarriesTheCaseContentItWasAnswered() {
+        CollaborationRequestStatusDTO closed = GatewayTestSupport.sampleCollaborationRequest("tok-close-content")
+            .submitterCaseNumber("A-1")
+            .description("Body")
+            .customFields(new java.util.ArrayList<>(java.util.List.of(
+                new com.tsanet.api.generated.model.CaseCustomFieldStatusDTO().id(7L).fieldName("F").value("v"))));
+        closed.setStatus(CaseStatus.CLOSED);
+        when(caseResponsesApi.closeCollaborationRequest("tok-close-content")).thenReturn(closed);
+        when(collaborationRequestsApi.getCollaborationRequestByToken("tok-close-content", false)).thenReturn(closed);
+
+        CollaborationRequestStatusDto result = gateway.closeCollaborationRequest("tok-close-content");
+
+        assertThat(result.submitterCaseNumber()).isEqualTo("A-1");
+        assertThat(result.description()).isEqualTo("Body");
+        assertThat(result.customFields())
+            .containsExactly(new com.tsanet.api.connectapi.dto.CaseCustomFieldDto(7L, "F", "v"));
+    }
 }

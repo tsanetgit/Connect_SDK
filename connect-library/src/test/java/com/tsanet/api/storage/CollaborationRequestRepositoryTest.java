@@ -2,6 +2,7 @@ package com.tsanet.api.storage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.tsanet.api.connectapi.dto.CaseCustomFieldDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,12 +12,13 @@ import org.sqlite.SQLiteDataSource;
 
 class CollaborationRequestRepositoryTest {
     private CollaborationRequestRepository repository;
+    private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void setUp() {
         SQLiteDataSource dataSource = new SQLiteDataSource();
         dataSource.setUrl("jdbc:sqlite:file:target/test-collaboration-request-repo.db");
-        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        jdbcTemplate = new JdbcTemplate(dataSource);
         DatabaseInitializer.createSchema(jdbcTemplate);
         jdbcTemplate.execute("DELETE FROM collaboration_request");
         repository = new CollaborationRequestRepository(jdbcTemplate);
@@ -100,6 +102,97 @@ class CollaborationRequestRepositoryTest {
         assertThat(repository.findByCompanyId(1L))
             .extracting(CollaborationRequestStatusDto::manifest)
             .containsExactly(manifest, null);
+    }
+
+    @Test
+    void itRoundTripsTheCaseContentKeepingEmptyAndNullAnswersApart() {
+        List<CaseCustomFieldDto> answers = java.util.Arrays.asList(
+            new CaseCustomFieldDto(501L, "Product", "{\"recipients\":[]}"),
+            new CaseCustomFieldDto(502L, "Optional note", ""),
+            new CaseCustomFieldDto(503L, "Unanswered", null));
+        repository.saveAll(
+            List.of(
+                new CollaborationRequestStatusDto(1L, "OPEN", "s", "Acme", 1L, "Beta", 2L, "tok1", null, null,
+                    false, "m.a.n", true, "A-2026-004417", " {\"recipients\":[]} ", answers),
+                new CollaborationRequestStatusDto(2L, "OPEN", "s", "Acme", 1L, "Beta", 2L, "tok2", null, null,
+                    false, null, false, null, null, List.of())
+            )
+        );
+
+        assertThat(repository.findAll()).first().satisfies(stored -> {
+            assertThat(stored.submitterCaseNumber()).isEqualTo("A-2026-004417");
+            assertThat(stored.description()).isEqualTo(" {\"recipients\":[]} ");
+            assertThat(stored.customFields()).containsExactlyElementsOf(answers);
+        });
+        assertThat(repository.findByCompanyId(1L)).last().satisfies(stored -> {
+            assertThat(stored.submitterCaseNumber()).isNull();
+            assertThat(stored.description()).isNull();
+            assertThat(stored.customFields()).isEmpty();
+        });
+    }
+
+    @Test
+    void anUnreadableCustomFieldsRowReadsNotKnownAndTheRestStillRead() {
+        repository.saveAll(List.of(
+            new CollaborationRequestStatusDto(1L, "OPEN", "s", "Acme", 1L, "Beta", 2L, "tok1", null, null,
+                false, null, false, "C-1", "d", List.of(new CaseCustomFieldDto(9L, "F", "v"))),
+            new CollaborationRequestStatusDto(2L, "OPEN", "s", "Acme", 1L, "Beta", 2L, "tok2", null, null,
+                false, null, false, "C-2", "d", List.of(new CaseCustomFieldDto(8L, "G", "w")))));
+        jdbcTemplate.update("UPDATE collaboration_request SET custom_fields_json = 'not json' WHERE id = 1");
+
+        assertThat(repository.findAll())
+            .extracting(CollaborationRequestStatusDto::id, CollaborationRequestStatusDto::customFields)
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple(1L, null),
+                org.assertj.core.groups.Tuple.tuple(2L, List.of(new CaseCustomFieldDto(8L, "G", "w"))));
+    }
+
+    /**
+     * The DDL below is a FROZEN copy of collaboration_request as connect-library 3.0.0 created it,
+     * on purpose. A refetched row gets the case content; a row that isn't refetched reads all three
+     * as null ("not known"), never as "no description" or "no answers".
+     */
+    @Test
+    void itUpgradesA300CacheAndFillsTheCaseContentColumnsOnRefetch() {
+        SQLiteDataSource dataSource = new SQLiteDataSource();
+        dataSource.setUrl("jdbc:sqlite:file:target/test-collaboration-request-content-upgrade-" + System.nanoTime() + ".db");
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS collaboration_request (
+                id INTEGER PRIMARY KEY,
+                status TEXT,
+                summary TEXT,
+                submit_company_name TEXT,
+                submit_company_id INTEGER,
+                receive_company_name TEXT,
+                receive_company_id INTEGER,
+                token TEXT NOT NULL UNIQUE,
+                created_at TEXT,
+                updated_at TEXT,
+                test_case INTEGER,
+                fetched_at TEXT NOT NULL
+            )
+            """);
+        jdbcTemplate.update(
+            "INSERT INTO collaboration_request (id, status, summary, submit_company_name, submit_company_id,"
+                + " receive_company_name, receive_company_id, token, created_at, updated_at, test_case, fetched_at)"
+                + " VALUES (1, 'OPEN', 'Old row', 'Acme', 1, 'Beta', 2, 'tok1', NULL, NULL, 0, 'x'),"
+                + " (2, 'OPEN', 'Untouched old row', 'Acme', 1, 'Beta', 2, 'tok2', NULL, NULL, 0, 'x')"
+        );
+
+        DatabaseInitializer.createSchema(jdbcTemplate);
+        DatabaseInitializer.createSchema(jdbcTemplate);
+        CollaborationRequestRepository upgraded = new CollaborationRequestRepository(jdbcTemplate);
+        upgraded.saveAll(List.of(new CollaborationRequestStatusDto(1L, "OPEN", "Old row", "Acme", 1L, "Beta", 2L,
+            "tok1", null, null, false, null, false, "C-1", "Body", List.of(new CaseCustomFieldDto(9L, "F", "v")))));
+
+        assertThat(upgraded.findAll())
+            .extracting(CollaborationRequestStatusDto::id, CollaborationRequestStatusDto::submitterCaseNumber,
+                CollaborationRequestStatusDto::description, CollaborationRequestStatusDto::customFields)
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple(1L, "C-1", "Body", List.of(new CaseCustomFieldDto(9L, "F", "v"))),
+                org.assertj.core.groups.Tuple.tuple(2L, null, null, null)
+            );
     }
 
     /**
