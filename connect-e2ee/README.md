@@ -59,7 +59,7 @@ Branch on the record's `encrypted` first: a partner without E2EE sends plaintext
 Verification runs the six checks of Addendum D §5 in order and returns the content only when all pass. A failure is a `Refused` that names the step (`SENDER_KEY`, `SIGNATURE`, `CLAIMS`, `FIRST_RECEIPT`, `FIELDS`, `DECRYPT`) and the field. There is no partial result and no plaintext fallback.
 
 - **`Receipt.FIRST_RECEIPT`:** a webhook delivery, or the response to your own create. Use it on exactly one of those paths per record. Connect returns the stored manifest on every later read, so freshness and replay can only be checked once.
-- **A first receipt refused for a reason on your side** (your key service down at `DECRYPT`, or keys unavailable at `SENDER_KEY`): the record's `jti` is already used, so a redelivery is refused as a replay, and the sender never learns of the failure. Recover by fetching the case and verifying it as `STORED_READ`.
+- **A first receipt refused for a reason on your side at `DECRYPT`** (your key service down, say): the replay check at step 4 has already used the record's `jti`, so a redelivery is refused as a replay, and the sender never learns of the failure. Recover by fetching the case and verifying it as `STORED_READ`. A refusal at steps 1 to 3 (`SENDER_KEY`, `SIGNATURE`, `CLAIMS`) comes before that check and uses nothing, so a redelivery is checked afresh.
 - **`Receipt.STORED_READ`:** every later read. It checks the signature, the binding and the digests, not freshness.
 - **Notes:** `verifyNote(note, caseRecord, receipt)` takes the case too, since it supplies the note's binding.
 
