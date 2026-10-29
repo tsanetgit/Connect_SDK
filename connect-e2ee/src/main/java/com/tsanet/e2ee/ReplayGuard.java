@@ -11,8 +11,11 @@ import java.time.Instant;
  * for each record: the webhook, or the create response, not both.
  *
  * <p>The check runs after the signature is verified, so an unsigned forgery can't fill the seen
- * set. A record that then fails a later step has still used up its {@code jti}: a redelivery of the
- * same {@code jti} is a replay by definition, and the sender re-sends with a new one.
+ * set. A record that then fails a later step has still used up its {@code jti}, so a redelivery of
+ * the same record is refused as a replay. When the failure was the sender's, the sender re-sends
+ * with a new {@code jti}. When it was this member's (its key service unavailable at
+ * {@code DECRYPT}, say), the sender never learns of it: recover by fetching the record and
+ * verifying it as {@link E2eeProfile.Receipt#STORED_READ}, not by waiting for a redelivery.
  */
 public interface ReplayGuard {
     enum Result {

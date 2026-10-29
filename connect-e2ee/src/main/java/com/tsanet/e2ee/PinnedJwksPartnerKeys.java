@@ -13,8 +13,8 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * {@link PartnerKeys} from a JWKS URL pinned per company in configuration, fetched over HTTPS and
- * cached. A fetch that fails, answers anything but 200, or returns a set with a private key is
+ * {@link PartnerKeys} from a JWKS URL pinned per company in configuration, fetched over HTTPS (plain
+ * HTTP only to this machine, for tests and a local key server) and cached. A fetch that fails, answers anything but 200, or returns a set with a private key is
  * refused; a cached set is used until it is older than the cache lifetime.
  */
 public final class PinnedJwksPartnerKeys implements PartnerKeys {

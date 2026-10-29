@@ -150,6 +150,20 @@ class EncryptRoundTripTest {
     }
 
     @Test
+    void aPartnerKeyBelowTheSpecs2048BitsIsNotUsed() throws Exception {
+        com.nimbusds.jose.jwk.JWKSet weak = new com.nimbusds.jose.jwk.JWKSet(
+            new com.nimbusds.jose.jwk.gen.RSAKeyGenerator(1024, true).keyID("weak")
+                .keyUse(com.nimbusds.jose.jwk.KeyUse.ENCRYPTION).generate().toPublicJWK());
+        PartnerKeys keys = company -> company.equals(Vectors.MEMBER_B) ? weak : v.partnerKeys().publicKeys(company);
+        E2eeProfile sender = new E2eeProfile(Vectors.MEMBER_A, v.memberAKeys(), keys,
+            new InMemoryReplayGuard(java.time.Duration.ofMinutes(10), java.time.Duration.ofMinutes(2), Vectors.clockAt(NOW)),
+            Vectors.clockAt(NOW));
+
+        assertThatThrownBy(() -> sender.encryptCase(new CasePlaintext("A-1", "s", "d", Map.of(), List.of()), Vectors.MEMBER_B))
+            .isInstanceOf(E2eeException.class).hasMessageContaining("no encryption key");
+    }
+
+    @Test
     void nullAnswersAndFormAreTreatedAsNone() throws Exception {
         EncryptedCase sent = memberA.encryptCase(new CasePlaintext("A-1", "s", "d", null, null), Vectors.MEMBER_B);
 

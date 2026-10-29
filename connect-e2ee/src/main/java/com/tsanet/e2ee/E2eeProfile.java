@@ -201,8 +201,12 @@ public final class E2eeProfile {
         }
     }
 
+    /** The specification's floor for an encryption key: RSA, 2048 bits or more. */
+    private static final int MIN_RSA_BITS = 2048;
+
     private static boolean isEncryptionKey(RSAKey key) {
         return key.getKeyID() != null
+            && key.size() >= MIN_RSA_BITS
             && (key.getKeyUse() == null || KeyUse.ENCRYPTION.equals(key.getKeyUse()))
             && (key.getAlgorithm() == null || JWEAlgorithm.RSA_OAEP_256.equals(key.getAlgorithm()));
     }

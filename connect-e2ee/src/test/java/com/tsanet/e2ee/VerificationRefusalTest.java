@@ -429,6 +429,56 @@ class VerificationRefusalTest {
         assertThat(refusal(forgotten.verifyCase(original, Receipt.STORED_READ)).step()).isEqualTo(Step.DECRYPT);
     }
 
+    /** The summary JWE with one member changed, under a manifest re-signed for it, as B reads it. */
+    @SuppressWarnings("unchecked")
+    private Verification<?> summaryEditedAndResigned(java.util.function.Consumer<Map<String, Object>> edit, Receipt receipt,
+                                                     E2eeProfile reader) throws Exception {
+        Map<String, Object> jwe = com.nimbusds.jose.util.JSONObjectUtils.parse(original.summary());
+        edit.accept(jwe);
+        String edited = com.nimbusds.jose.util.JSONObjectUtils.toJSONString(jwe);
+        Map<String, String> values = originalValues();
+        values.put(Profile.PROBLEM_SUMMARY, edited);
+        return reader.verifyCase(withContent(edited, original.description(), resign(values, Profile.VERSION, v.memberAKeys())),
+            receipt);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aSignedJweMissingAPartIsRefusedNotThrown() throws Exception {
+        for (java.util.function.Consumer<Map<String, Object>> edit : List.<java.util.function.Consumer<Map<String, Object>>>of(
+            jwe -> jwe.remove("iv"),
+            jwe -> jwe.remove("tag"),
+            jwe -> jwe.put("iv", Base64URL.encode(new byte[16]).toString()),
+            jwe -> ((Map<String, Object>) ((List<Object>) jwe.get("recipients")).get(0)).remove("encrypted_key"))) {
+            assertThat(refusal(summaryEditedAndResigned(edit, Receipt.STORED_READ, memberB)).field())
+                .isEqualTo(Profile.PROBLEM_SUMMARY);
+        }
+    }
+
+    @Test
+    void aFirstReceiptRefusedForAReceiverFaultIsRecoveredByAStoredRead() throws Exception {
+        KeyOperations real = v.memberBKeys();
+        boolean[] keyServiceDown = {true};
+        KeyOperations flaky = new KeyOperations() {
+            public String encryptionKid() { return real.encryptionKid(); }
+            public String signingKid() { return real.signingKid(); }
+            public byte[] unwrap(String kid, byte[] encryptedKey) throws java.security.GeneralSecurityException {
+                if (keyServiceDown[0]) {
+                    throw new java.security.GeneralSecurityException("key service unavailable");
+                }
+                return real.unwrap(kid, encryptedKey);
+            }
+            public byte[] sign(byte[] signingInput) throws java.security.GeneralSecurityException { return real.sign(signingInput); }
+        };
+        E2eeProfile receiver = v.profile(Vectors.MEMBER_B, flaky, Vectors.clockAt(iat));
+
+        assertThat(refusal(receiver.verifyCase(original, Receipt.FIRST_RECEIPT)).step()).isEqualTo(Step.DECRYPT);
+        keyServiceDown[0] = false;
+        assertThat(refusal(receiver.verifyCase(original, Receipt.FIRST_RECEIPT)).step())
+            .as("the redelivery is a replay").isEqualTo(Step.FIRST_RECEIPT);
+        assertThat(receiver.verifyCase(original, Receipt.STORED_READ)).as("the documented recovery").isInstanceOf(Verified.class);
+    }
+
     @Test
     void aNonCanonicalCustomFieldNameIsRefusedAtFields() throws Exception {
         String padded = FieldCipher.encrypt("x", new FieldCipher.Binding(Profile.VERSION,

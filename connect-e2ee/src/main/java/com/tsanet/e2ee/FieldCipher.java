@@ -145,6 +145,14 @@ final class FieldCipher {
         if (!PROTECTED_MEMBERS.containsAll(header.getIncludedParams())) {
             throw new FieldCipherException("protected header has members the profile doesn't define");
         }
+        // A256GCM: a 96-bit IV and a 128-bit tag (RFC 7518 section 5.3). Checked here, so a JWE missing
+        // either is refused rather than failing later on a null.
+        if (jwe.getIV() == null || jwe.getIV().decode().length != 12) {
+            throw new FieldCipherException("missing or wrong-length iv");
+        }
+        if (jwe.getAuthTag() == null || jwe.getAuthTag().decode().length != 16) {
+            throw new FieldCipherException("missing or wrong-length tag");
+        }
         return new Parsed(jwe, new Binding(
             stringParam(header, "tsa_ver"), stringParam(header, "tsa_jti"), stringParam(header, "tsa_fld")));
     }
@@ -172,6 +180,9 @@ final class FieldCipher {
         }
         if (mine == null) {
             throw new FieldCipherException("no recipient entry for this member's encryption key");
+        }
+        if (mine.getEncryptedKey() == null) {
+            throw new FieldCipherException("recipient entry has no encrypted_key");
         }
         Object alg = mine.getUnprotectedHeader().getParam("alg");
         if (!KEY_WRAP_ALG.equals(alg instanceof String s ? s : String.valueOf(alg))) {
