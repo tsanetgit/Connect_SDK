@@ -20,6 +20,10 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class PinnedJwksPartnerKeys implements PartnerKeys {
     private static final Duration FETCH_TIMEOUT = Duration.ofSeconds(10);
     private static final int MAX_JWKS_BYTES = 64 * 1024;
+    private static final Duration MIN_REFRESH_INTERVAL = Duration.ofMinutes(1);
+    // Virtual threads, so a stalled read never holds a pool thread; it ends when the stream is closed.
+    private static final java.util.concurrent.ExecutorService READERS =
+        java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
 
     private final Map<String, URI> jwksUrls;
     private final Duration cacheLifetime;
@@ -60,6 +64,27 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
         String host = url.getHost();
         return "http".equalsIgnoreCase(url.getScheme())
             && ("localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host) || "[::1]".equals(host));
+    }
+
+    /**
+     * Fetches again, unless this company's set was fetched within the last minute: after a partner
+     * rotates its signing key, its first manifest under the new {@code kid} isn't refused for the
+     * rest of the cache lifetime, and a sender naming unknown kids can't make every read a fetch.
+     */
+    @Override
+    public JWKSet refreshedPublicKeys(String companyId) throws IOException {
+        URI url = jwksUrls.get(companyId);
+        if (url == null) {
+            throw new IOException("No JWKS URL is configured for company " + companyId);
+        }
+        Instant now = clock.instant();
+        Cached cached = cache.get(companyId);
+        if (cached != null && cached.fetchedAt().plus(MIN_REFRESH_INTERVAL).isAfter(now)) {
+            return cached.keys();
+        }
+        JWKSet fetched = fetch(url, companyId);
+        cache.put(companyId, new Cached(fetched, now));
+        return fetched;
     }
 
     @Override
@@ -108,7 +133,7 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
             } catch (IOException failed) {
                 throw new java.io.UncheckedIOException(failed);
             }
-        });
+        }, READERS);
         try {
             return read.get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
         } catch (java.util.concurrent.TimeoutException slow) {

@@ -341,6 +341,45 @@ class VerificationRefusalTest {
     }
 
     @Test
+    void aJweWhoseProtectedHeaderAddsAMemberIsRefusedAtFields() throws Exception {
+        String withZip = FieldCipher.encrypt("x", new FieldCipher.Binding(Profile.VERSION, "j", Profile.PROBLEM_SUMMARY),
+            List.of(v.rsa("memberB_enc").toPublicJWK()));
+        String header = new String(java.util.Base64.getUrlDecoder().decode(
+            withZip.replaceAll("^\\{\"protected\":\"([^\"]+)\".*$", "$1")), StandardCharsets.UTF_8);
+        String extra = Base64URL.encode(header.replace("{", "{\"zip\":\"DEF\",").getBytes(StandardCharsets.UTF_8)).toString();
+        String tampered = withZip.replaceFirst("\"protected\":\"[^\"]+\"", "\"protected\":\"" + extra + "\"");
+        Map<String, String> values = originalValues();
+        values.put(Profile.PROBLEM_SUMMARY, tampered);
+        String manifest = resign(values, Profile.VERSION, v.memberAKeys());
+
+        Refused<?> refused = refusal(memberB.verifyCase(withContent(tampered, original.description(), manifest),
+            Receipt.STORED_READ));
+        // Without the allowlist Nimbus would accept zip and fail later, at DECRYPT.
+        assertThat(refused.step()).isEqualTo(Step.FIELDS);
+    }
+
+    @Test
+    void aSignatureUnderANewlyRotatedKidIsAcceptedAfterOneRefetch() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger refreshes = new java.util.concurrent.atomic.AtomicInteger();
+        com.nimbusds.jose.jwk.JWKSet before = new com.nimbusds.jose.jwk.JWKSet(v.rsa("memberA_enc").toPublicJWK());
+        PartnerKeys rotating = new PartnerKeys() {
+            public com.nimbusds.jose.jwk.JWKSet publicKeys(String company) throws java.io.IOException {
+                return company.equals(Vectors.MEMBER_A) ? before : v.partnerKeys().publicKeys(company);
+            }
+            public com.nimbusds.jose.jwk.JWKSet refreshedPublicKeys(String company) throws java.io.IOException {
+                refreshes.incrementAndGet();
+                return v.partnerKeys().publicKeys(company);
+            }
+        };
+        E2eeProfile receiver = new E2eeProfile(Vectors.MEMBER_B, v.memberBKeys(), rotating,
+            new InMemoryReplayGuard(java.time.Duration.ofMinutes(10), java.time.Duration.ofMinutes(2), Vectors.clockAt(iat)),
+            Vectors.clockAt(iat));
+
+        assertThat(receiver.verifyCase(original, Receipt.STORED_READ)).isInstanceOf(Verified.class);
+        assertThat(refreshes).hasValue(1);
+    }
+
+    @Test
     void aFlattenedJweIsRefusedAtFields() throws Exception {
         String flattened = original.summary().replaceFirst("^\\{", "{\"header\":{\"kid\":\"x\"},");
         Map<String, String> values = originalValues();

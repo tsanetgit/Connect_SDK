@@ -20,4 +20,13 @@ public interface PartnerKeys {
      * @throws IOException when the keys can't be had, including for a company with no configured source
      */
     JWKSet publicKeys(String companyId) throws IOException;
+
+    /**
+     * The same, fetched again where the source caches: called once when a manifest names a
+     * {@code kid} the set doesn't hold, as after the sender rotates its signing key. A source that
+     * doesn't cache returns {@link #publicKeys}.
+     */
+    default JWKSet refreshedPublicKeys(String companyId) throws IOException {
+        return publicKeys(companyId);
+    }
 }

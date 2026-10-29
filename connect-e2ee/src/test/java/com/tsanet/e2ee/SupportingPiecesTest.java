@@ -95,6 +95,13 @@ class SupportingPiecesTest {
             assertThatThrownBy(() -> keys.publicKeys("666")).isInstanceOf(IOException.class).hasMessageContaining("private");
             assertThatThrownBy(() -> keys.publicKeys("777")).isInstanceOf(IOException.class).hasMessageContaining("777");
             assertThatThrownBy(() -> keys.publicKeys("888")).isInstanceOf(IOException.class).hasMessageContaining("larger");
+
+            int before = fetches.get();
+            keys.refreshedPublicKeys("1042");
+            assertThat(fetches).as("no refetch within a minute of the last fetch").hasValue(before);
+            now[0] = now[0].plus(Duration.ofMinutes(2));
+            keys.refreshedPublicKeys("1042");
+            assertThat(fetches).as("a refetch once the minute has passed").hasValue(before + 1);
         } finally {
             server.stop(0);
         }

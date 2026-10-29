@@ -344,7 +344,11 @@ public final class E2eeProfile {
         }
         ECKey senderKey;
         try {
-            JWK key = partnerKeys.publicKeys(iss).getKeyByKeyId(jws.getHeader().getKeyID());
+            String kid = jws.getHeader().getKeyID();
+            JWK key = partnerKeys.publicKeys(iss).getKeyByKeyId(kid);
+            if (key == null && kid != null) {
+                key = partnerKeys.refreshedPublicKeys(iss).getKeyByKeyId(kid);
+            }
             if (!(key instanceof ECKey ec) || !Curve.P_256.equals(ec.getCurve())
                 || (ec.getKeyUse() != null && !KeyUse.SIGNATURE.equals(ec.getKeyUse()))
                 || (ec.getAlgorithm() != null && !JWSAlgorithm.ES256.equals(ec.getAlgorithm()))) {

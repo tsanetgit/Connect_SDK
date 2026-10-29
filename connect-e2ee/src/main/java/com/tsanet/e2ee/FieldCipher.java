@@ -41,6 +41,8 @@ final class FieldCipher {
     private static final int CONTENT_KEY_BYTES = 32;
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final JWEJCAContext JCA = new JWEJCAContext();
+    /** The profile's protected header, and nothing else: no {@code zip}, {@code crit} or anything a sender adds. */
+    private static final java.util.Set<String> PROTECTED_MEMBERS = java.util.Set.of("enc", "tsa_ver", "tsa_jti", "tsa_fld");
 
     private FieldCipher() {
     }
@@ -139,6 +141,9 @@ final class FieldCipher {
         JWEHeader header = jwe.getHeader();
         if (header == null || header.getParsedBase64URL() == null) {
             throw new FieldCipherException("no protected header");
+        }
+        if (!PROTECTED_MEMBERS.containsAll(header.getIncludedParams())) {
+            throw new FieldCipherException("protected header has members the profile doesn't define");
         }
         return new Parsed(jwe, new Binding(
             stringParam(header, "tsa_ver"), stringParam(header, "tsa_jti"), stringParam(header, "tsa_fld")));
