@@ -133,10 +133,13 @@ final class FieldCipher {
         JWEObjectJSON jwe;
         try {
             jwe = JWEObjectJSON.parse(json);
-        } catch (ParseException unparseable) {
+        } catch (ParseException | RuntimeException unparseable) {
             throw new FieldCipherException("unparseable JWE");
         }
         JWEHeader header = jwe.getHeader();
+        if (header == null || header.getParsedBase64URL() == null) {
+            throw new FieldCipherException("no protected header");
+        }
         return new Parsed(jwe, new Binding(
             stringParam(header, "tsa_ver"), stringParam(header, "tsa_jti"), stringParam(header, "tsa_fld")));
     }
@@ -152,10 +155,12 @@ final class FieldCipher {
         if (!EncryptionMethod.A256GCM.equals(jwe.getHeader().getEncryptionMethod())) {
             throw new FieldCipherException("not A256GCM");
         }
+        // The first entry for a key this member holds: the current one, or an earlier version for a
+        // record encrypted before a rotation.
         JWEObjectJSON.Recipient mine = null;
         for (JWEObjectJSON.Recipient recipient : jwe.getRecipients()) {
-            if (recipient.getUnprotectedHeader() != null
-                && keys.encryptionKid().equals(recipient.getUnprotectedHeader().getKeyID())) {
+            if (recipient.getUnprotectedHeader() != null && recipient.getUnprotectedHeader().getKeyID() != null
+                && keys.holdsEncryptionKey(recipient.getUnprotectedHeader().getKeyID())) {
                 mine = recipient;
                 break;
             }
@@ -169,7 +174,7 @@ final class FieldCipher {
         }
         byte[] contentKey;
         try {
-            contentKey = keys.unwrap(keys.encryptionKid(), mine.getEncryptedKey().decode());
+            contentKey = keys.unwrap(mine.getUnprotectedHeader().getKeyID(), mine.getEncryptedKey().decode());
         } catch (GeneralSecurityException unwrapFailed) {
             throw new FieldCipherException("content key unwrap failed");
         }

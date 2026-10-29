@@ -341,6 +341,56 @@ class VerificationRefusalTest {
     }
 
     @Test
+    void aFlattenedJweIsRefusedAtFields() throws Exception {
+        String flattened = original.summary().replaceFirst("^\\{", "{\"header\":{\"kid\":\"x\"},");
+        Map<String, String> values = originalValues();
+        values.put(Profile.PROBLEM_SUMMARY, flattened);
+        String manifest = resign(values, Profile.VERSION, v.memberAKeys());
+
+        assertThat(refusal(memberB.verifyCase(withContent(flattened, original.description(), manifest),
+            Receipt.STORED_READ)).step()).isEqualTo(Step.FIELDS);
+    }
+
+    @Test
+    void aJweWithNoProtectedHeaderIsRefusedNotThrown() throws Exception {
+        String noProtected = "{\"recipients\":[],\"iv\":\"\",\"ciphertext\":\"\",\"tag\":\"\"}";
+        Map<String, String> values = originalValues();
+        values.put(Profile.PROBLEM_SUMMARY, noProtected);
+        String manifest = resign(values, Profile.VERSION, v.memberAKeys());
+
+        assertThat(refusal(memberB.verifyCase(withContent(noProtected, original.description(), manifest),
+            Receipt.STORED_READ)).step()).isEqualTo(Step.FIELDS);
+    }
+
+    @Test
+    void aCustomFieldNamingAnInvalidFieldIsRefusedWithoutRepeatingTheName() throws Exception {
+        String bogus = FieldCipher.encrypt("x", new FieldCipher.Binding(Profile.VERSION, "j", "evil\r\nname"),
+            List.of(v.rsa("memberB_enc").toPublicJWK()));
+        List<CaseCustomFieldDto> fields = new ArrayList<>(original.customFields());
+        fields.set(0, new CaseCustomFieldDto(fields.get(0).id(), "x", bogus));
+        CollaborationRequestStatusDto record = with(original.summary(), original.description(), fields,
+            original.manifest(), true, 1042L, 2087L, original.submitterCaseNumber());
+
+        Refused<?> refused = refusal(memberB.verifyCase(record, Receipt.STORED_READ));
+        assertThat(refused.step()).isEqualTo(Step.FIELDS);
+        assertThat(refused.field()).isNull();
+        assertThat(refused.toString()).doesNotContain("evil");
+    }
+
+    @Test
+    void aStoredRecordStaysReadableAfterTheReceiverRotatesItsEncryptionKey() throws Exception {
+        RSAKey current = new RSAKeyGenerator(2048).keyID("member-b-enc-v2").generate();
+        ECKey signing = new ECKeyGenerator(Curve.P_256).keyID("x").generate();
+        E2eeProfile rotated = v.profile(Vectors.MEMBER_B,
+            new SoftwareKeyOperations(current, List.of(v.rsa("memberB_enc")), signing), Vectors.clockAt(iat));
+        E2eeProfile forgotten = v.profile(Vectors.MEMBER_B,
+            new SoftwareKeyOperations(current, signing), Vectors.clockAt(iat));
+
+        assertThat(rotated.verifyCase(original, Receipt.STORED_READ)).isInstanceOf(Verified.class);
+        assertThat(refusal(forgotten.verifyCase(original, Receipt.STORED_READ)).step()).isEqualTo(Step.DECRYPT);
+    }
+
+    @Test
     void aNoteByACompanyThatIsNotAPartyIsRefused() {
         CaseNoteDto note = v.noteRecord();
         CaseNoteDto byOutsider = Vectors.noteRecord(note.summary(), note.description(), note.manifest(), 3000L);

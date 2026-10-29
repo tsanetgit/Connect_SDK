@@ -150,6 +150,14 @@ class EncryptRoundTripTest {
     }
 
     @Test
+    void nullAnswersAndFormAreTreatedAsNone() throws Exception {
+        EncryptedCase sent = memberA.encryptCase(new CasePlaintext("A-1", "s", "d", null, null), Vectors.MEMBER_B);
+
+        assertThat(sent.customFieldValues()).isEmpty();
+        assertThat(new CasePlaintext("A-1", "s", "d", null, null).toString()).contains("0 custom fields");
+    }
+
+    @Test
     void resultsKeepContentOutOfToString() throws Exception {
         EncryptedCase sent = memberA.encryptCase(
             new CasePlaintext("A-1", "secret summary", "secret description", answers(), List.of()), Vectors.MEMBER_B);

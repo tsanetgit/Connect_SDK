@@ -92,11 +92,13 @@ public final class E2eeProfile {
 
     /** Encrypts a case this member is about to create for {@code partnerCompanyId}. */
     public EncryptedCase encryptCase(CasePlaintext plaintext, String partnerCompanyId) throws E2eeException {
+        Map<Long, String> answers = plaintext.customFieldValues() == null ? Map.of() : plaintext.customFieldValues();
+        List<FormFieldDto> form = plaintext.formFields() == null ? List.of() : plaintext.formFields();
         requireText(plaintext.caseNumber(), "internalCaseNumber");
         requireText(plaintext.summary(), Profile.PROBLEM_SUMMARY);
         requireLength(plaintext.summary(), MAX_SUMMARY, Profile.PROBLEM_SUMMARY);
         requireLength(plaintext.description(), MAX_DESCRIPTION, Profile.PROBLEM_DESCRIPTION);
-        checkForm(plaintext.customFieldValues(), plaintext.formFields());
+        checkForm(answers, form);
 
         String jti = UUID.randomUUID().toString();
         List<RSAKey> recipients = List.of(partnerEncryptionKey(partnerCompanyId), ownEncryptionKey());
@@ -105,7 +107,7 @@ public final class E2eeProfile {
         String summary = encryptField(plaintext.summary(), Profile.PROBLEM_SUMMARY, jti, recipients, digests);
         String description = encryptField(plaintext.description(), Profile.PROBLEM_DESCRIPTION, jti, recipients, digests);
         Map<Long, String> customValues = new LinkedHashMap<>();
-        for (Map.Entry<Long, String> answer : plaintext.customFieldValues().entrySet()) {
+        for (Map.Entry<Long, String> answer : answers.entrySet()) {
             String name = Profile.customField(answer.getKey());
             customValues.put(answer.getKey(), encryptField(answer.getValue(), name, jti, recipients, digests));
         }
@@ -264,7 +266,8 @@ public final class E2eeProfile {
                 return refused(new Refused<>(Step.FIELDS, null, "a custom-field value is not a profile JWE"));
             }
             if (Profile.customFieldId(name) == null || wire.containsKey(name)) {
-                return refused(new Refused<>(Step.FIELDS, name, "custom-field JWE names an invalid or repeated field"));
+                // The name isn't authenticated yet, so it isn't repeated in the refusal.
+                return refused(new Refused<>(Step.FIELDS, null, "a custom-field JWE names an invalid or repeated field"));
             }
             wire.put(name, value);
             namesInOrder.add(name);

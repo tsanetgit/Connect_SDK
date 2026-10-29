@@ -15,6 +15,15 @@ public interface KeyOperations {
     /** The {@code kid} of this member's encryption key, exactly as its published JWKS lists it. */
     String encryptionKid();
 
+    /**
+     * Whether this member can unwrap with the encryption key {@code kid}: the current one, or an
+     * earlier version still held for records encrypted before a rotation. Decryption picks the
+     * recipient entry by this, so a stored record stays readable after the published key changes.
+     */
+    default boolean holdsEncryptionKey(String kid) {
+        return encryptionKid().equals(kid);
+    }
+
     /** The {@code kid} of this member's signing key, exactly as its published JWKS lists it. */
     String signingKid();
 
@@ -22,8 +31,8 @@ public interface KeyOperations {
      * Unwraps a content key that was wrapped with RSA-OAEP-256 (SHA-256, MGF1 with SHA-256) for
      * this member's encryption key.
      *
-     * @param kid          the recipient {@code kid} the JWE named; an implementation refuses one
-     *                     that isn't {@link #encryptionKid()} or a key version it still holds
+     * @param kid          the recipient {@code kid} the JWE named, one {@link #holdsEncryptionKey}
+     *                     accepts; an implementation refuses any other
      * @param encryptedKey the wrapped key
      * @return the 32-byte AES-256 content key
      */

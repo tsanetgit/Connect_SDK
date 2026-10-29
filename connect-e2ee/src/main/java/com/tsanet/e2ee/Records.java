@@ -19,7 +19,7 @@ public final class Records {
      * @param caseNumber        the sender's own case number, sent as {@code internalCaseNumber} and bound as {@code ref}
      * @param customFieldValues each answer by the form's {@code fieldId}; a null answer stays null and unencrypted
      * @param formFields        the form's field definitions, to check {@code required} and lengths on the plaintext
-     *                          (the platform can't check ciphertext); may be empty
+     *                          (the platform can't check ciphertext); may be empty or null
      */
     public record CasePlaintext(
         String caseNumber,
@@ -30,7 +30,8 @@ public final class Records {
     ) {
         @Override
         public String toString() {
-            return "CasePlaintext[caseNumber=" + caseNumber + ", " + customFieldValues.size() + " custom fields]";
+            return "CasePlaintext[caseNumber=" + caseNumber + ", "
+                + (customFieldValues == null ? 0 : customFieldValues.size()) + " custom fields]";
         }
     }
 

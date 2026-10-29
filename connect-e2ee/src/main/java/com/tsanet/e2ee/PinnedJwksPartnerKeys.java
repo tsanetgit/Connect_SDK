@@ -25,6 +25,7 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
     private final Duration cacheLifetime;
     private final HttpClient http;
     private final Clock clock;
+    private final Duration fetchTimeout;
     private final Map<String, Cached> cache = new ConcurrentHashMap<>();
 
     private record Cached(JWKSet keys, Instant fetchedAt) {
@@ -36,10 +37,12 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
      *                      up a partner's key rotation sooner
      */
     public PinnedJwksPartnerKeys(Map<String, URI> jwksUrls, Duration cacheLifetime) {
-        this(jwksUrls, cacheLifetime, HttpClient.newBuilder().connectTimeout(FETCH_TIMEOUT).build(), Clock.systemUTC());
+        this(jwksUrls, cacheLifetime, HttpClient.newBuilder().connectTimeout(FETCH_TIMEOUT).build(), Clock.systemUTC(),
+            FETCH_TIMEOUT);
     }
 
-    PinnedJwksPartnerKeys(Map<String, URI> jwksUrls, Duration cacheLifetime, HttpClient http, Clock clock) {
+    PinnedJwksPartnerKeys(Map<String, URI> jwksUrls, Duration cacheLifetime, HttpClient http, Clock clock,
+                          Duration fetchTimeout) {
         for (URI url : jwksUrls.values()) {
             if (!"https".equalsIgnoreCase(url.getScheme()) && !isLoopback(url)) {
                 throw new IllegalArgumentException("A JWKS URL must be HTTPS");
@@ -49,6 +52,7 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
         this.cacheLifetime = cacheLifetime;
         this.http = http;
         this.clock = clock;
+        this.fetchTimeout = fetchTimeout;
     }
 
     // Plain HTTP only to this machine, for tests and a local key server; never to another host.
@@ -75,7 +79,7 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
     }
 
     private JWKSet fetch(URI url, String companyId) throws IOException {
-        HttpRequest request = HttpRequest.newBuilder(url).timeout(FETCH_TIMEOUT).GET().build();
+        HttpRequest request = HttpRequest.newBuilder(url).timeout(fetchTimeout).GET().build();
         HttpResponse<java.io.InputStream> response;
         try {
             response = http.send(request, HttpResponse.BodyHandlers.ofInputStream());
@@ -87,11 +91,35 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
             if (response.statusCode() != 200) {
                 throw new IOException("The JWKS for company " + companyId + " answered " + response.statusCode());
             }
-            byte[] bytes = body.readNBytes(MAX_JWKS_BYTES + 1);
+            byte[] bytes = readWithin(body, companyId, fetchTimeout);
             if (bytes.length > MAX_JWKS_BYTES) {
                 throw new IOException("The JWKS for company " + companyId + " is larger than " + MAX_JWKS_BYTES + " bytes");
             }
             return Jwks.parsePublic(new String(bytes, java.nio.charset.StandardCharsets.UTF_8));
+        }
+    }
+
+    // The request timeout covers only the wait for the response headers, so the body read is bounded
+    // in time here too: a host that trickles bytes can't hold the caller's thread.
+    private static byte[] readWithin(java.io.InputStream body, String companyId, Duration timeout) throws IOException {
+        java.util.concurrent.CompletableFuture<byte[]> read = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+            try {
+                return body.readNBytes(MAX_JWKS_BYTES + 1);
+            } catch (IOException failed) {
+                throw new java.io.UncheckedIOException(failed);
+            }
+        });
+        try {
+            return read.get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.TimeoutException slow) {
+            body.close();
+            read.cancel(true);
+            throw new IOException("The JWKS for company " + companyId + " took longer than " + timeout.toMillis() + " ms");
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted fetching the JWKS for company " + companyId);
+        } catch (java.util.concurrent.ExecutionException failed) {
+            throw new IOException("Reading the JWKS for company " + companyId + " failed");
         }
     }
 }

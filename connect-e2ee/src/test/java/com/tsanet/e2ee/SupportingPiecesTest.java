@@ -83,7 +83,7 @@ class SupportingPiecesTest {
             PinnedJwksPartnerKeys keys = new PinnedJwksPartnerKeys(
                 Map.of("1042", URI.create(base + "/a.json"), "666", URI.create(base + "/leak.json"),
                     "888", URI.create(base + "/huge.json")),
-                Duration.ofMinutes(5), HttpClient.newHttpClient(), clock);
+                Duration.ofMinutes(5), HttpClient.newHttpClient(), clock, Duration.ofSeconds(10));
 
             assertThat(keys.publicKeys("1042").getKeyByKeyId(v.ec("memberA_sig").getKeyID())).isNotNull();
             keys.publicKeys("1042");
@@ -95,6 +95,35 @@ class SupportingPiecesTest {
             assertThatThrownBy(() -> keys.publicKeys("666")).isInstanceOf(IOException.class).hasMessageContaining("private");
             assertThatThrownBy(() -> keys.publicKeys("777")).isInstanceOf(IOException.class).hasMessageContaining("777");
             assertThatThrownBy(() -> keys.publicKeys("888")).isInstanceOf(IOException.class).hasMessageContaining("larger");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void aJwksHostThatTricklesBytesTimesOut() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/slow.json", exchange -> {
+            exchange.sendResponseHeaders(200, 0);
+            try {
+                exchange.getResponseBody().write('{');
+                exchange.getResponseBody().flush();
+                Thread.sleep(3000);
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            } finally {
+                exchange.close();
+            }
+        });
+        server.start();
+        try {
+            PinnedJwksPartnerKeys keys = new PinnedJwksPartnerKeys(
+                Map.of("1", URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/slow.json")),
+                Duration.ZERO, HttpClient.newHttpClient(), Clock.systemUTC(), Duration.ofMillis(500));
+
+            long start = System.nanoTime();
+            assertThatThrownBy(() -> keys.publicKeys("1")).isInstanceOf(IOException.class).hasMessageContaining("longer");
+            assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(2));
         } finally {
             server.stop(0);
         }

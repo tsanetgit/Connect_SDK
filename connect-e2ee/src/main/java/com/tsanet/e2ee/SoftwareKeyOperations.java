@@ -8,6 +8,9 @@ import java.security.InvalidKeyException;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.spec.MGF1ParameterSpec;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import javax.crypto.Cipher;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
@@ -18,7 +21,7 @@ import javax.crypto.spec.PSource;
  */
 public final class SoftwareKeyOperations implements KeyOperations {
     private final String encryptionKid;
-    private final PrivateKey encryptionKey;
+    private final Map<String, PrivateKey> encryptionKeys = new HashMap<>();
     private final String signingKid;
     private final PrivateKey signingKey;
 
@@ -27,6 +30,14 @@ public final class SoftwareKeyOperations implements KeyOperations {
      * @param signing    this member's P-256 signing key, private part included, with its {@code kid}
      */
     public SoftwareKeyOperations(RSAKey encryption, ECKey signing) throws JOSEException {
+        this(encryption, List.of(), signing);
+    }
+
+    /**
+     * @param earlierEncryption earlier encryption key versions, still held after a rotation so
+     *                          records encrypted to them stay readable; not published
+     */
+    public SoftwareKeyOperations(RSAKey encryption, List<RSAKey> earlierEncryption, ECKey signing) throws JOSEException {
         if (encryption.getKeyID() == null || signing.getKeyID() == null) {
             throw new IllegalArgumentException("Both keys need a kid");
         }
@@ -34,7 +45,13 @@ public final class SoftwareKeyOperations implements KeyOperations {
             throw new IllegalArgumentException("Both keys need their private part");
         }
         this.encryptionKid = encryption.getKeyID();
-        this.encryptionKey = encryption.toPrivateKey();
+        for (RSAKey earlier : earlierEncryption) {
+            if (earlier.getKeyID() == null || !earlier.isPrivate()) {
+                throw new IllegalArgumentException("An earlier encryption key needs a kid and its private part");
+            }
+            encryptionKeys.put(earlier.getKeyID(), earlier.toPrivateKey());
+        }
+        encryptionKeys.put(encryptionKid, encryption.toPrivateKey());
         this.signingKid = signing.getKeyID();
         this.signingKey = signing.toPrivateKey();
     }
@@ -45,13 +62,19 @@ public final class SoftwareKeyOperations implements KeyOperations {
     }
 
     @Override
+    public boolean holdsEncryptionKey(String kid) {
+        return encryptionKeys.containsKey(kid);
+    }
+
+    @Override
     public String signingKid() {
         return signingKid;
     }
 
     @Override
     public byte[] unwrap(String kid, byte[] encryptedKey) throws GeneralSecurityException {
-        if (!encryptionKid.equals(kid)) {
+        PrivateKey encryptionKey = kid == null ? null : encryptionKeys.get(kid);
+        if (encryptionKey == null) {
             throw new InvalidKeyException("Not this member's encryption key");
         }
         // Set SHA-256 for MGF1 explicitly: some providers default the transformation's MGF1 to SHA-1.
