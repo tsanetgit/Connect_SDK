@@ -70,13 +70,13 @@ not send credentials and you get an opaque 401. The parent pom
 (`tsanet-client-parent`) is published alongside the library and resolves from the same
 repository.
 
-Only the current release is published and supported — 2.0.0 today; earlier releases are
+Only the current release is published and supported (see
+<https://github.com/tsanetgit/Connect_SDK/releases/latest>); earlier releases are
 obsolete, are not offered to members, and there are no external deployments to keep them
 for. Never point a member at an older version. The current release **requires Jackson 3**
 (`tools.jackson.core:jackson-databind`) and the Spring Boot 4.1 line; a service still on
 Jackson 2 or Spring Boot 3 has to move to that runtime before it can take the library.
-**2.0.0 changes what a failure looks like** (see Upgrading) and also publishes
-`attachment-receiver`. The
+What changed in each release, including how a failure looks, is under Upgrading. The
 library works outside Spring Boot; from 1.0.0 `java.time` support comes from Jackson 3's
 databind itself, so no `jsr310` module is declared or needed.
 
@@ -378,3 +378,50 @@ Watch the release notes on each release.
     `jdk.httpclient.keepalive.timeout` default, a JVM-wide setting the library leaves alone.
     A `POST` sent on a pooled connection that something on the network path closed while it
     sat idle fails as `CONNECTIVITY`: the JDK client can retry a `GET` there, never a `POST`.
+- **4.0.0** adds optional end-to-end encryption (`tsanetgit/Connect_SDK#140`); the runtime line
+  (Spring Boot 4.1, Jackson 3, JDK 21) is unchanged from 3.0.0. Coming from 2.0.0, apply the
+  3.0.0 entry first. Existing calls compile, and a consumer that bumps without recompiling still
+  links. It is a major because of two source breaks: a record pattern over the two changed
+  records, and an implementer or decorator of the two changed facades. Also check a `-Werror`
+  build, code that compares or logs the changed records, and code that reads `customFields` or
+  `encrypted` from the cache.
+  - New artifact `com.tsanet:connect-e2ee`, same repository and version: encrypts and signs a
+    case or note for a create, and verifies and decrypts one on a read, to the `tsanet-e2ee-1`
+    profile. Only a connector that uses E2EE adds it; it brings `com.nimbusds:nimbus-jose-jwt`.
+    Setup is in `connect-e2ee/README.md`.
+  - `createRequest` (both forms) and `createNote` gain an overload taking `E2eeFields(manifest,
+    encrypted)`, sent exactly as given. `E2eeFields` is in `connect-library`
+    (`com.tsanet.api.connectapi.dto`), so adding the overloads doesn't need `connect-e2ee`. The
+    old overloads are now interface defaults that forward to the new ones, so callers are
+    unaffected, but **an implementer or decorator of `CollaborationRequestsFacade` or
+    `CaseNotesFacade` must add the new abstract overloads and move its logic to them**. An
+    override of the old overload alone no longer sees every create: an E2EE create calls the new
+    one directly, so a decorator that forces `testSubmission` or audits creates would let it
+    through untouched. Point interceptors (a pointcut on the exact old signature) and test stubs
+    at the new overloads too. The library normally strips leading and trailing whitespace from a
+    note's summary and text and from custom-field values (the form-template `createRequest`);
+    with `encrypted` true it sends them exactly as given, and the note length limits don't apply,
+    since the values are ciphertext.
+  - `CollaborationRequestStatusDto` gains `manifest`, `encrypted`, `submitterCaseNumber`,
+    `description` and `customFields` (`CaseCustomFieldDto(id, fieldName, value)`); `CaseNoteDto`
+    gains `manifest` and `encrypted`. The earlier constructors are deprecated and still work
+    (a build with `-Werror` on deprecation sees them). A record pattern over either type has
+    the new components, so a 3.0.0 `case CaseNoteDto(...)` or `case CollaborationRequestStatusDto(...)`
+    stops compiling.
+    The records' `equals` and `hashCode` cover the new components, so a case or note cached
+    before the upgrade doesn't equal a fresh read of it (the old row reads the new components as
+    null; a fresh read has values, and `encrypted` reads `false` when the API leaves it out).
+    `toString` and JSON serialization cover them too, so logging or forwarding a
+    `CollaborationRequestStatusDto` now carries the case's description and custom-field answers,
+    where 3.0.0 carried only its summary. For an unencrypted case that is plaintext customer
+    content.
+  - The SQLite cache gains the new columns on its first open, with no manual step. A case or
+    note cached by 3.0.0 reads the new components as null ("not known") until it is fetched
+    again, while a fresh read of a case with no answers reads `customFields` as empty. On stored
+    reads, until every case and note has been fetched again, null-check `customFields` and test
+    `Boolean.TRUE.equals(record.encrypted())` rather than unboxing `encrypted()`, which throws on
+    a 3.0.0 row. A null `encrypted` means not known, never not encrypted. The cache keeps what
+    the platform returned, ciphertext included for an encrypted case; `connect-e2ee` never
+    writes decrypted text to it. It now holds each case's description and custom-field answers
+    as well as its summary; run `CacheRetention.sweep` if closed and rejected cases shouldn't
+    stay on disk (it never sweeps an open case).
