@@ -128,9 +128,10 @@ class ConnectApiNotesGatewayWireTest {
 
     @Test
     void aNoteWithoutE2eeFieldsSendsTheDefaultsAndStaysStripped() throws Exception {
-        // Pins what every create already sent before the fields were exposed: "encrypted": false and a
-        // null manifest, the generated model's defaults. tsanetgit/Connect_SDK#137 asked for both to be
-        // left out instead; the PR records keeping the defaults as a decision for review.
+        // Pins what every create already sent before the fields were exposed: "encrypted": false and an
+        // explicit null manifest, the generated model's defaults. The spec defaults encrypted to false when
+        // omitted; on create it marks manifest optional but not nullable, so that an explicit null is stored
+        // as no manifest is the server's behavior, not a promise of the spec.
         expectCreate("{\"id\":6,\"token\":\"n6\",\"summary\":\"s\",\"encrypted\":false}");
 
         CaseNoteDto note = gateway.createNote("tok-1", " s ", " d ", "LOW");
