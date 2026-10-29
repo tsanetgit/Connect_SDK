@@ -77,7 +77,8 @@ public final class Records {
      *
      * @param fieldId the form's {@code fieldId}, from the JWE's {@code tsa_fld}; null for an answer that was null,
      *                which has no JWE to name it
-     * @param readId  the API's id for the field on this case, as the read returned it
+     * @param readId  the API's id for the field on this case, as the read returned it. Not authenticated: only
+     *                {@code fieldId} and {@code value} are bound by the manifest, so key on {@code fieldId}
      * @param value   the answer; null stays null
      */
     public record DecryptedCustomField(Long fieldId, Long readId, String value) {

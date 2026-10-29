@@ -25,7 +25,7 @@ E2eeProfile e2ee = new E2eeProfile("1042", keys, partners, replay, Clock.systemU
 
 - **`KeyOperations`** is the member's two private-key operations: unwrap a content key (RSA-OAEP-256) and sign (ES256, returning the raw 64-byte `r || s`). Implement it against your key service (Azure Key Vault, AWS KMS, OCI Vault, an HSM) so the private keys never enter this process. `SoftwareKeyOperations` holds keys in memory, for tests and local use.
 - **`PartnerKeys`** gives each company's public keys, this member's own included. `PinnedJwksPartnerKeys` fetches each company's JWKS from a URL pinned in your configuration (HTTPS only), caches it, and refuses a set that holds a private key. Publish your own with `Jwks.publicJson(...)`, which drops every private member. Keys are only ever taken from here, for the company the record says sent it; never from a manifest or a JWE.
-- **Rotating keys:** publish only your current encryption key; a sender refuses a JWKS with two, since it couldn't tell which to use. Keep the earlier ones in your key service, and have `KeyOperations.holdsEncryptionKey` accept them, so records encrypted before the rotation stay readable. Keep earlier signing keys published while records signed with them are still read, since a stored manifest is re-verified by its `kid`. When a manifest names a `kid` the cached set doesn't hold, the set is fetched again, at most once a minute per company.
+- **Rotating keys:** publish only your current encryption key; a sender refuses a JWKS with two, since it couldn't tell which to use. The profile doesn't settle this yet; the refusal is provisional until the workgroup sets a rule. Keep the earlier ones in your key service, and have `KeyOperations.holdsEncryptionKey` accept them, so records encrypted before the rotation stay readable. Keep earlier signing keys published while records signed with them are still read, since a stored manifest is re-verified by its `kid`. When a manifest names a `kid` the cached set doesn't hold, the set is fetched again, at most once a minute per company.
 - **`ReplayGuard`** is the first-receipt check: `iat` within the window, and `jti` not seen before. The window has no default; set it from the profile's guidance. `InMemoryReplayGuard` is single-process and forgets on restart. A deployment with several instances needs a shared, persistent implementation.
 
 Which partners have E2EE turned on is the platform's to decide (Groups), and email notifications are off for them. This module encrypts for whatever partner you name.
@@ -53,6 +53,8 @@ switch (result) {
     case Refused<DecryptedCase> no -> audit(no.step(), no.field(), no.reason());   // never a value
 }
 ```
+
+Branch on the record's `encrypted` first: a partner without E2EE sends plaintext and no manifest, and verifying that record refuses it at `SIGNATURE`.
 
 Verification runs the six checks of Addendum D §5 in order and returns the content only when all pass. A failure is a `Refused` that names the step (`SENDER_KEY`, `SIGNATURE`, `CLAIMS`, `FIRST_RECEIPT`, `FIELDS`, `DECRYPT`) and the field. There is no partial result and no plaintext fallback.
 

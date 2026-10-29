@@ -164,6 +164,10 @@ public final class E2eeProfile {
         }
     }
 
+    // Provisional, waiting on the E2EE workgroup (a decision for the shared specification, which has no
+    // issue tracker): the profile doesn't say which key to use when a member publishes two encryption
+    // keys, so this refuses rather than guess, and the docs ask members to publish only the current one.
+    // When the workgroup sets a rule (newest first, a use date, or all keys as recipients), it replaces this.
     private RSAKey partnerEncryptionKey(String companyId) throws E2eeException {
         RSAKey match = null;
         for (JWK key : publicKeysForEncrypting(companyId).getKeys()) {
@@ -296,6 +300,9 @@ public final class E2eeProfile {
      * the case's submitter case number, and the note's author and the other party are its two members.
      */
     public Verification<DecryptedNote> verifyNote(CaseNoteDto note, CollaborationRequestStatusDto caseRecord, Receipt receipt) {
+        if (note.caseToken() != null && caseRecord.token() != null && !note.caseToken().equals(caseRecord.token())) {
+            return refused(new Refused<>(Step.CLAIMS, null, "the note belongs to another case"));
+        }
         String iss = idString(note.companyId());
         String aud = iss == null ? null : otherParty(caseRecord, iss);
 

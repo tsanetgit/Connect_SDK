@@ -51,7 +51,7 @@ class EncryptRoundTripTest {
         for (String value : sent.customFieldValues().values()) {
             fields.add(new CaseCustomFieldDto(readId++, "label", value));
         }
-        return new CollaborationRequestStatusDto(1L, "OPEN", sent.summary(), "A", 1042L, "B", 2087L, "tok", null, null,
+        return new CollaborationRequestStatusDto(1L, "OPEN", sent.summary(), "A", 1042L, "B", 2087L, "tok-77", null, null,
             false, sent.e2ee().manifest(), sent.e2ee().encrypted(), sent.caseNumber(), sent.description(), fields);
     }
 

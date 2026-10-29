@@ -430,6 +430,31 @@ class VerificationRefusalTest {
     }
 
     @Test
+    void aNonCanonicalCustomFieldNameIsRefusedAtFields() throws Exception {
+        String padded = FieldCipher.encrypt("x", new FieldCipher.Binding(Profile.VERSION,
+            (String) v.map("example1_case_create", "manifest_payload").get("jti"), "customFields/0101/value"),
+            List.of(v.rsa("memberB_enc").toPublicJWK()));
+        List<CaseCustomFieldDto> fields = new ArrayList<>(original.customFields());
+        fields.add(new CaseCustomFieldDto(9999L, "dup", padded));
+        Map<String, String> values = originalValues();
+        values.put("customFields/0101/value", padded);
+        CollaborationRequestStatusDto record = with(original.summary(), original.description(), fields,
+            resign(values, Profile.VERSION, v.memberAKeys()), true, 1042L, 2087L, original.submitterCaseNumber());
+
+        assertThat(refusal(memberB.verifyCase(record, Receipt.STORED_READ)).step()).isEqualTo(Step.FIELDS);
+    }
+
+    @Test
+    void aNoteCheckedAgainstAnotherCaseIsRefused() {
+        CollaborationRequestStatusDto otherCase = new CollaborationRequestStatusDto(78L, "OPEN", original.summary(),
+            "A", 1042L, "B", 2087L, "tok-78", null, null, false, original.manifest(), true,
+            original.submitterCaseNumber(), original.description(), original.customFields());
+
+        Refused<?> refused = refusal(memberB.verifyNote(v.noteRecord(), otherCase, Receipt.STORED_READ));
+        assertThat(refused.step()).isEqualTo(Step.CLAIMS);
+    }
+
+    @Test
     void aNoteByACompanyThatIsNotAPartyIsRefused() {
         CaseNoteDto note = v.noteRecord();
         CaseNoteDto byOutsider = Vectors.noteRecord(note.summary(), note.description(), note.manifest(), 3000L);

@@ -31,14 +31,19 @@ public final class Profile {
         return CUSTOM_FIELD_PREFIX + fieldId + CUSTOM_FIELD_SUFFIX;
     }
 
-    /** The form {@code fieldId} in a custom-field manifest name, or null when the name isn't one. */
+    /**
+     * The form {@code fieldId} in a custom-field manifest name, or null when the name isn't one in
+     * canonical form: {@code customFields/0101/value} or {@code customFields/+101/value} isn't, so no
+     * two names can claim the same field.
+     */
     static Long customFieldId(String name) {
         if (name == null || !name.startsWith(CUSTOM_FIELD_PREFIX) || !name.endsWith(CUSTOM_FIELD_SUFFIX)) {
             return null;
         }
         String id = name.substring(CUSTOM_FIELD_PREFIX.length(), name.length() - CUSTOM_FIELD_SUFFIX.length());
         try {
-            return Long.parseLong(id);
+            long fieldId = Long.parseLong(id);
+            return customField(fieldId).equals(name) ? fieldId : null;
         } catch (NumberFormatException notAnId) {
             return null;
         }
