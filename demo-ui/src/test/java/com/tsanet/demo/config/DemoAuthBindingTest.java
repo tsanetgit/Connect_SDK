@@ -87,7 +87,9 @@ class DemoAuthBindingTest {
                 "--spring.main.banner-mode=off",
                 "--tsanet.demo.auth.password=",
                 "--tsanet.demo.auth.guest.password=s3cret-guest-pw"))
-            .isInstanceOf(Exception.class);
+            .hasRootCauseInstanceOf(IllegalStateException.class)
+            .hasRootCauseMessage("TSANET_DEMO_AUTH_GUEST_PASSWORD is set but TSANET_DEMO_AUTH_PASSWORD is not: the gate would be off"
+                + " while a guest login is configured. Set the operator password or unset the guest one.");
 
         assertThat(output.getAll())
             .contains("APPLICATION FAILED TO START")
