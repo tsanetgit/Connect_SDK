@@ -1,5 +1,7 @@
 package com.tsanet.demo.config;
 
+import java.util.ArrayList;
+
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -7,6 +9,7 @@ import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
@@ -38,10 +41,20 @@ public class SecurityConfig {
             return new InMemoryUserDetailsManager();
         }
         var encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
-        return new InMemoryUserDetailsManager(User.builder()
-            .username(auth.username() != null && !auth.username().isBlank() ? auth.username() : "demo")
+        var users = new ArrayList<UserDetails>();
+        users.add(User.builder()
+            .username(auth.effectiveUsername())
             .password(encoder.encode(auth.password()))
             .roles("DEMO")
             .build());
+        if (auth.guestEnabled()) {
+            // Same role on purpose: the gate is the only perimeter (tsanetgit/Connect_SDK#148).
+            users.add(User.builder()
+                .username(auth.effectiveGuestUsername())
+                .password(encoder.encode(auth.guest().password()))
+                .roles("DEMO")
+                .build());
+        }
+        return new InMemoryUserDetailsManager(users);
     }
 }

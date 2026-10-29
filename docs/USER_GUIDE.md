@@ -84,7 +84,11 @@ Save replaces it.
 When the app is deployed with the Basic-auth gate enabled
 (`TSANET_DEMO_AUTH_PASSWORD` set), the browser prompts for the gate
 credentials before the page loads — that gate protects the demo itself and is
-unrelated to the BETA member credentials entered inside it.
+unrelated to the BETA member credentials entered inside it. The operator can
+also configure a second gate login for guests (`TSANET_DEMO_AUTH_GUEST_USER` and
+`TSANET_DEMO_AUTH_GUEST_PASSWORD`); it opens the same demo with the same rights,
+so a guest sees whatever member credentials are currently stored and can change
+them. Hand it to people you would hand the demo to, not as a per-person account.
 
 ## 4. Dashboard — collaboration cases
 
