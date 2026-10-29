@@ -87,8 +87,12 @@ credentials before the page loads — that gate protects the demo itself and is
 unrelated to the BETA member credentials entered inside it. The operator can
 also configure a second gate login for guests (`TSANET_DEMO_AUTH_GUEST_USER` and
 `TSANET_DEMO_AUTH_GUEST_PASSWORD`); it opens the same demo with the same rights,
-so a guest sees whatever member credentials are currently stored and can change
-them. Hand it to people you would hand the demo to, not as a per-person account.
+so a guest sees whatever member credentials are currently stored and, unless the
+operator has locked them, can change them. With `TSANET_DEMO_CREDENTIALS_LOCKED`
+set, each environment card shows who the demo is signed in as, with the Make Active
+button on the other environments; saving or clearing credentials is refused, and the
+receiver-storage section is unaffected. Hand the guest login to
+people you would hand the demo to, not as a per-person account.
 
 ## 4. Dashboard — collaboration cases
 

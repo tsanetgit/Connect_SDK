@@ -58,7 +58,8 @@ class ReceiverStorageSettingsTest {
             "beta",
             dataDir.toString(),
             true,  // never contacted: the session is a mock
-            editable
+            editable,
+            null  // credentials not locked
         );
         TsaNetApiSession session = mock(TsaNetApiSession.class);
         when(session.attachmentStorage()).thenReturn(storage);

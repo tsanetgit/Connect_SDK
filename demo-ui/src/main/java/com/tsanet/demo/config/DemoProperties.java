@@ -9,7 +9,8 @@ public record DemoProperties(
     String defaultEnvironment,
     String dataDir,
     Boolean allowInsecureHttp,
-    Boolean receiverStorageEditable
+    Boolean receiverStorageEditable,
+    Boolean credentialsLocked
 ) {
 
     /** The operator's opt-out of the https requirement, for a local mock; null means false. */
@@ -25,6 +26,18 @@ public record DemoProperties(
      */
     public boolean receiverStorageEditingAllowed() {
         return Boolean.TRUE.equals(receiverStorageEditable);
+    }
+
+    /**
+     * Whether the stored member credentials may be changed through Settings; null means false.
+     * On a hosted demo the operator pre-loads a credential per environment and turns this on, so
+     * visitors only switch environments: the page shows who the demo is signed in as, and the
+     * save and clear endpoints refuse (tsanetgit/Connect_SDK#152). Off by default because a local
+     * run has nobody but the operator to enter credentials. Independent of the gate login: both
+     * gate users see the same page (tsanetgit/Connect_SDK#148).
+     */
+    public boolean credentialChangesLocked() {
+        return Boolean.TRUE.equals(credentialsLocked);
     }
 
     /**
