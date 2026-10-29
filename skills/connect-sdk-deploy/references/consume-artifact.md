@@ -70,7 +70,8 @@ not send credentials and you get an opaque 401. The parent pom
 (`tsanet-client-parent`) is published alongside the library and resolves from the same
 repository.
 
-Only the current release is published and supported — 2.0.0 today; earlier releases are
+Only the current release is published and supported (see
+<https://github.com/tsanetgit/Connect_SDK/releases/latest>); earlier releases are
 obsolete, are not offered to members, and there are no external deployments to keep them
 for. Never point a member at an older version. The current release **requires Jackson 3**
 (`tools.jackson.core:jackson-databind`) and the Spring Boot 4.1 line; a service still on
@@ -378,3 +379,22 @@ Watch the release notes on each release.
     `jdk.httpclient.keepalive.timeout` default, a JVM-wide setting the library leaves alone.
     A `POST` sent on a pooled connection that something on the network path closed while it
     sat idle fails as `CONNECTIVITY`: the JDK client can retry a `GET` there, never a `POST`.
+- **3.1.0** adds optional end-to-end encryption (`tsanetgit/Connect_SDK#140`); the runtime line
+  (Spring Boot 4.1, Jackson 3, JDK 21) is unchanged from 3.0.0. Callers need no change.
+  - New artifact `com.tsanet:connect-e2ee`, same repository and version: encrypts and signs a
+    case or note for a create, and verifies and decrypts one on a read, to the `tsanet-e2ee-1`
+    profile. Only a connector that uses E2EE adds it; it brings `com.nimbusds:nimbus-jose-jwt`.
+    Setup is in `connect-e2ee/README.md`.
+  - `createRequest` (both forms) and `createNote` gain an overload taking `E2eeFields(manifest,
+    encrypted)`, sent exactly as given. The old overloads are now interface defaults, so
+    callers are unaffected, but **an implementer of `CollaborationRequestsFacade` or
+    `CaseNotesFacade` must add the new abstract overloads**. With `encrypted` true, note text
+    and custom-field values are sent unstripped, and the note length limits don't apply.
+  - `CollaborationRequestStatusDto` gains `manifest`, `encrypted`, `submitterCaseNumber`,
+    `description` and `customFields` (`CaseCustomFieldDto(id, fieldName, value)`); `CaseNoteDto`
+    gains `manifest` and `encrypted`. The earlier constructors are deprecated and still work.
+    The records' `equals` and `hashCode` cover the new components, so a record cached before
+    the upgrade doesn't equal a fresh read of the same case.
+  - The SQLite cache gains the new columns on its first open, with no manual step. It now
+    holds each case's description and custom-field answers as well as its summary; run
+    `CacheRetention.sweep` if closed and rejected cases shouldn't stay on disk.
