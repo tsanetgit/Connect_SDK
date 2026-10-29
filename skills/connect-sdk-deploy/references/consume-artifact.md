@@ -18,6 +18,12 @@ SDKs at once: about 170 runtime artifacts, including AWS SDK, Azure, Google Clou
 gRPC and OpenTelemetry, because the storage factory links every adapter. A per-provider
 split is a follow-up, not something the first release offers.
 
+`com.tsanet:connect-e2ee`, same repository and same version from the first release that
+carries it: optional end-to-end encryption of cases and notes to the `tsanet-e2ee-1`
+profile. It depends on `connect-library` and on `com.nimbusds:nimbus-jose-jwt`; a member
+that doesn't use E2EE leaves it out and gets neither. Setup (key operations, pinned partner
+JWKS, the replay window) is in `connect-e2ee/README.md` in the repository.
+
 Always point people at the **latest release** for the current version number:
 <https://github.com/tsanetgit/Connect_SDK/releases/latest>. Do not hardcode a version
 into docs you write for them; quote the coordinates pattern and let the release page

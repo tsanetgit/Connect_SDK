@@ -35,6 +35,7 @@ re-verify the release version, branch names, and module list against the live re
 | `TSANet-integration-demo` | Scripted demo scenarios over the library | Spring Boot jar |
 | `demo-ui` | The branded web demo: dashboard, partner search, dynamic process forms, full case lifecycle from the browser. This is "the SDK demo" most people mean. | Spring Boot jar, port 8090 |
 | `attachment-receiver` | The storage half of receiving pushed files: a streaming storage SPI with AWS S3, Azure Files (backend id `azure`), Azure Blob Storage (backend id `azure_blob`), and Google Cloud Storage adapters, an encrypted per-tenant config store, and a go-live verifier. The HTTPS endpoint that accepts the push is being built in tsanetgit/Connect_Gateway's attachments-only profile (tsanetgit/Connect_Gateway#35), not here; no standalone docs yet. | Library only (published alongside connect-library) |
+| `connect-e2ee` | Optional end-to-end encryption of cases and notes to the `tsanet-e2ee-1` profile: encrypts and signs protected fields for a create, verifies and decrypts them on a read. Private keys stay behind a `KeyOperations` interface; partner keys come from pinned JWKS URLs. Docs: `connect-e2ee/README.md`. | Library only (published alongside connect-library) |
 
 ## Access model (read this first, it shapes everything)
 
