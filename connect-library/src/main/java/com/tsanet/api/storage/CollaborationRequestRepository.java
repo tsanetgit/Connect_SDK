@@ -29,8 +29,8 @@ public class CollaborationRequestRepository {
             INSERT INTO collaboration_request (
                 id, status, summary, submit_company_name, submit_company_id,
                 receive_company_name, receive_company_id, token, created_at, updated_at,
-                test_case, fetched_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                test_case, fetched_at, manifest, encrypted
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 status = excluded.status,
                 summary = excluded.summary,
@@ -42,7 +42,9 @@ public class CollaborationRequestRepository {
                 created_at = excluded.created_at,
                 updated_at = excluded.updated_at,
                 test_case = excluded.test_case,
-                fetched_at = excluded.fetched_at
+                fetched_at = excluded.fetched_at,
+                manifest = excluded.manifest,
+                encrypted = excluded.encrypted
             """,
             requests,
             requests.size(),
@@ -59,6 +61,8 @@ public class CollaborationRequestRepository {
                 ps.setString(10, request.updatedAt());
                 ps.setObject(11, toStoredBoolean(request.testCase()));
                 ps.setString(12, fetchedAt);
+                ps.setString(13, request.manifest());
+                ps.setObject(14, toStoredBoolean(request.encrypted()));
             }
         );
     }
@@ -68,7 +72,7 @@ public class CollaborationRequestRepository {
             """
             SELECT id, status, summary, submit_company_name, submit_company_id,
                    receive_company_name, receive_company_id, token, created_at, updated_at,
-                   test_case
+                   test_case, manifest, encrypted
             FROM collaboration_request
             ORDER BY id
             """,
@@ -81,7 +85,7 @@ public class CollaborationRequestRepository {
             """
             SELECT id, status, summary, submit_company_name, submit_company_id,
                    receive_company_name, receive_company_id, token, created_at, updated_at,
-                   test_case
+                   test_case, manifest, encrypted
             FROM collaboration_request
             WHERE submit_company_id = ? OR receive_company_id = ?
             ORDER BY id
@@ -104,7 +108,9 @@ public class CollaborationRequestRepository {
             rs.getString("token"),
             rs.getString("created_at"),
             rs.getString("updated_at"),
-            readStoredBoolean(rs, "test_case")
+            readStoredBoolean(rs, "test_case"),
+            rs.getString("manifest"),
+            readStoredBoolean(rs, "encrypted")
         );
     }
 

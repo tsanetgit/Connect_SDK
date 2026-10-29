@@ -20,7 +20,9 @@ import com.tsanet.api.connectapi.internal.ConnectApiSessionStore;
 import com.tsanet.api.connectapi.internal.ConnectApiUserGateway;
 import com.tsanet.api.connectapi.internal.ConnectApiWebhooksGateway;
 import com.tsanet.api.connectapi.internal.TokenManager;
+import com.tsanet.api.connectapi.dto.E2eeFields;
 import com.tsanet.api.generated.model.CollaborationRequestDTO;
+import com.tsanet.api.generated.model.FieldMetadataDTO;
 import com.tsanet.api.storage.AttachmentConfigStorageService;
 import com.tsanet.api.storage.AttachmentForwardResultStorageService;
 import com.tsanet.api.storage.CaseNoteStorageService;
@@ -106,6 +108,42 @@ class DefaultTsaNetApiSessionCreateRequestTest {
         session.createRequest(template(), "CASE-1", "s", "d", Map.of(), true);
 
         assertThat(capturedForm().getTestSubmission()).isTrue();
+    }
+
+    @Test
+    void itSendsTheE2eeFieldsAndCiphertextCustomValuesExactlyAsGiven() {
+        String manifest = "eyJhbGciOiJFUzI1NiJ9.eyJ2ZXIiOiJ0c2FuZXQtZTJlZS0xIn0.c2lnLV9-";
+        String ciphertext = " {\"recipients\":[]} ";
+        withCustomField(9L);
+
+        session.createRequest(template(), "CASE-1", ciphertext, ciphertext, Map.of(9L, ciphertext), true,
+            new E2eeFields(manifest, true));
+
+        CollaborationRequestDTO form = capturedForm();
+        assertThat(form.getManifest()).isEqualTo(manifest);
+        assertThat(form.getEncrypted()).isTrue();
+        assertThat(form.getProblemSummary()).isEqualTo(ciphertext);
+        assertThat(form.getProblemDescription()).isEqualTo(ciphertext);
+        assertThat(form.getCustomFields()).singleElement().extracting(FieldMetadataDTO::getValue).isEqualTo(ciphertext);
+    }
+
+    @Test
+    void theOverloadWithoutE2eeFieldsSendsTheDefaultsAndStillStripsCustomValues() {
+        withCustomField(9L);
+
+        session.createRequest(template(), "CASE-1", "s", "d", Map.of(9L, " plain "), true);
+
+        CollaborationRequestDTO form = capturedForm();
+        assertThat(form.getManifest()).isNull();
+        assertThat(form.getEncrypted()).isFalse();
+        assertThat(form.getCustomFields()).singleElement().extracting(FieldMetadataDTO::getValue).isEqualTo("plain");
+    }
+
+    private void withCustomField(long fieldId) {
+        CollaborationRequestDTO form = new CollaborationRequestDTO();
+        form.setDocumentId(77L);
+        form.setCustomFields(new java.util.ArrayList<>(java.util.List.of(new FieldMetadataDTO().fieldId(fieldId))));
+        when(formGateway.getFormByDocumentId(anyLong())).thenReturn(form);
     }
 
     private CollaborationRequestDTO capturedForm() {

@@ -78,6 +78,79 @@ class CollaborationRequestRepositoryTest {
             );
     }
 
+    @Test
+    void itRoundTripsTheE2eeFieldsThroughTheCacheUnchanged() {
+        String manifest = "eyJhbGciOiJFUzI1NiJ9.eyJ2ZXIiOiJ0c2FuZXQtZTJlZS0xIn0.c2lnLV9-";
+        repository.saveAll(
+            List.of(
+                new CollaborationRequestStatusDto(1L, "OPEN", "{\"recipients\":[]}", "Acme", 1L, "Beta", 2L, "tok1",
+                    null, null, false, manifest, true),
+                new CollaborationRequestStatusDto(2L, "OPEN", "Plain", "Acme", 1L, "Beta", 2L, "tok2",
+                    null, null, false, null, false)
+            )
+        );
+
+        assertThat(repository.findAll())
+            .extracting(CollaborationRequestStatusDto::id, CollaborationRequestStatusDto::manifest,
+                CollaborationRequestStatusDto::encrypted)
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple(1L, manifest, Boolean.TRUE),
+                org.assertj.core.groups.Tuple.tuple(2L, null, Boolean.FALSE)
+            );
+        assertThat(repository.findByCompanyId(1L))
+            .extracting(CollaborationRequestStatusDto::manifest)
+            .containsExactly(manifest, null);
+    }
+
+    /**
+     * The DDL below is a FROZEN copy of collaboration_request as connect-library 3.0.0 created it
+     * (test_case, no manifest or encrypted), on purpose: deriving it from current constants would
+     * make this test pass by construction. A refetched row gets both values; a row that isn't
+     * refetched reads encrypted as null ("not known"), never false.
+     */
+    @Test
+    void itUpgradesA300CacheAndFillsTheE2eeColumnsOnRefetch() {
+        SQLiteDataSource dataSource = new SQLiteDataSource();
+        dataSource.setUrl("jdbc:sqlite:file:target/test-collaboration-request-e2ee-upgrade-" + System.nanoTime() + ".db");
+        JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+        jdbcTemplate.execute("""
+            CREATE TABLE IF NOT EXISTS collaboration_request (
+                id INTEGER PRIMARY KEY,
+                status TEXT,
+                summary TEXT,
+                submit_company_name TEXT,
+                submit_company_id INTEGER,
+                receive_company_name TEXT,
+                receive_company_id INTEGER,
+                token TEXT NOT NULL UNIQUE,
+                created_at TEXT,
+                updated_at TEXT,
+                test_case INTEGER,
+                fetched_at TEXT NOT NULL
+            )
+            """);
+        jdbcTemplate.update(
+            "INSERT INTO collaboration_request (id, status, summary, submit_company_name, submit_company_id,"
+                + " receive_company_name, receive_company_id, token, created_at, updated_at, test_case, fetched_at)"
+                + " VALUES (1, 'OPEN', 'Old row', 'Acme', 1, 'Beta', 2, 'tok1', NULL, NULL, 0, 'x'),"
+                + " (2, 'OPEN', 'Untouched old row', 'Acme', 1, 'Beta', 2, 'tok2', NULL, NULL, 0, 'x')"
+        );
+
+        DatabaseInitializer.createSchema(jdbcTemplate);
+        DatabaseInitializer.createSchema(jdbcTemplate);
+        CollaborationRequestRepository upgraded = new CollaborationRequestRepository(jdbcTemplate);
+        upgraded.saveAll(List.of(new CollaborationRequestStatusDto(
+            1L, "OPEN", "Old row", "Acme", 1L, "Beta", 2L, "tok1", null, null, false, "m.a.n", true)));
+
+        assertThat(upgraded.findAll())
+            .extracting(CollaborationRequestStatusDto::id, CollaborationRequestStatusDto::manifest,
+                CollaborationRequestStatusDto::encrypted)
+            .containsExactly(
+                org.assertj.core.groups.Tuple.tuple(1L, "m.a.n", Boolean.TRUE),
+                org.assertj.core.groups.Tuple.tuple(2L, null, null)
+            );
+    }
+
     /**
      * The DDL below is a FROZEN copy of collaboration_request as it existed before the
      * test_case column, on purpose: deriving it from current constants would make this

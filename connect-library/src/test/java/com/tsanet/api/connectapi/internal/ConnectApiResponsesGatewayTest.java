@@ -121,4 +121,20 @@ class ConnectApiResponsesGatewayTest {
         assertThat(result.status()).isEqualTo("CLOSED");
         verify(caseResponsesApi).closeCollaborationRequest("tok-close");
     }
+
+    @Test
+    void aLifecycleCallCarriesTheE2eeFieldsItWasAnswered() {
+        String manifest = "eyJhbGciOiJFUzI1NiJ9.eyJ2ZXIiOiJ0c2FuZXQtZTJlZS0xIn0.c2lnLV9-";
+        CollaborationRequestStatusDTO closed = GatewayTestSupport.sampleCollaborationRequest("tok-close-e2ee")
+            .manifest(manifest)
+            .encrypted(true);
+        closed.setStatus(CaseStatus.CLOSED);
+        when(caseResponsesApi.closeCollaborationRequest("tok-close-e2ee")).thenReturn(closed);
+        when(collaborationRequestsApi.getCollaborationRequestByToken("tok-close-e2ee", false)).thenReturn(closed);
+
+        CollaborationRequestStatusDto result = gateway.closeCollaborationRequest("tok-close-e2ee");
+
+        assertThat(result.manifest()).isEqualTo(manifest);
+        assertThat(result.encrypted()).isTrue();
+    }
 }

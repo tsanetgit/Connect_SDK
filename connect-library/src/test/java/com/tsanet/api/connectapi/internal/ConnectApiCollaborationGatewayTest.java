@@ -77,6 +77,24 @@ class ConnectApiCollaborationGatewayTest {
     }
 
     @Test
+    void itCarriesTheE2eeFieldsFromAReadIntoTheDtoAndTheCacheUnchanged() {
+        String manifest = "eyJhbGciOiJFUzI1NiJ9.eyJ2ZXIiOiJ0c2FuZXQtZTJlZS0xIn0.c2lnLV9-";
+        CollaborationRequestStatusDTO apiDto = GatewayTestSupport.sampleCollaborationRequest("tok-e2ee")
+            .manifest(manifest)
+            .encrypted(true);
+        when(collaborationRequestsApi.getCollaborationRequestByToken("tok-e2ee", false)).thenReturn(apiDto);
+
+        CollaborationRequestStatusDto request = gateway.getCollaborationRequestByToken("tok-e2ee");
+
+        assertThat(request.manifest()).isEqualTo(manifest);
+        assertThat(request.encrypted()).isTrue();
+        assertThat(storageService.findAll()).singleElement().satisfies(stored -> {
+            assertThat(stored.manifest()).isEqualTo(manifest);
+            assertThat(stored.encrypted()).isTrue();
+        });
+    }
+
+    @Test
     void itCreatesCollaborationRequest() {
         CollaborationRequestDTO createPayload = new CollaborationRequestDTO();
         CollaborationRequestStatusDTO created = GatewayTestSupport.sampleCollaborationRequest("tok-new");
