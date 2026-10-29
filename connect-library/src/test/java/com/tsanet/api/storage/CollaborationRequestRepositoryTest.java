@@ -134,7 +134,8 @@ class CollaborationRequestRepositoryTest {
     /**
      * A FROZEN copy of the stored JSON shape, on purpose: the round-trip tests write and read with the
      * same record, so a renamed CaseCustomFieldDto component would pass them while every cached row
-     * read back as null. This literal is what this version writes; changing it needs a migration.
+     * read back as null. This literal is the stored shape a cache already holds; a change that stops
+     * it reading needs a migration.
      */
     @Test
     void itReadsTheStoredCustomFieldsShape() {
