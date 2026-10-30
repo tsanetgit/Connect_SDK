@@ -39,10 +39,15 @@ class E2eePartnerSettingsTest {
     private EnvironmentService environments;
 
     private MockMvc mvc(E2eeKeys keys) {
+        return mvc(keys, false, null);
+    }
+
+    private MockMvc mvc(E2eeKeys keys, boolean locked, String betaSeed) {
         DemoProperties properties = new DemoProperties(
             Map.of("beta", new DemoProperties.EnvironmentDef("Beta", "http://localhost:9", null, null)),
-            "beta", dataDir.toString(), true, null);
-        environments = new EnvironmentService(properties, keys, new DemoE2eeProperties(null, null));
+            "beta", dataDir.toString(), true, null, locked, null);
+        environments = new EnvironmentService(properties, keys,
+            new DemoE2eeProperties(null, betaSeed == null ? Map.of() : Map.of("beta", betaSeed)));
         return MockMvcBuilders.standaloneSetup(new SettingsController(environments, new SessionGuard(environments), properties))
             .setControllerAdvice(new ApiErrorHandler())
             .build();
@@ -75,7 +80,7 @@ class E2eePartnerSettingsTest {
     void anUnusableSeedFailsStartupNamingItsVariable() {
         DemoProperties properties = new DemoProperties(
             Map.of("beta", new DemoProperties.EnvironmentDef("Beta", "http://localhost:9", null, null)),
-            "beta", dataDir.toString(), true, null);
+            "beta", dataDir.toString(), true, null, null, null);
         DemoE2eeProperties badSeed = new DemoE2eeProperties(null, Map.of("beta", "{\"2087\": {}}"));
 
         // Keys loaded: the table is read at construction, which is startup for the real bean.
@@ -156,6 +161,37 @@ class E2eePartnerSettingsTest {
                 .content(json("jwksUrl", "https://keys.partner.example/jwks.json")))
             .andExpect(status().isBadRequest());
         assertThat(file()).doesNotExist();
+    }
+
+    /**
+     * The credentials lock covers the partner table (Shawn's decision on tsanetgit/Connect_SDK#155): a
+     * locked demo lists the seeded table and reports the lock, so the page renders it read-only, and
+     * refuses both writes before looking at the body; the seed is the table's only source there.
+     */
+    @Test
+    void aLockedDemoListsTheSeededTableReadOnlyAndRefusesBothWrites() throws Exception {
+        String seed = "{\"2087\": {\"jwksUrl\": \"https://keys.partner.example/.well-known/jwks.json\"}}";
+        MockMvc mvc = mvc(E2eeKeys.fromJson(v.memberAPrivateJwks()), true, seed);
+
+        mvc.perform(get("/api/settings"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.credentialsLocked").value(true))
+            .andExpect(jsonPath("$.e2ee.enabled").value(true))
+            .andExpect(jsonPath("$.environments[0].e2eePartners[0].companyId").value("2087"));
+
+        // A well-formed replace, and an unparseable body: both 403 before anything is parsed or written.
+        mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)
+                .content(json("jwks", v.publicJwks("memberB"))))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("credentials-locked")));
+        mvc.perform(put("/api/settings/beta/e2ee-partners/3104").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"jwks\":\"not a jwks\"}"))
+            .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/settings/beta/e2ee-partners/2087")).andExpect(status().isForbidden());
+
+        assertThat(environments.partnerKeysFor("beta").entries().keySet()).containsExactly("2087");
+        assertThat(environments.partnerKeysFor("beta").entries().get("2087").source()).isEqualTo("url");
+        assertThat(file()).as("no write reached the store").doesNotExist();
     }
 
     @Test

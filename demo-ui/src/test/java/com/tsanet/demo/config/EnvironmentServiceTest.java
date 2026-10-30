@@ -40,7 +40,9 @@ class EnvironmentServiceTest {
             "beta",
             dataDir.toString(),
             true,  // the tests point at a local http mock that is never contacted
-            null
+            null,
+            null,  // credentials not locked
+            null  // no seeds
         );
         service = new EnvironmentService(properties);
     }
@@ -52,7 +54,9 @@ class EnvironmentServiceTest {
             "beta",
             dataDir.toString(),
             null,
-            null
+            null,
+            null,  // credentials not locked
+            null  // no seeds
         );
 
         assertThatThrownBy(() -> new EnvironmentService(http))
@@ -64,7 +68,9 @@ class EnvironmentServiceTest {
             "beta",
             dataDir.toString(),
             null,
-            null
+            null,
+            null,  // credentials not locked
+            null  // no seeds
         ))).doesNotThrowAnyException();
     }
 

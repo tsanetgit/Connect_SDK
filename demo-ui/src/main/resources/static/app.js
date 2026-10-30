@@ -111,7 +111,24 @@ function renderEnvSettings() {
         const isActive = env.key === state.settings.activeEnvironment;
         const card = document.createElement('div');
         card.className = 'env-card' + (isActive ? ' active-env' : '');
-        card.innerHTML = `
+        const locked = state.settings.credentialsLocked === true;
+        // Locked: who the demo is signed in as, the switch, and no form (tsanetgit/Connect_SDK#152).
+        // Unlocked: the markup below is unchanged from before the lock existed.
+        card.innerHTML = locked ? `
+            <div class="env-head">
+                <span class="env-name">${esc(env.label)}</span>
+                <span class="env-url">${esc(env.apiBaseUrl)}</span>
+                ${env.configured
+                    ? chipHtml(`Signed in as ${env.username} (${env.mode === 'oauth' ? 'OAuth' : 'password'})`, 'st-approved')
+                    : chipHtml('no credentials', 'st-pending')}
+                <span class="spacer"></span>
+                ${isActive ? chipHtml('ACTIVE', 'outbound') : ''}
+            </div>
+            <p class="muted">Credentials are managed by the operator of this demo.</p>
+            ${isActive ? '' : `<div class="button-row"><button type="button" class="env-switch-btn" data-env="${esc(env.key)}">Make Active</button></div>`}
+            <div class="receiver-storage" data-env="${esc(env.key)}" data-configured="${env.configured}"></div>
+            <div class="e2ee-partners" data-env="${esc(env.key)}" data-locked="true"></div>
+        ` : `
             <div class="env-head">
                 <span class="env-name">${esc(env.label)}</span>
                 <span class="env-url">${esc(env.apiBaseUrl)}</span>
@@ -176,23 +193,37 @@ function renderEnvSettings() {
 // pinned JWKS URL or a pasted public JWK set. Shown only when the demo holds its own keys; with
 // E2EE off the card is as it was. Values from the API are set through the DOM, not attributes.
 
+// Locked (tsanet.demo.credentials-locked): the table and the JWKS URL render read-only, with no form and
+// no Remove buttons; the server refuses the writes too, and the table comes from the seed variable.
 function renderE2eePartners(box, env) {
+    if (!box) return;
     if (!state.e2ee?.enabled) {
         box.innerHTML = '';
         return;
     }
+    const locked = state.settings?.credentialsLocked === true;
     const jwksUrl = `${location.origin}${state.e2ee.jwksPath}`;
     const rows = (env.e2eePartners ?? []).map(p => `
         <tr>
             <td><code>${esc(p.companyId)}</code></td>
             <td>${p.source === 'url' ? `URL <code>${esc(p.jwksUrl)}</code>` : `pasted JWKS (${esc(p.kids.length)} key${p.kids.length === 1 ? '' : 's'}: <code>${esc(p.kids.join(', '))}</code>)`}</td>
-            <td><button type="button" class="danger e2ee-remove-btn" data-company="${esc(p.companyId).replaceAll('"', '&quot;')}">Remove</button></td>
+            ${locked ? '' : `<td><button type="button" class="danger e2ee-remove-btn" data-company="${esc(p.companyId).replaceAll('"', '&quot;')}">Remove</button></td>`}
         </tr>`).join('');
+    const table = rows
+        ? `<table class="e2ee-table"><thead><tr><th>Company</th><th>Keys</th>${locked ? '' : '<th></th>'}</tr></thead><tbody>${rows}</tbody></table>`
+        : '<p class="muted">No partner keys yet: Encrypt stays unchecked for every partner.</p>';
+    if (locked) {
+        box.innerHTML = `<h4>E2EE partner keys</h4>
+            <p class="muted">The demo's public keys for a partner to pin: <code class="e2ee-own-url"></code>.
+                The partner table is managed by the operator of this demo.</p>
+            ${table}`;
+        box.querySelector('.e2ee-own-url').textContent = jwksUrl;
+        return;
+    }
     box.innerHTML = `<h4>E2EE partner keys</h4>
         <p class="muted">The demo's public keys for a partner to pin: <code class="e2ee-own-url"></code>.
             Add each partner company you will exchange encrypted cases with, by its company id.</p>
-        ${rows ? `<table class="e2ee-table"><thead><tr><th>Company</th><th>Keys</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
-               : '<p class="muted">No partner keys yet: Encrypt stays unchecked for every partner.</p>'}
+        ${table}
         <form class="e2ee-partner-form">
             <div class="form-grid">
                 <label>Partner company id

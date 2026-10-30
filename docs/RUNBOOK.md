@@ -73,7 +73,7 @@ Unset, E2EE is off and the demo is unchanged: no Encrypt checkbox, no chips, no 
 
 Point each environment card at a member account you control on that environment. For bidirectional testing you need two member companies that are partnered with published process forms (each can search and submit to the other). Store their credentials in your own `.env`/credential store, not in this repo.
 
-Credentials persist to `~/.tsanet-demo-ui/credentials.properties` (mode 600, never in git) — subsequent startups skip this step. **Settings → Clear** wipes them.
+Credentials persist per environment to `~/.tsanet-demo-ui/credentials-<env>.properties` (mode 600, never in git) — subsequent startups skip this step. **Settings → Clear** wipes them.
 
 Badge decoder:
 - **Green "Company — email"** — authenticated, everything live
@@ -109,10 +109,13 @@ SSM Parameter Store as SecureStrings and let the task read them as secrets, so n
 plaintext in the service configuration. The two `GUEST` values are optional: set them to give
 members a second login with the same rights. Without a guest login, delete those two names from
 the loop (SSM refuses an empty SecureString) and the two matching `secrets` entries below. To
-keep the default guest username (`guest`), delete only the `GUEST_USER` name and entry.
+keep the default guest username (`guest`), delete only the `GUEST_USER` name and entry. The four
+`SEED` values are the member credentials written into each environment's store at startup (see
+the lock paragraph below); without them, delete those names, their `secrets` entries and the
+`environment` block, and run the demo unlocked.
 
 ```bash
-for v in TSANET_DEMO_AUTH_USER TSANET_DEMO_AUTH_PASSWORD TSANET_DEMO_AUTH_GUEST_USER TSANET_DEMO_AUTH_GUEST_PASSWORD TSANET_DEMO_ENTRA_TENANT TSANET_DEMO_ENTRA_AUDIENCE_BETA TSANET_DEMO_ENTRA_AUDIENCE_DEV; do
+for v in TSANET_DEMO_AUTH_USER TSANET_DEMO_AUTH_PASSWORD TSANET_DEMO_AUTH_GUEST_USER TSANET_DEMO_AUTH_GUEST_PASSWORD TSANET_DEMO_ENTRA_TENANT TSANET_DEMO_ENTRA_AUDIENCE_BETA TSANET_DEMO_ENTRA_AUDIENCE_DEV TSANET_DEMO_SEED_BETA_USERNAME TSANET_DEMO_SEED_BETA_PASSWORD TSANET_DEMO_SEED_DEV_USERNAME TSANET_DEMO_SEED_DEV_PASSWORD; do
   aws ssm put-parameter --region <REGION> --name "/connect-sdk-demo/$v" --type SecureString --value "<value>" --overwrite
 done
 ```
@@ -165,7 +168,8 @@ like the credentials. To restore it at startup set `TSANET_DEMO_E2EE_PARTNERS_BE
 table as JSON: each partner company id maps to `{"jwksUrl": "https://..."}` or
 `{"jwks": {"keys": [...]}}` (public keys only; a set with a private key is refused at startup). The
 seed applies only when that environment's table file is absent; a table edited on the card wins
-until the next redeploy. The same JSON shape is what the demo writes to `e2ee-partners-<env>.json`
+until the next redeploy. On a locked demo (`TSANET_DEMO_CREDENTIALS_LOCKED`) the card cannot
+edit the table, so the seed is the only way the pilot's keys get in. The same JSON shape is what the demo writes to `e2ee-partners-<env>.json`
 in the data dir, so a table built on the card can be copied out as the seed.
 
 **Build, push, create.** Build the jar (step 1), then:
@@ -195,7 +199,14 @@ readable from `describe-express-gateway-service`):
     {"name": "TSANET_DEMO_AUTH_GUEST_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_PASSWORD"},
     {"name": "TSANET_DEMO_ENTRA_TENANT", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_TENANT"},
     {"name": "TSANET_DEMO_ENTRA_AUDIENCE_BETA", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_BETA"},
-    {"name": "TSANET_DEMO_ENTRA_AUDIENCE_DEV", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_DEV"}
+    {"name": "TSANET_DEMO_ENTRA_AUDIENCE_DEV", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_DEV"},
+    {"name": "TSANET_DEMO_SEED_BETA_USERNAME", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_BETA_USERNAME"},
+    {"name": "TSANET_DEMO_SEED_BETA_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_BETA_PASSWORD"},
+    {"name": "TSANET_DEMO_SEED_DEV_USERNAME", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_DEV_USERNAME"},
+    {"name": "TSANET_DEMO_SEED_DEV_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_DEV_PASSWORD"}
+  ],
+  "environment": [
+    {"name": "TSANET_DEMO_CREDENTIALS_LOCKED", "value": "true"}
   ]
 }
 ```
@@ -235,14 +246,32 @@ with the previous sha tag. Logs: `aws logs tail <LOG_GROUP> --region <REGION> --
 (the group name is in `describe-express-gateway-service` under `awsLogsConfiguration`).
 
 The container filesystem is ephemeral: re-enter member credentials in Settings after every
-deploy. The gate passwords live only in SSM and your local untracked notes. Rotating either
+deploy, or seed them so each deploy re-creates them: put each environment's member username and password in
+SSM (`/connect-sdk-demo/TSANET_DEMO_SEED_BETA_USERNAME`, `.../TSANET_DEMO_SEED_BETA_PASSWORD`, and
+the `DEV` pair), add them to the container's `secrets` like the gate values, and the demo writes
+them into the matching store at startup when that store is empty. With the seeds in place, keep
+the `environment` block from the example above (`TSANET_DEMO_CREDENTIALS_LOCKED` = `true`) and
+deploy: Settings becomes a read-only "Signed in as" view with the environment switch, and
+credential saves and clears are refused. The lock covers the E2EE partner table as well: its
+add and remove endpoints refuse, the card shows the table read-only, and the pilot's keys come
+from `TSANET_DEMO_E2EE_PARTNERS_BETA` (above), which the locked demo reads at startup. Rotating a seeded credential is a new SSM value plus a
+redeploy, and that works only because the ECS filesystem is ephemeral: a seed never overwrites a
+stored credential, so on a persisted data dir you would clear `credentials-<env>.properties`
+first. Two rules for every value that reaches the demo through an environment variable (seeds and
+gate passwords alike): it must not contain `${`, because Spring resolves `${name:default}` inside
+a bound value and would seed a different string; and put it with `--value`, not `file://`, so no
+trailing newline is stored, since values are seeded exactly as given. A locked demo warns at
+startup for every environment whose store is empty: seed both, or expect visitors who switch to
+the other one to see a demo signed in as nobody. The gate passwords live only in SSM and your local untracked notes. Rotating either
 password is a new SSM value plus the same `update-express-gateway-service` call, which starts a
 new deployment even when the container settings are unchanged (observed: an update with an
 identical container block started a new deployment; the app reads both logins once at startup,
 and ECS resolves secrets when a task starts). A gate configuration the app refuses (a guest
 password with no operator password, or the same username for both logins) exits the task at
 startup, so the deployment never reaches `SUCCESSFUL` in `list-service-deployments`; the reason
-is the `APPLICATION FAILED TO START` block in `aws logs tail <LOG_GROUP>`.
+is the `APPLICATION FAILED TO START` block in `aws logs tail <LOG_GROUP>`. A seed the demo cannot
+write (an unwritable data dir) or a seed naming an environment that does not exist fails startup
+the same way.
 
 **Turning it off:** there is no pause. Delete the service with
 `aws ecs delete-express-gateway-service --service-arn <SERVICE_ARN>` when the demo is not

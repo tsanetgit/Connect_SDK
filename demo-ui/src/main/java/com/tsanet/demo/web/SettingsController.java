@@ -58,8 +58,34 @@ public class SettingsController {
             })
             .toList();
         boolean e2ee = environments.e2eeKeys().enabled();
-        return new SettingsStatus(environments.activeEnvironment(), envs,
+        return new SettingsStatus(environments.activeEnvironment(), envs, properties.credentialChangesLocked(),
             new E2eeStatus(e2ee, e2ee ? JwksController.PATH : null));
+    }
+
+    /**
+     * Refuses a credential change while {@code tsanet.demo.credentials-locked} is on. Checked
+     * before the controller's own field checks and the environment lookup, so every well-formed save
+     * or clear on a locked demo answers 403 (a body Spring cannot bind still fails earlier, with no
+     * state touched); hiding the page's form alone wouldn't stop a direct call.
+     */
+    private void requireCredentialsUnlocked() {
+        if (properties.credentialChangesLocked()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Credentials are managed by the operator of this demo (tsanet.demo.credentials-locked)");
+        }
+    }
+
+    /**
+     * The lock covers the E2EE partner table too (Shawn's decision on tsanetgit/Connect_SDK#155):
+     * on a locked demo any gate login could otherwise replace a partner's keys with its own, and
+     * every later Encrypt to that company would go to the wrong key until a redeploy. Checked first,
+     * before the body is looked at. On a locked hosted demo the table comes from the seed variable.
+     */
+    private void requirePartnerTableUnlocked() {
+        if (properties.credentialChangesLocked()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "The E2EE partner table is managed by the operator of this demo (tsanet.demo.credentials-locked)");
+        }
     }
 
     // With E2EE off the table isn't read: the page shows nothing E2EE, as before #149.
@@ -113,6 +139,7 @@ public class SettingsController {
     }
 
     private PartnerKeysStore partnerKeyStore(String env) {
+        requirePartnerTableUnlocked();
         if (!environments.e2eeKeys().enabled()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                 "E2EE is off for this demo: " + E2eeKeys.VARIABLE + " is not set");
@@ -135,6 +162,7 @@ public class SettingsController {
 
     @PostMapping("/api/settings/{env}/credentials")
     public SettingsStatus saveCredentials(@PathVariable String env, @RequestBody SaveCredentialsBody body) {
+        requireCredentialsUnlocked();
         boolean oauth = CredentialsStore.MODE_OAUTH.equals(body.mode());
         if (oauth) {
             if (isBlank(body.clientId()) || isBlank(body.clientSecret())) {
@@ -176,6 +204,7 @@ public class SettingsController {
     @DeleteMapping("/api/settings/{env}/credentials")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void clearCredentials(@PathVariable String env) {
+        requireCredentialsUnlocked();
         try {
             environments.credentialsFor(env).clear();
         } catch (IllegalArgumentException e) {
@@ -337,6 +366,8 @@ public class SettingsController {
     ) {
     }
 
-    public record SettingsStatus(String activeEnvironment, List<EnvironmentStatus> environments, E2eeStatus e2ee) {
+    /** {@code credentialsLocked} mirrors {@code tsanet.demo.credentials-locked}, so the page needn't guess; it covers the partner table too. */
+    public record SettingsStatus(String activeEnvironment, List<EnvironmentStatus> environments, boolean credentialsLocked,
+                                 E2eeStatus e2ee) {
     }
 }

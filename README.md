@@ -81,7 +81,14 @@ docker first (see the Dockerfile header). A hosted deploy must set
 second login for members, with the same rights, comes from
 `TSANET_DEMO_AUTH_GUEST_USER` (default `guest`) and
 `TSANET_DEMO_AUTH_GUEST_PASSWORD`; it is active only when that password is set
-(`tsanetgit/Connect_SDK#148`). End-to-end encryption is on when
+(`tsanetgit/Connect_SDK#148`). When the operator pre-loads the member credentials,
+`TSANET_DEMO_CREDENTIALS_LOCKED=true` turns Settings into a read-only "Signed in as"
+view with the environment switch, and the save and clear endpoints refuse
+(`tsanetgit/Connect_SDK#152`). To pre-load those credentials on an ephemeral host,
+set the optional `TSANET_DEMO_SEED_BETA_USERNAME` / `_PASSWORD` and
+`TSANET_DEMO_SEED_DEV_USERNAME` / `_PASSWORD`: each pair is written into that
+environment's store at startup when the store is empty, and never overwrites one. End-to-end encryption is on when
 `TSANET_DEMO_E2EE_PRIVATE_JWKS` holds the demo's own private JWK set (generated
 by `com.tsanet.demo.E2eeKeyGenerator`, see the RUNBOOK); unset, the demo is
-unchanged.
+unchanged. On a locked demo the E2EE partner table is read-only too and comes
+from `TSANET_DEMO_E2EE_PARTNERS_BETA` / `_DEV`.

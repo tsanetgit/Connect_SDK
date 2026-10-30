@@ -44,7 +44,7 @@ card holds that environment's credentials; the highlighted card is the
 
 Each environment keeps an isolated credentials file (mode 600) and its own
 SQLite cache under `~/.tsanet-demo-ui/` (ephemeral `/tmp` in the container),
-so BETA and DEV data never mix. Credentials are never committed, logged, or
+so BETA and DEV data never mix. Passwords and secrets are never committed, logged, or
 returned by the API — `GET /api/settings` reports only the username.
 **Clear** wipes that environment's file.
 
@@ -87,8 +87,17 @@ credentials before the page loads — that gate protects the demo itself and is
 unrelated to the BETA member credentials entered inside it. The operator can
 also configure a second gate login for guests (`TSANET_DEMO_AUTH_GUEST_USER` and
 `TSANET_DEMO_AUTH_GUEST_PASSWORD`); it opens the same demo with the same rights,
-so a guest sees whatever member credentials are currently stored and can change
-them. Hand it to people you would hand the demo to, not as a per-person account.
+so a guest sees whatever member credentials are currently stored and, unless the
+operator has locked them, can change them. With `TSANET_DEMO_CREDENTIALS_LOCKED`
+set, each environment card shows who the demo is signed in as, with the Make Active
+button on the other environments; saving or clearing credentials is refused, and the
+receiver-storage section is unaffected. The lock covers the E2EE partner keys too: the
+card lists the table and the demo's JWKS URL read-only, with no Add / Replace form and
+no Remove buttons, and the add and remove endpoints refuse. On a locked hosted demo the
+pilot's keys arrive through `TSANET_DEMO_E2EE_PARTNERS_BETA` (RUNBOOK §6). When the operator has also seeded both environments
+(see the RUNBOOK), the hosted demo comes up already signed in on each, so a visitor only
+ever switches environments. Hand the guest login to
+people you would hand the demo to, not as a per-person account.
 
 ### E2EE partner keys
 
@@ -109,7 +118,9 @@ exactly as before.
   Replace** writes the entry for that company id; **Remove** deletes it.
 - The table is kept per environment next to that environment's credentials,
   so on the hosted demo it is lost on redeploy like the credentials. The
-  operator's seed variable restores it at startup (Runbook §6).
+  operator's seed variable restores it at startup (Runbook §6). With
+  `TSANET_DEMO_CREDENTIALS_LOCKED` set the table is read-only on the card and
+  the seed is its only source.
 - The demo's own company is never in the table: its keys come from its own set.
 
 ## 4. Dashboard — collaboration cases

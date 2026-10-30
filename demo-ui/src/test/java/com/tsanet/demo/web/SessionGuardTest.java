@@ -28,7 +28,9 @@ class SessionGuardTest {
             "beta",
             dataDir.toString(),
             true,  // the tests point at a local http mock that is never contacted
-            null
+            null,
+            null,  // credentials not locked
+            null  // no seeds
         ));
         guard = new SessionGuard(environments);
     }
@@ -63,7 +65,9 @@ class SessionGuardTest {
             "beta",
             dataDir.toString(),
             true,  // never contacted: dev has no credentials, so no session is built
-            null
+            null,
+            null,  // credentials not locked
+            null  // no seeds
         ));
         two.credentialsFor("beta").save("user@example.com", "pw");
 
