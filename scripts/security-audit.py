@@ -251,6 +251,75 @@ def check_credentials_not_logged(root):
                "no log statements referencing credential-shaped names", cat)
 
 
+def check_record_secrets_redacted(root):
+    # Mask literals and comments before balancing delimiters. Preserve offsets
+    # for diagnostics, including newlines inside text blocks.
+    non_code = re.compile(
+        r'"""[\s\S]*?"""|"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\''
+        r'|//[^\n]*|/\*[\s\S]*?\*/')
+    declaration = re.compile(r'\brecord\s+(\w+)\s*(?:<[^{};]*?>\s*)?\(')
+    secret = re.compile(
+        r'(?i)\b\w*(?:password|secret|token|credential|api_?key)\w*\s*(?=,|$)')
+    boolean_component = re.compile(r'\b(?:boolean|Boolean)\s+\w+\s*(?=,|$)')
+    override = re.compile(r'\bpublic\s+(?:final\s+)?String\s+toString\s*\(\s*\)')
+
+    def closing(text, start, left, right):
+        depth = 0
+        for i in range(start, len(text)):
+            if text[i] == left:
+                depth += 1
+            elif text[i] == right:
+                depth -= 1
+                if depth == 0:
+                    return i
+        return None
+
+    hits = []
+    for rel, body in walk_sources(root):
+        if not rel.endswith(".java") or "/src/main/java/" not in "/" + rel.replace(os.sep, "/"):
+            continue
+        masked = non_code.sub(
+            lambda m: re.sub(r'[^\n]', ' ', m.group()), body)
+        for match in declaration.finditer(masked):
+            end_header = closing(masked, match.end() - 1, '(', ')')
+            if end_header is None:
+                continue
+            # Presence/locking flags describe credentials; they do not hold them.
+            header = boolean_component.sub('', masked[match.end():end_header])
+            if not secret.search(header):
+                continue
+            start_body = masked.find('{', end_header)
+            if start_body == -1:
+                continue
+            end_body = closing(masked, start_body, '{', '}')
+            if end_body is None:
+                continue
+            # Only a method on this record counts, not one on a nested record,
+            # class, or anonymous object.
+            depth = 0
+            members = []
+            for char in masked[start_body + 1:end_body]:
+                if char == '{':
+                    depth += 1
+                    members.append(' ')
+                elif char == '}':
+                    depth -= 1
+                    members.append(' ')
+                else:
+                    members.append(char if depth == 0 else ' ')
+            if not override.search(''.join(members)):
+                line = masked[:match.start()].count('\n') + 1
+                hits.append(f"{rel}:{line} ({match.group(1)})")
+    if hits:
+        record("FAIL", "secret-bearing records override toString",
+               "records with sensitive components and no toString override: "
+               + "; ".join(sorted(hits)), "credentials")
+    else:
+        record("PASS", "secret-bearing records override toString",
+               "all main-source records with sensitive components override toString",
+               "credentials")
+
+
 # ── Transport ───────────────────────────────────────────────────────────
 
 def check_tls(root):
@@ -323,6 +392,7 @@ def main():
         check_dependency_pinning(root)
         check_no_embedded_secrets(root)
         check_credentials_not_logged(root)
+        check_record_secrets_redacted(root)
         check_tls(root)
         check_deprecated_endpoints(root)
     except Exception as e:  # noqa: BLE001 - a crashed audit must not read as a pass

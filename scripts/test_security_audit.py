@@ -158,6 +158,79 @@ class EmbeddedCredentialsProbe(unittest.TestCase):
         self.assertPasses("Login.java", "String password = credentials.password;\n")
 
 
+class RecordSecretsProbe(unittest.TestCase):
+
+    def verdict(self, content, source="main"):
+        audit = load_audit()
+        with tempfile.TemporaryDirectory() as root:
+            path = os.path.join(root, "module", "src", source, "java")
+            os.makedirs(path)
+            with open(os.path.join(path, "Records.java"), "w") as f:
+                f.write(content)
+            audit.check_record_secrets_redacted(root)
+        [result] = audit.RESULTS
+        return result
+
+    def test_secret_component_names_fail(self):
+        for name in ("password", "clientSecret", "bearerToken", "credentials",
+                     "apiKey", "api_key", "caseToken", "requestToken", "noteToken", "token"):
+            with self.subTest(name=name):
+                result = self.verdict(f"record Login(String {name}) {{}}")
+                self.assertEqual("FAIL", result["status"])
+                self.assertIn("Records.java:1 (Login)", result["detail"])
+
+    def test_multiline_nested_record_fails(self):
+        result = self.verdict("""
+class Config {
+    record Login(
+        String username,
+        String password
+    ) {}
+}
+""")
+        self.assertEqual("FAIL", result["status"])
+        self.assertIn("Records.java:3 (Login)", result["detail"])
+
+    def test_override_passes(self):
+        result = self.verdict("""
+record Login(String password) {
+    @Override
+    public String toString() { return "redacted"; }
+}
+""")
+        self.assertEqual("PASS", result["status"])
+
+    def test_nested_override_does_not_cover_outer_record(self):
+        result = self.verdict("""
+record Outer(String password) {
+    record Inner(String token) {
+        public String toString() { return "redacted"; }
+    }
+}
+""")
+        self.assertEqual("FAIL", result["status"])
+        self.assertIn("(Outer)", result["detail"])
+        self.assertNotIn("(Inner)", result["detail"])
+
+    def test_literals_and_comments_cannot_supply_override(self):
+        result = self.verdict('''
+record Login(String password) {
+    // public String toString() {}
+    static String example = """
+        public String toString() { return "}"; }
+        """;
+}
+''')
+        self.assertEqual("FAIL", result["status"])
+
+    def test_non_secret_record_and_test_sources_pass(self):
+        self.assertEqual("PASS", self.verdict("record User(String name) {}")["status"])
+        self.assertEqual("PASS", self.verdict(
+            "record Status(boolean credentialsLocked, Boolean secretConfigured) {}")["status"])
+        self.assertEqual("PASS", self.verdict(
+            "record Login(String password) {}", source="test")["status"])
+
+
 class ExitCodeContract(unittest.TestCase):
     """The workflow keys on the exit code, so one probe runs the script for real."""
 
