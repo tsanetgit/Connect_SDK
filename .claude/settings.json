@@ -10,5 +10,6 @@
   },
   "enabledPlugins": {
     "tsanet@ai-devkit": true
-  }
+  },
+  "advisorModel": "opus"
 }
