@@ -36,10 +36,12 @@ The working steps, in order:
 - **`main` and `develop`.** `main` is what works against the released platform: it
   builds against Connect-API-Code `beta`, and releases are cut from it. `develop` is
   where work that needs unreleased API changes lands first: it builds against
-  Connect-API-Code `develop`. Feature PRs target `develop`. `develop` reaches `main`
-  through one promotion PR once `beta` carries what it needs; that PR builds against
-  `beta`, so it stays red until then. A fix that lands on `main` alone is merged back
-  into `develop`. Issues close on the promotion to `main`, not on the merge into
+  Connect-API-Code `develop`. Library PRs target `develop`, including a `demo-ui` change
+  that needs library work; a change only to `demo-ui`, the hosted demo or repo config
+  targets `main`. `develop` reaches `main` through one promotion PR once `beta` carries
+  what it needs; that PR builds against `beta`, so it stays red until then. `main` is
+  synced into `develop` by one PR before the next promotion, or sooner if work on
+  `develop` needs it. Issues close on the promotion to `main`, not on the merge into
   `develop`, because GitHub closes issues only on merges into the default branch.
   `develop` is created from `main` once this branch setup is on `main`, so it carries
   the same workflows. `main` already builds against Connect-API-Code `develop` (the
