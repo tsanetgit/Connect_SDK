@@ -413,18 +413,34 @@ class CollaborationRequestsE2eeTest {
     }
 
     @Test
-    void aRecordNotMarkedEncryptedIsPlaintextAndNotVerified() throws Exception {
+    void aCaseWithNothingEncryptedNeverLooksTheProfileUpAndIsReadAsBefore() throws Exception {
         demoIs(E2eeTestVectors.MEMBER_B);
         CollaborationRequestStatusDto plain = E2eeTestVectors.caseRecord("hello", "world", List.of(), null, false, "A-1");
         platformHolds(plain, E2eeTestVectors.noteRecord("s", "d", null, 1042L, false));
 
+        String body = mvc.perform(get("/api/requests/tok-77"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status.summary").value("hello"))
+            .andExpect(jsonPath("$.notes[0].summary").value("s"))
+            .andReturn().getResponse().getContentAsString();
+
+        // No e2ee block, and the profile (whose first use calls /v1/me) is never asked for.
+        assertThat(body).doesNotContain("\"e2ee\"");
+        verify(guard, never()).e2ee(any());
+    }
+
+    @Test
+    void aPlaintextNoteOnAnEncryptedCaseIsMarkedPlaintextAndNotVerified() throws Exception {
+        demoIs(E2eeTestVectors.MEMBER_B);
+        // The platform's own note on an encrypted case: not encrypted, no manifest.
+        platformHolds(v.caseRecord(), E2eeTestVectors.noteRecord("Case created.", "", null, null, false));
+
         mvc.perform(get("/api/requests/tok-77"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.e2ee.state").value("plaintext"))
-            .andExpect(jsonPath("$.e2ee.step").doesNotExist())
-            .andExpect(jsonPath("$.status.summary").value("hello"))
+            .andExpect(jsonPath("$.e2ee.state").value("verified"))
             .andExpect(jsonPath("$.notes[0].e2ee.state").value("plaintext"))
-            .andExpect(jsonPath("$.notes[0].summary").value("s"));
+            .andExpect(jsonPath("$.notes[0].e2ee.step").doesNotExist())
+            .andExpect(jsonPath("$.notes[0].summary").value("Case created."));
     }
 
     /** Today's response shape, for the byte-for-byte comparison below. */
@@ -444,6 +460,7 @@ class CollaborationRequestsE2eeTest {
         assertThat(body).isEqualTo(before);
         // No e2ee block on the case or any note (the ciphertext's own kids happen to contain "e2ee", so the key is checked).
         assertThat(body).doesNotContain("\"e2ee\"");
+        // The records are encrypted, so the profile was asked for; with keys unset it is null.
         verify(guard).e2ee(session);
     }
 

@@ -115,13 +115,20 @@ class PartnerKeysStoreTest {
     }
 
     @Test
-    void aMalformedSeedNamesItsVariable() {
+    void aMalformedSeedNamesItsVariable() throws Exception {
         assertThatThrownBy(() -> new PartnerKeysStore(file(), "not json", SEED_VAR))
             .isInstanceOf(IllegalStateException.class).hasMessageContaining(SEED_VAR);
         assertThatThrownBy(() -> new PartnerKeysStore(file(), "{\"2087\": {}}", SEED_VAR))
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("exactly one of jwksUrl and jwks");
         assertThatThrownBy(() -> new PartnerKeysStore(file(), "{\"acme\": {\"jwksUrl\": \"https://x\"}}", SEED_VAR))
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("numeric company id");
+        // Well-formed but wrong: a plain-http URL, through the seed and through a hand-edited file.
+        String plainHttp = "{\"2087\": {\"jwksUrl\": \"http://keys.partner.example/jwks.json\"}}";
+        assertThatThrownBy(() -> new PartnerKeysStore(file(), plainHttp, SEED_VAR))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining(SEED_VAR).hasMessageContaining("HTTPS");
+        Files.writeString(file(), plainHttp);
+        assertThatThrownBy(() -> new PartnerKeysStore(file(), null, SEED_VAR))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("Fix or delete the file").hasMessageContaining("HTTPS");
     }
 
     @Test

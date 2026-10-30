@@ -128,8 +128,11 @@ public class CollaborationRequestsController {
      * The case, its notes and its responses. Every record here is a stored read, so with E2EE on
      * each {@code encrypted} record is verified as {@link Receipt#STORED_READ} (signature, binding
      * and digests, not freshness) and carries an {@code e2ee} block: verified with the decrypted
-     * content, or refused with the step and field and no value. The DTOs keep their ciphertext,
-     * and the SDK's cache is untouched. With E2EE off nothing is added (tsanetgit/Connect_SDK#149).
+     * content, or refused with the step and field and no value; a record not marked encrypted on
+     * such a case carries {@code plaintext}. The DTOs keep their ciphertext, and the SDK's cache is
+     * untouched. The profile is looked up only when some record is encrypted, so a case with none
+     * is read exactly as before, with E2EE on or off, and never waits on the profile's one-time
+     * {@code /v1/me} call (tsanetgit/Connect_SDK#149).
      */
     @GetMapping("/api/requests/{token}")
     public CaseDetail getRequest(@PathVariable String token) {
@@ -137,7 +140,9 @@ public class CollaborationRequestsController {
         CollaborationRequestStatusDto status = session.collaborationRequests().fetchRequestByToken(token);
         List<CaseNoteDto> notes = session.caseNotes().listNotesForRequest(token);
         List<CaseResponseDto> responses = session.caseResponses().listResponsesForRequest(token);
-        E2eeProfile e2ee = guard.e2ee(session);
+        boolean anyEncrypted = Boolean.TRUE.equals(status.encrypted())
+            || notes.stream().anyMatch(note -> Boolean.TRUE.equals(note.encrypted()));
+        E2eeProfile e2ee = anyEncrypted ? guard.e2ee(session) : null;
         E2eeView caseView = e2ee == null ? null : caseView(e2ee, status);
         List<NoteDetail> noteDetails = notes.stream()
             .map(note -> new NoteDetail(note, e2ee == null ? null : noteView(e2ee, note, status)))

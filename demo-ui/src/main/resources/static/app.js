@@ -1099,6 +1099,8 @@ document.getElementById('collab-form').addEventListener('submit', async (event) 
         });
         status.appendChild(link);
         form.reset();
+        // reset() clears the Encrypt box too; the partner is still selected, so its precheck comes back.
+        renderEncryptRow(state.formTemplate.receiverCompanyId ?? state.selectedPartner?.companyId ?? null);
     } catch (err) {
         status.textContent = `Failed: ${err.message}`;
     }

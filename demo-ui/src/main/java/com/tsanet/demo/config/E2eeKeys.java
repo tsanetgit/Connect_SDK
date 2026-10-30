@@ -132,7 +132,7 @@ public class E2eeKeys {
         this.replayGuard = new InMemoryReplayGuard(REPLAY_MAX_AGE, REPLAY_SKEW, clock);
     }
 
-    /** Keys from a private JWK set, for tests and the generator's self-check. */
+    /** Keys from a private JWK set; the tests' way in (the generator's output is checked through it there). */
     public static E2eeKeys fromJson(String privateJwks) {
         return new E2eeKeys(Objects.requireNonNull(privateJwks));
     }

@@ -91,25 +91,25 @@ public class PartnerKeysStore {
      */
     public PartnerKeysStore(Path path, String seedJson, String seedName) {
         this.path = Objects.requireNonNull(path);
-        Map<String, Entry> entries;
+        // Snapshot.of runs inside each try: it holds the URL scheme check, so a plain-http URL in a
+        // seed or a file is reported with the same message as any other unusable entry.
         if (Files.exists(path)) {
             try {
-                entries = parse(Files.readString(path));
+                this.snapshot = Snapshot.of(parse(Files.readString(path)));
             } catch (IOException | IllegalArgumentException unusable) {
                 throw new IllegalStateException("The partner key table " + path.getFileName()
                     + " cannot be read: " + unusable.getMessage() + ". Fix or delete the file.");
             }
         } else if (seedJson != null && !seedJson.isBlank()) {
             try {
-                entries = parse(seedJson);
+                this.snapshot = Snapshot.of(parse(seedJson));
             } catch (IOException | IllegalArgumentException unusable) {
                 throw new IllegalStateException(seedName + " is not a usable partner key table: "
                     + unusable.getMessage());
             }
         } else {
-            entries = new LinkedHashMap<>();
+            this.snapshot = Snapshot.of(new LinkedHashMap<>());
         }
-        this.snapshot = Snapshot.of(entries);
     }
 
     /** The table, in insertion order. */
