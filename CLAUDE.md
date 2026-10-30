@@ -44,7 +44,8 @@ python3 scripts/security-audit.py
 
 ## Branches and PRs
 
-- **Base branch:** `develop` for library work, `main` for changes only to `demo-ui`, the hosted demo or repo config. A change that lands on `main` alone is merged back into `develop`.
+- **Base branch:** `develop` for library work, including a `demo-ui` change that needs it. `main` for changes only to `demo-ui`, the hosted demo or repo config, which don't wait for a promotion.
+- **`main` reaches `develop`** through a sync PR before the next promotion, not after every change, so `develop` can sit behind `main`. Sync sooner if work on `develop` needs what landed on `main`.
 - **`develop` reaches `main`** through one promotion PR, which builds against `beta` and stays red until `beta` carries what it needs. Releases are cut from `main`.
 - **Branch names:** `feat/<slug>`, `fix/<slug>`, `chore/<slug>`.
 - **Closing keywords** (`Closes #N`) only fire on merges into `main`, the default branch. Issues worked on `develop` close on the promotion.
