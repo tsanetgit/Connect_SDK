@@ -1,5 +1,6 @@
 package com.tsanet.demo.web;
 
+import com.tsanet.api.connectapi.dto.CaseCustomFieldDto;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.connectapi.dto.CaseResponseDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormTemplateDto;
@@ -181,7 +182,7 @@ public class CollaborationRequestsController {
             return E2eeView.PLAINTEXT;
         }
         return switch (e2ee.verifyCase(status, Receipt.STORED_READ)) {
-            case Verified<DecryptedCase> ok -> E2eeView.verifiedCase(ok.content());
+            case Verified<DecryptedCase> ok -> E2eeView.verifiedCase(ok.content(), status.customFields());
             case Refused<DecryptedCase> no -> E2eeView.refused(no);
         };
     }
@@ -294,7 +295,8 @@ public class CollaborationRequestsController {
     /**
      * The verification of one stored record for the page. {@code state} is {@code plaintext}
      * (not marked encrypted; not verified), {@code verified} (with the decrypted summary,
-     * description and, for a case, custom-field values by the form's {@code fieldId}),
+     * description and, for a case, custom-field values by the form's {@code fieldId}, plus each
+     * field's name from the stored record under the same key, so the page can label it),
      * {@code refused} (with the step, the field when the failure is about one, and the module's
      * reason; never a value) or {@code unverified} (encrypted, but the demo had no profile to verify
      * it with; the reason says why). Nulls are left out, so a plaintext record shows only its state.
@@ -307,31 +309,48 @@ public class CollaborationRequestsController {
         String reason,
         String summary,
         String description,
-        Map<Long, String> customFields
+        Map<Long, String> customFields,
+        Map<Long, String> customFieldNames
     ) {
-        static final E2eeView PLAINTEXT = new E2eeView("plaintext", null, null, null, null, null, null);
+        static final E2eeView PLAINTEXT = new E2eeView("plaintext", null, null, null, null, null, null, null);
 
-        static E2eeView verifiedCase(DecryptedCase content) {
+        /**
+         * {@code stored} is the record the case was verified from: each decrypted field names the
+         * stored entry it came from ({@code readId}), whose {@code fieldName} labels it. The name is
+         * the platform's readable form metadata, never a decrypted value.
+         */
+        static E2eeView verifiedCase(DecryptedCase content, List<CaseCustomFieldDto> stored) {
+            Map<Long, String> namesByReadId = new LinkedHashMap<>();
+            for (CaseCustomFieldDto entry : stored == null ? List.<CaseCustomFieldDto>of() : stored) {
+                if (entry.id() != null && entry.fieldName() != null && !entry.fieldName().isBlank()) {
+                    namesByReadId.put(entry.id(), entry.fieldName().strip());
+                }
+            }
             Map<Long, String> values = new LinkedHashMap<>();
+            Map<Long, String> names = new LinkedHashMap<>();
             for (DecryptedCustomField field : content.customFields()) {
                 // A null answer has no JWE and so no fieldId to show it under.
                 if (field.fieldId() != null) {
                     values.put(field.fieldId(), field.value());
+                    String name = namesByReadId.get(field.readId());
+                    if (name != null) {
+                        names.put(field.fieldId(), name);
+                    }
                 }
             }
-            return new E2eeView("verified", null, null, null, content.summary(), content.description(), values);
+            return new E2eeView("verified", null, null, null, content.summary(), content.description(), values, names);
         }
 
         static E2eeView verifiedNote(DecryptedNote content) {
-            return new E2eeView("verified", null, null, null, content.summary(), content.description(), null);
+            return new E2eeView("verified", null, null, null, content.summary(), content.description(), null, null);
         }
 
         static E2eeView refused(Refused<?> refusal) {
-            return new E2eeView("refused", refusal.step().name(), refusal.field(), refusal.reason(), null, null, null);
+            return new E2eeView("refused", refusal.step().name(), refusal.field(), refusal.reason(), null, null, null, null);
         }
 
         static E2eeView unverified(String reason) {
-            return new E2eeView("unverified", null, null, reason, null, null, null);
+            return new E2eeView("unverified", null, null, reason, null, null, null, null);
         }
 
         @Override

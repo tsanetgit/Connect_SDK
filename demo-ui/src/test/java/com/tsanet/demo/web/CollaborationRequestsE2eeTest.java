@@ -196,7 +196,33 @@ class CollaborationRequestsE2eeTest {
             .andExpect(jsonPath("$.e2ee.state").value("verified"))
             .andExpect(jsonPath("$.e2ee.summary").value(SECRET_SUMMARY))
             .andExpect(jsonPath("$.e2ee.description").value(SECRET_DESCRIPTION))
-            .andExpect(jsonPath("$.e2ee.customFields.101").value(SECRET_FIELD));
+            .andExpect(jsonPath("$.e2ee.customFields.101").value(SECRET_FIELD))
+            // The label comes from the stored entry the value was decrypted from (read id 9001).
+            .andExpect(jsonPath("$.e2ee.customFieldNames.101").value("Product"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aStoredEntryWithoutANameLeavesTheDecryptedFieldUnlabeled() throws Exception {
+        // The page falls back to "Custom field <id>" when the stored record carries no name for it.
+        demoIs(E2eeTestVectors.MEMBER_A);
+        mvc.perform(post("/api/requests").contentType(MediaType.APPLICATION_JSON)
+                .content(formCreate(2087, true, SECRET_SUMMARY)))
+            .andExpect(status().isOk());
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> description = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<Long, String>> values = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<E2eeFields> e2ee = ArgumentCaptor.forClass(E2eeFields.class);
+        verify(requests).createRequest(any(CollaborationRequestFormTemplateDto.class), eq("A-2026-004417"),
+            summary.capture(), description.capture(), values.capture(), eq(true), e2ee.capture());
+        platformHolds(E2eeTestVectors.caseRecord(summary.getValue(), description.getValue(),
+            List.of(new CaseCustomFieldDto(9001L, "  ", values.getValue().get(101L))),
+            e2ee.getValue().manifest(), true, "A-2026-004417"));
+
+        mvc.perform(get("/api/requests/tok-77"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.e2ee.customFields.101").value(SECRET_FIELD))
+            .andExpect(jsonPath("$.e2ee.customFieldNames.101").doesNotExist());
     }
 
     @Test
