@@ -139,12 +139,12 @@ whole JSON on one line to standard output and nowhere else (never log it, never 
 ```
 
 Put it in SSM as a SecureString like the gate values (a 2048-bit RSA private JWK plus a P-256 JWK
-is under the standard tier's 4 KB), straight from the generator so it never sits in a file, and add
-the matching `secrets` entry to `primary-container.json`:
+is under the standard tier's 4 KB), piped straight from the generator so it never sits in a file or
+on a command line, and add the matching `secrets` entry to `primary-container.json`:
 
 ```bash
-aws ssm put-parameter --region <REGION> --name /connect-sdk-demo/TSANET_DEMO_E2EE_PRIVATE_JWKS --type SecureString --overwrite \
-  --value "$("$JAVA_HOME/bin/java" -cp <DEMO_REPO>/demo-ui/target/demo-ui-0.0.1-SNAPSHOT.jar -Dloader.main=com.tsanet.demo.E2eeKeyGenerator org.springframework.boot.loader.launch.PropertiesLauncher)"
+"$JAVA_HOME/bin/java" -cp <DEMO_REPO>/demo-ui/target/demo-ui-0.0.1-SNAPSHOT.jar -Dloader.main=com.tsanet.demo.E2eeKeyGenerator org.springframework.boot.loader.launch.PropertiesLauncher \
+  | aws ssm put-parameter --region <REGION> --name /connect-sdk-demo/TSANET_DEMO_E2EE_PRIVATE_JWKS --type SecureString --overwrite --value file:///dev/stdin
 ```
 
 ```json

@@ -195,10 +195,13 @@ Opens from the Dashboard or after creating a case.
   not freshness, since there is no webhook receiver) and shows a chip next to the
   status: **Verified (E2EE)**, with the decrypted summary, description and
   custom-field values in place of the ciphertext and the ciphertext behind a
-  *Ciphertext as stored* disclosure for the interop check; or **Refused at
-  `<step>`: `<field>`**, which shows the step and field and never a value. A record
+  *Ciphertext as stored* disclosure for the interop check; **Refused at
+  `<step>`: `<field>`**, which shows the step and field and never a value; or
+  **Encrypted, cannot verify**, when the demo holds keys but could not build its
+  profile for this session (the status line keeps the reason; reload). A record
   not marked `encrypted` is plaintext and gets no chip. Notes get the same chip
-  per item. With no keys the demo renders the record as the API returned it.
+  per item. With no keys the demo renders the record as the API returned it,
+  with no chip.
 - **Notes Timeline** and **Response History** — the full conversation and
   every engineer response on the case. System-generated notes (e.g.
   "Case accepted.") arrive as HTML; the demo renders them formatted through a

@@ -81,4 +81,9 @@ public class SessionGuard {
     public E2eeProfile e2ee(TsaNetApiSession session) {
         return environments.e2eeFor(session);
     }
+
+    /** Whether the demo holds its own E2EE keys; with them loaded, a null {@link #e2ee} means a replaced session. */
+    public boolean e2eeEnabled() {
+        return environments.e2eeKeys().enabled();
+    }
 }

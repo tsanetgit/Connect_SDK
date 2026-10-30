@@ -270,10 +270,12 @@ function partnerHasKeys(companyId) {
     return (active?.e2eePartners ?? []).some(p => p.companyId === String(companyId));
 }
 
-// The chip for one record's `e2ee` block: verified, refused at a step (and field), or none for plaintext.
+// The chip for one record's `e2ee` block: verified, refused at a step (and field), cannot verify
+// (encrypted, but the demo had no profile for it), or none for plaintext.
 function e2eeChip(e2ee) {
     if (!e2ee || e2ee.state === 'plaintext') return '';
     if (e2ee.state === 'verified') return chip('Verified (E2EE)', 'e2ee-verified');
+    if (e2ee.state === 'unverified') return chip('Encrypted, cannot verify', 'e2ee-lock');
     return chip(`Refused at ${e2ee.step}${e2ee.field ? `: ${e2ee.field}` : ''}`, 'e2ee-refused');
 }
 

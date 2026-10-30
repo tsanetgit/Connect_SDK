@@ -136,7 +136,8 @@ What a member gets once it is on:
   the decrypted fields and the ciphertext behind a disclosure, or **Refused at `<step>`:
   `<field>`** with no value shown. The dashboard shows a lock chip for encrypted cases.
 
-Known platform limits while testing with a partner, none of them the demo's: the API rewrites
+Known platform limits while testing with a partner, none of them the demo's (as
+`tsanetgit/Connect_SDK#149` records them): the API rewrites
 `"` as `&#34;` in descriptions and note text (`tsanetgit/Connect-API-Code#214`; the module
 decodes it before checking, a partner's receiver must too), E2EE relationships are not yet
 gated by Groups on Beta so an encrypted case travels as a normal case whose content is

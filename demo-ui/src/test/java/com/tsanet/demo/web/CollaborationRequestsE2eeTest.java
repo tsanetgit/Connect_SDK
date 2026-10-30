@@ -97,6 +97,7 @@ class CollaborationRequestsE2eeTest {
     /** The demo is {@code own}; its partner table holds the other member's public set. */
     private E2eeProfile demoIs(String own) {
         E2eeProfile profile = v.profileFor(own, dir);
+        when(guard.e2eeEnabled()).thenReturn(true);
         when(guard.e2ee(session)).thenReturn(profile);
         return profile;
     }
@@ -443,6 +444,32 @@ class CollaborationRequestsE2eeTest {
             .andExpect(jsonPath("$.notes[0].summary").value("Case created."));
     }
 
+    @Test
+    void withKeysLoadedButNoProfileAnEncryptedRecordIsUnverifiedNotFailed() throws Exception {
+        // The session was replaced between the two lookups: the profile is null while keys are loaded.
+        when(guard.e2eeEnabled()).thenReturn(true);
+        platformHolds(v.caseRecord(), v.noteRecord(), E2eeTestVectors.noteRecord("Case created.", "", null, null, false));
+        String plainSummary = (String) v.map("example1_case_create", "plaintext_request").get("problemSummary");
+
+        String body = mvc.perform(get("/api/requests/tok-77"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.e2ee.state").value("unverified"))
+            .andExpect(jsonPath("$.e2ee.reason").value(org.hamcrest.Matchers.containsString("replaced")))
+            .andExpect(jsonPath("$.e2ee.summary").doesNotExist())
+            .andExpect(jsonPath("$.notes[0].e2ee.state").value("unverified"))
+            .andExpect(jsonPath("$.notes[1].e2ee.state").value("plaintext"))
+            .andReturn().getResponse().getContentAsString();
+        assertThat(body).doesNotContain(plainSummary);
+
+        // Building the profile failed (its first use asks /v1/me): the page degrades the same way, with the cause.
+        when(guard.e2ee(session)).thenThrow(new IllegalStateException("/v1/me answered no company id; the E2EE profile needs one"));
+        mvc.perform(get("/api/requests/tok-77"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.e2ee.state").value("unverified"))
+            .andExpect(jsonPath("$.e2ee.reason").value(org.hamcrest.Matchers.containsString("/v1/me")))
+            .andExpect(jsonPath("$.status.summary").value(org.hamcrest.Matchers.startsWith("{\"protected\"")));
+    }
+
     /** Today's response shape, for the byte-for-byte comparison below. */
     private record CaseDetailBefore149(CollaborationRequestStatusDto status, List<CaseNoteDto> notes, List<CaseResponseDto> responses) {
     }
@@ -460,8 +487,8 @@ class CollaborationRequestsE2eeTest {
         assertThat(body).isEqualTo(before);
         // No e2ee block on the case or any note (the ciphertext's own kids happen to contain "e2ee", so the key is checked).
         assertThat(body).doesNotContain("\"e2ee\"");
-        // The records are encrypted, so the profile was asked for; with keys unset it is null.
-        verify(guard).e2ee(session);
+        // The records are encrypted, but with keys unset the profile is never asked for.
+        verify(guard, never()).e2ee(any());
     }
 
     @Test

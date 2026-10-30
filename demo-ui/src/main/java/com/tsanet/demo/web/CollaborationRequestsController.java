@@ -132,7 +132,10 @@ public class CollaborationRequestsController {
      * such a case carries {@code plaintext}. The DTOs keep their ciphertext, and the SDK's cache is
      * untouched. The profile is looked up only when some record is encrypted, so a case with none
      * is read exactly as before, with E2EE on or off, and never waits on the profile's one-time
-     * {@code /v1/me} call (tsanetgit/Connect_SDK#149).
+     * {@code /v1/me} call. With keys loaded but no profile to be had (the session was replaced, or
+     * building the profile failed), an encrypted record carries {@code unverified} with the reason
+     * rather than failing the page: the records were already read. With keys unset nothing is
+     * added (tsanetgit/Connect_SDK#149).
      */
     @GetMapping("/api/requests/{token}")
     public CaseDetail getRequest(@PathVariable String token) {
@@ -142,12 +145,32 @@ public class CollaborationRequestsController {
         List<CaseResponseDto> responses = session.caseResponses().listResponsesForRequest(token);
         boolean anyEncrypted = Boolean.TRUE.equals(status.encrypted())
             || notes.stream().anyMatch(note -> Boolean.TRUE.equals(note.encrypted()));
-        E2eeProfile e2ee = anyEncrypted ? guard.e2ee(session) : null;
-        E2eeView caseView = e2ee == null ? null : caseView(e2ee, status);
+        if (!anyEncrypted || !guard.e2eeEnabled()) {
+            return new CaseDetail(status, notes.stream().map(note -> new NoteDetail(note, null)).toList(), responses, null);
+        }
+        E2eeProfile e2ee;
+        String unavailable = null;
+        try {
+            e2ee = guard.e2ee(session);
+            if (e2ee == null) {
+                unavailable = "the session was replaced while the case was being read; reload";
+            }
+        } catch (RuntimeException failed) {
+            // The profile's first use asks /v1/me for the company id; the module's and the SDK's messages carry no value.
+            e2ee = null;
+            unavailable = "the demo could not build its E2EE profile: " + failed.getMessage();
+        }
+        final E2eeProfile profile = e2ee;
+        final String reason = unavailable;
+        E2eeView caseView = profile != null ? caseView(profile, status) : unverified(status.encrypted(), reason);
         List<NoteDetail> noteDetails = notes.stream()
-            .map(note -> new NoteDetail(note, e2ee == null ? null : noteView(e2ee, note, status)))
+            .map(note -> new NoteDetail(note, profile != null ? noteView(profile, note, status) : unverified(note.encrypted(), reason)))
             .toList();
         return new CaseDetail(status, noteDetails, responses, caseView);
+    }
+
+    private static E2eeView unverified(Boolean encrypted, String reason) {
+        return Boolean.TRUE.equals(encrypted) ? E2eeView.unverified(reason) : E2eeView.PLAINTEXT;
     }
 
     // A record whose encrypted isn't true is plaintext and isn't verified (connect-e2ee README).
@@ -269,9 +292,10 @@ public class CollaborationRequestsController {
     /**
      * The verification of one stored record for the page. {@code state} is {@code plaintext}
      * (not marked encrypted; not verified), {@code verified} (with the decrypted summary,
-     * description and, for a case, custom-field values by the form's {@code fieldId}) or
+     * description and, for a case, custom-field values by the form's {@code fieldId}),
      * {@code refused} (with the step, the field when the failure is about one, and the module's
-     * reason; never a value). Nulls are left out, so a plaintext record shows only its state.
+     * reason; never a value) or {@code unverified} (encrypted, but the demo had no profile to verify
+     * it with; the reason says why). Nulls are left out, so a plaintext record shows only its state.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record E2eeView(
@@ -302,6 +326,10 @@ public class CollaborationRequestsController {
 
         static E2eeView refused(Refused<?> refusal) {
             return new E2eeView("refused", refusal.step().name(), refusal.field(), refusal.reason(), null, null, null);
+        }
+
+        static E2eeView unverified(String reason) {
+            return new E2eeView("unverified", null, null, reason, null, null, null);
         }
 
         @Override
