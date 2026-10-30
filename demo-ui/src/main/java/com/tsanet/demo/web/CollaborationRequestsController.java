@@ -317,7 +317,12 @@ public class CollaborationRequestsController {
         /**
          * {@code stored} is the record the case was verified from: each decrypted field names the
          * stored entry it came from ({@code readId}), whose {@code fieldName} labels it. The name is
-         * the platform's readable form metadata, never a decrypted value.
+         * the platform's readable form metadata, never a decrypted value, and it is NOT covered by
+         * verification: the value and its {@code fieldId} (from {@code tsa_fld} inside the JWE) are,
+         * the label is unsigned like every other readable field on the record, so the page shows the
+         * authenticated {@code fieldId} beside it. A stored entry without an id or a name leaves its
+         * field unlabeled; {@code stored} is null only for a payload older than custom fields, which
+         * then decrypts none.
          */
         static E2eeView verifiedCase(DecryptedCase content, List<CaseCustomFieldDto> stored) {
             Map<Long, String> namesByReadId = new LinkedHashMap<>();

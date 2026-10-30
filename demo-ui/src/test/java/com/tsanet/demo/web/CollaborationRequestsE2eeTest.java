@@ -227,6 +227,31 @@ class CollaborationRequestsE2eeTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void aStoredEntryWithoutAnIdLeavesTheDecryptedFieldUnlabeled() throws Exception {
+        // A name with no stored id cannot be paired with any decrypted field, so none is borrowed.
+        demoIs(E2eeTestVectors.MEMBER_A);
+        mvc.perform(post("/api/requests").contentType(MediaType.APPLICATION_JSON)
+                .content(formCreate(2087, true, SECRET_SUMMARY)))
+            .andExpect(status().isOk());
+        ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> description = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<Long, String>> values = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<E2eeFields> e2ee = ArgumentCaptor.forClass(E2eeFields.class);
+        verify(requests).createRequest(any(CollaborationRequestFormTemplateDto.class), eq("A-2026-004417"),
+            summary.capture(), description.capture(), values.capture(), eq(true), e2ee.capture());
+        platformHolds(E2eeTestVectors.caseRecord(summary.getValue(), description.getValue(),
+            List.of(new CaseCustomFieldDto(null, "Product", values.getValue().get(101L))),
+            e2ee.getValue().manifest(), true, "A-2026-004417"));
+
+        mvc.perform(get("/api/requests/tok-77"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.e2ee.state").value("verified"))
+            .andExpect(jsonPath("$.e2ee.customFields.101").value(SECRET_FIELD))
+            .andExpect(jsonPath("$.e2ee.customFieldNames.101").doesNotExist());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void anEncryptedSimpleCreateUsesTheE2eeOverloadAndEncryptsNoCustomFields() throws Exception {
         demoIs(E2eeTestVectors.MEMBER_A);
 
