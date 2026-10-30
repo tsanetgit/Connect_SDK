@@ -276,7 +276,8 @@ password with no operator password, or the same username for both logins) exits 
 startup, so the deployment never reaches `SUCCESSFUL` in `list-service-deployments`; the reason
 is the `APPLICATION FAILED TO START` block in `aws logs tail <LOG_GROUP>`. A seed the demo cannot
 write (an unwritable data dir) or a seed naming an environment that does not exist fails startup
-the same way.
+the same way, and so does a partner seed the demo cannot use (a private key, or a JWKS URL that
+isn't HTTPS or names no host).
 
 **Turning it off:** there is no pause. Delete the service with
 `aws ecs delete-express-gateway-service --service-arn <SERVICE_ARN>` when the demo is not
