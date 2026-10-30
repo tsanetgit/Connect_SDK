@@ -31,10 +31,10 @@ python3 scripts/security-audit.py
 `IntegrationScenariosIT` in `TSANet-integration-demo` never runs in `verify`, even with `TSANET_RUN_SCENARIOS=true`. Select it by name:
 
 ```bash
-TSANET_RUN_SCENARIOS=true mvn -pl TSANet-integration-demo -am test "-Dtest=IntegrationScenariosIT" "-Dsurefire.failIfNoSpecifiedTests=false"
+TSANET_RUN_SCENARIOS=true SPRING_PROFILES_ACTIVE=local mvn -pl TSANet-integration-demo -am test "-Dtest=IntegrationScenariosIT" "-Dsurefire.failIfNoSpecifiedTests=false"
 ```
 
-It fails without the `tsanet.scenarios` company configuration (`acme` and `beta`), which belongs in an untracked `application-local.yml`. It writes to `tsanet.api.base-url`, so point that at DEV or BETA only.
+It fails without the `tsanet.scenarios` company configuration (`acme` and `beta`), which belongs in an untracked `TSANet-integration-demo/application-local.yml`. It writes to `tsanet.api.base-url`, so point that at DEV or BETA only.
 
 ## Layout
 
