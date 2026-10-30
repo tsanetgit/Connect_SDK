@@ -25,7 +25,7 @@ mvn -B --no-transfer-progress verify
 
 # CI's mechanical security audit
 python3 -m unittest -v scripts/test_security_audit.py
-python3 scripts/security-audit.py
+python3 scripts/security-audit.py    # exit 1 means a FAIL; exit 2 means warnings only, and CI still passes
 ```
 
 `IntegrationScenariosIT` in `TSANet-integration-demo` never runs in `verify`, even with `TSANET_RUN_SCENARIOS=true`. Select it by name:
