@@ -119,5 +119,13 @@ public class CredentialsStore {
         public String principal() {
             return isOAuth() ? clientId : username;
         }
+
+        /** Never the password or client secret: a record's default toString would print them. */
+        @Override
+        public String toString() {
+            String secret = isOAuth() ? clientSecret : password;
+            return "Credentials[mode=" + mode + ", principal=" + principal()
+                + (secret == null || secret.isBlank() ? ", no secret" : ", secret set") + "]";
+        }
     }
 }

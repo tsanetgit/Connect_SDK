@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.tsanet.demo.config.CredentialsStore;
 import com.tsanet.demo.config.DemoProperties;
 import com.tsanet.demo.config.EnvironmentService;
 import java.nio.file.Path;
@@ -83,5 +84,21 @@ class SettingsControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"username\":\"user@example.com\",\"password\":\"pw\"}"))
             .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void theCredentialRecordsNeverPrintASecret() {
+        var body = new SettingsController.SaveCredentialsBody("password", "user@example.com", "s3cret-pw", "client-1", "s3cret-client");
+        assertThat(body.toString())
+            .contains("user@example.com", "client-1", "password set", "client secret set")
+            .doesNotContain("s3cret-pw", "s3cret-client");
+        assertThat(new SettingsController.SaveCredentialsBody("oauth", null, null, "client-1", null).toString())
+            .contains("no password", "no client secret");
+
+        var stored = new CredentialsStore.Credentials("password", "user@example.com", "s3cret-pw", null, null);
+        assertThat(stored.toString()).contains("user@example.com", "secret set").doesNotContain("s3cret-pw");
+        var oauth = new CredentialsStore.Credentials("oauth", null, null, "client-1", "s3cret-client");
+        assertThat(oauth.toString()).contains("client-1", "secret set").doesNotContain("s3cret-client");
+        assertThat(new CredentialsStore.Credentials("oauth", null, null, "client-1", null).toString()).contains("no secret");
     }
 }

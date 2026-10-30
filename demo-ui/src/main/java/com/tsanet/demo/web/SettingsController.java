@@ -339,6 +339,14 @@ public class SettingsController {
     /** {@code mode} is "password" (default when absent) or "oauth". */
     public record SaveCredentialsBody(String mode, String username, String password,
                                       String clientId, String clientSecret) {
+
+        /** Never the password or client secret: Spring logs a request body through this at DEBUG. */
+        @Override
+        public String toString() {
+            return "SaveCredentialsBody[mode=" + mode + ", username=" + username + ", clientId=" + clientId
+                + (isBlank(password) ? ", no password" : ", password set")
+                + (isBlank(clientSecret) ? ", no client secret" : ", client secret set") + "]";
+        }
     }
 
     /** One partner's key entry: {@code source} is "url" (with {@code jwksUrl}) or "jwks" (with the pasted set's {@code kids}). */
