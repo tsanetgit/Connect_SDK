@@ -83,4 +83,7 @@ second login for members, with the same rights, comes from
 (`tsanetgit/Connect_SDK#148`). When the operator pre-loads the member credentials,
 `TSANET_DEMO_CREDENTIALS_LOCKED=true` turns Settings into a read-only "Signed in as"
 view with the environment switch, and the save and clear endpoints refuse
-(`tsanetgit/Connect_SDK#152`).
+(`tsanetgit/Connect_SDK#152`). To pre-load those credentials on an ephemeral host,
+set the optional `TSANET_DEMO_SEED_BETA_USERNAME` / `_PASSWORD` and
+`TSANET_DEMO_SEED_DEV_USERNAME` / `_PASSWORD`: each pair is written into that
+environment's store at startup when the store is empty, and never overwrites one.

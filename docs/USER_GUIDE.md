@@ -44,7 +44,7 @@ card holds that environment's credentials; the highlighted card is the
 
 Each environment keeps an isolated credentials file (mode 600) and its own
 SQLite cache under `~/.tsanet-demo-ui/` (ephemeral `/tmp` in the container),
-so BETA and DEV data never mix. Credentials are never committed, logged, or
+so BETA and DEV data never mix. Passwords and secrets are never committed, logged, or
 returned by the API — `GET /api/settings` reports only the username.
 **Clear** wipes that environment's file.
 
@@ -91,7 +91,9 @@ so a guest sees whatever member credentials are currently stored and, unless the
 operator has locked them, can change them. With `TSANET_DEMO_CREDENTIALS_LOCKED`
 set, each environment card shows who the demo is signed in as, with the Make Active
 button on the other environments; saving or clearing credentials is refused, and the
-receiver-storage section is unaffected. Hand the guest login to
+receiver-storage section is unaffected. When the operator has also seeded both environments
+(see the RUNBOOK), the hosted demo comes up already signed in on each, so a visitor only
+ever switches environments. Hand the guest login to
 people you would hand the demo to, not as a per-person account.
 
 ## 4. Dashboard — collaboration cases
