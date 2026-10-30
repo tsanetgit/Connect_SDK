@@ -168,8 +168,9 @@ until the next redeploy. On a locked demo (`TSANET_DEMO_CREDENTIALS_LOCKED`) the
 edit the table, so the seed is the only way the pilot's keys get in. The same JSON shape is what the demo writes to `e2ee-partners-<env>.json`
 in the data dir, so a table built on the card can be copied out as the seed.
 
-If you give a guest login to people outside your team with E2EE on, run the demo locked. On an
-unlocked demo, any gate login can add a partner JWKS URL, and the demo task then fetches it.
+If you give a guest login to people outside your team with E2EE on, run the demo locked, which
+needs the member seeds (see the lock paragraph below). On an unlocked demo, any gate login can add
+a partner JWKS URL, and the demo task then fetches it.
 
 **Build, push, create.** Build the jar (step 1), then:
 
