@@ -1,6 +1,6 @@
 # CLAUDE.md: Connect_SDK
 
-The Java SDK for the TSANet Connect REST API, with the demos and tools built on it. Members consume `connect-library` and `connect-e2ee` from GitHub Packages and run `demo-ui`, so public APIs and docs here are a contract with them. This repo is public.
+The Java SDK for the TSANet Connect REST API, with the demos and tools built on it. Members consume `connect-library`, `attachment-receiver` and `connect-e2ee` from GitHub Packages and run `demo-ui`, so public APIs and docs here are a contract with them. This repo is public.
 
 ## Never
 
