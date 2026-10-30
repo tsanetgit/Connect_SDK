@@ -1,6 +1,6 @@
 # CLAUDE.md: Connect_SDK
 
-The Java SDK for the TSANet Connect REST API, with the demos and tools built on it. Members consume `connect-library`, `attachment-receiver` and `connect-e2ee` from GitHub Packages and run `demo-ui`, so public APIs and docs here are a contract with them. This repo is public.
+The Java SDK for the TSANet Connect REST API, with the demos and tools built on it. Members consume `connect-library`, `attachment-receiver` and `connect-e2ee` from GitHub Packages and run `demo-ui`, so public APIs and docs here are a contract with them. This repo is public, so its settings leave the Claude Code advisor off, since they would turn it on for anyone who opens it. Turn it on yourself with `/advisor`.
 
 ## Never
 
@@ -34,7 +34,7 @@ python3 scripts/security-audit.py
 TSANET_RUN_SCENARIOS=true mvn -pl TSANet-integration-demo -am test "-Dtest=IntegrationScenariosIT" "-Dsurefire.failIfNoSpecifiedTests=false"
 ```
 
-It fails without scenario company configuration. It writes to `tsanet.api.base-url`, so point that at DEV or BETA only.
+It fails without the `tsanet.scenarios` company configuration (`acme` and `beta`), which belongs in an untracked `application-local.yml`. It writes to `tsanet.api.base-url`, so point that at DEV or BETA only.
 
 ## Layout
 

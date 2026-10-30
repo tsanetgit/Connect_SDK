@@ -39,14 +39,16 @@ The working steps, in order:
   Connect-API-Code `develop`. Library and console PRs target `develop`, including a
   `demo-ui` change that needs library work; a change only to `demo-ui` and its docs, the
   hosted demo or repo config targets `main`. Other docs and skill changes follow what
-  they describe: `main` for released behavior, `develop` for unreleased. A library fix that can't wait
-  for a promotion goes to `main`, then syncs to `develop`. `develop` reaches `main` through
-  one promotion PR once `beta` carries what it needs; that PR builds against `beta`, so it stays red until then. `main` is
-  synced into `develop` by one PR before the next promotion, or sooner if work on
-  `develop` needs it. Issues close on the promotion to `main`, not on the merge into
-  `develop`, because GitHub closes issues only on merges into the default branch.
-  `develop` was created from `main`, so it carries the same workflows. `main` already builds against Connect-API-Code `develop` (the
-  daily `spec-develop` run, green 2026-10-02 to 2026-10-05).
+  they describe: `main` for released behavior, `develop` for unreleased. A library fix
+  that can't wait for a promotion goes to `main`, then syncs to `develop`. `develop`
+  reaches `main` through one promotion PR once `beta` carries what it needs; that PR
+  builds against `beta`, so it stays red until then. `main` is synced into `develop` by
+  one PR before the next promotion, or sooner if work on `develop` needs it. Issues
+  close on the promotion to `main`, not on the merge into `develop`, because GitHub
+  closes issues only on merges into the default branch. `develop` was created from
+  `main`, so it carries the same workflows. `main` already builds against
+  Connect-API-Code `develop` (the daily `spec-develop` run, green 2026-10-02 to
+  2026-10-05).
 - **`main` builds.** `tsanetgit/Connect_SDK#44` merged the `oauth` branch on
   2026-08-11 (commit `66f44fe`). `main` builds against the sibling `beta`
   specification and passes the full suite (verified 2026-08-11: `mvn install`,
