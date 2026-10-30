@@ -75,6 +75,8 @@ is a maintainer decision and is deliberately not part of this document.
 repo. It only takes effect if you open this repo in Claude Code and trust the folder. Without
 access to that repo, the plugin doesn't install, Claude Code reports that it isn't installed,
 and your session otherwise works normally. With access, the plugin updates automatically.
+The settings also turn on Claude Code's advisor with Opus, with or without that access. It
+uses your own Claude usage, and setting `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` turns it off.
 
 ## Demo UI documentation
 
