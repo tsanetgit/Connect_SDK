@@ -186,7 +186,9 @@ docker push "<ECR_REGISTRY>/connect-sdk-demo:${SHA}"
 ```
 
 `primary-container.json` (pin the sha tag, not `latest`, so the running build is always
-readable from `describe-express-gateway-service`):
+readable from `describe-express-gateway-service`; delete the `secrets` entry for any value you
+did not put in SSM, including the three `E2EE` entries when E2EE is off and any partner seed you
+don't use):
 
 ```json
 {
@@ -203,7 +205,10 @@ readable from `describe-express-gateway-service`):
     {"name": "TSANET_DEMO_SEED_BETA_USERNAME", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_BETA_USERNAME"},
     {"name": "TSANET_DEMO_SEED_BETA_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_BETA_PASSWORD"},
     {"name": "TSANET_DEMO_SEED_DEV_USERNAME", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_DEV_USERNAME"},
-    {"name": "TSANET_DEMO_SEED_DEV_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_DEV_PASSWORD"}
+    {"name": "TSANET_DEMO_SEED_DEV_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_DEV_PASSWORD"},
+    {"name": "TSANET_DEMO_E2EE_PRIVATE_JWKS", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_E2EE_PRIVATE_JWKS"},
+    {"name": "TSANET_DEMO_E2EE_PARTNERS_BETA", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_E2EE_PARTNERS_BETA"},
+    {"name": "TSANET_DEMO_E2EE_PARTNERS_DEV", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_E2EE_PARTNERS_DEV"}
   ],
   "environment": [
     {"name": "TSANET_DEMO_CREDENTIALS_LOCKED", "value": "true"}
@@ -254,7 +259,7 @@ the `environment` block from the example above (`TSANET_DEMO_CREDENTIALS_LOCKED`
 deploy: Settings becomes a read-only "Signed in as" view with the environment switch, and
 credential saves and clears are refused. The lock covers the E2EE partner table as well: its
 add and remove endpoints refuse, the card shows the table read-only, and the pilot's keys come
-from `TSANET_DEMO_E2EE_PARTNERS_BETA` (above), which the locked demo reads at startup. Rotating a seeded credential is a new SSM value plus a
+from `TSANET_DEMO_E2EE_PARTNERS_BETA` and `TSANET_DEMO_E2EE_PARTNERS_DEV` (above), which the locked demo reads at startup. Rotating a seeded credential is a new SSM value plus a
 redeploy, and that works only because the ECS filesystem is ephemeral: a seed never overwrites a
 stored credential, so on a persisted data dir you would clear `credentials-<env>.properties`
 first. Two rules for every value that reaches the demo through an environment variable (seeds and

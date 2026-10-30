@@ -94,7 +94,7 @@ button on the other environments; saving or clearing credentials is refused, and
 receiver-storage section is unaffected. The lock covers the E2EE partner keys too: the
 card lists the table and the demo's JWKS URL read-only, with no Add / Replace form and
 no Remove buttons, and the add and remove endpoints refuse. On a locked hosted demo the
-pilot's keys arrive through `TSANET_DEMO_E2EE_PARTNERS_BETA` (RUNBOOK §6). When the operator has also seeded both environments
+pilot's keys arrive through `TSANET_DEMO_E2EE_PARTNERS_BETA` and `_DEV` (RUNBOOK §6). When the operator has also seeded both environments
 (see the RUNBOOK), the hosted demo comes up already signed in on each, so a visitor only
 ever switches environments. Hand the guest login to
 people you would hand the demo to, not as a per-person account.
