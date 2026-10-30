@@ -56,6 +56,13 @@ class GateFilterChainTest {
     }
 
     @Test
+    void theJwksPathIsOutsideTheGateEvenWithE2eeOff() throws Exception {
+        // With no keys the endpoint is a 404, not the gate's 401: the exemption holds without keys,
+        // and a 404 is what the path answered before it existed (tsanetgit/Connect_SDK#149).
+        mvc.perform(get("/.well-known/jwks.json")).andExpect(status().isNotFound());
+    }
+
+    @Test
     void anonymousIsRefused() throws Exception {
         mvc.perform(get("/api/settings")).andExpect(status().isUnauthorized());
     }

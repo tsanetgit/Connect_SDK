@@ -9,7 +9,8 @@ its four cloud adapters — the HTTPS endpoint that accepts the push is being bu
 `tsanetgit/Connect_Gateway`'s attachments-only profile, not here), `connect-e2ee` (optional
 end-to-end encryption of cases and notes over `connect-library`; see
 [`connect-e2ee/README.md`](connect-e2ee/README.md)), and `demo-ui` (the branded web demo over
-the SDK facades).
+the SDK facades, which exercises `connect-e2ee` when given its own keys: a partner can test its
+E2EE implementation against the SDK's through the hosted demo, `tsanetgit/Connect_SDK#149`).
 
 ## Building
 
@@ -86,4 +87,8 @@ view with the environment switch, and the save and clear endpoints refuse
 (`tsanetgit/Connect_SDK#152`). To pre-load those credentials on an ephemeral host,
 set the optional `TSANET_DEMO_SEED_BETA_USERNAME` / `_PASSWORD` and
 `TSANET_DEMO_SEED_DEV_USERNAME` / `_PASSWORD`: each pair is written into that
-environment's store at startup when the store is empty, and never overwrites one.
+environment's store at startup when the store is empty, and never overwrites one. End-to-end encryption is on when
+`TSANET_DEMO_E2EE_PRIVATE_JWKS` holds the demo's own private JWK set (generated
+by `com.tsanet.demo.E2eeKeyGenerator`, see the RUNBOOK); unset, the demo is
+unchanged. On a locked demo the E2EE partner table is read-only too and comes
+from `TSANET_DEMO_E2EE_PARTNERS_BETA` / `_DEV`.

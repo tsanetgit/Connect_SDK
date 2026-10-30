@@ -49,7 +49,9 @@ const state = {
     selectedPartner: null,
     formTemplate: null,
     currentCaseToken: null,
+    currentCaseEncrypted: false,  // the open case's `encrypted`, prechecks the Add note Encrypt box
     currentWebhookId: null,
+    e2ee: {enabled: false},       // GET /api/settings `e2ee`; nothing E2EE renders while enabled is false
 };
 
 // ---------- tabs ----------
@@ -77,6 +79,7 @@ async function refreshIdentity() {
     try {
         const settings = await fetchJson('/api/settings');
         state.settings = settings;
+        state.e2ee = settings.e2ee ?? {enabled: false};
         const active = settings.environments.find(e => e.key === settings.activeEnvironment);
         chip.textContent = active?.label ?? settings.activeEnvironment;
         subtitle.textContent = `TSANet Connect ${active?.label ?? ''} — ${active?.apiBaseUrl ?? ''}`;
@@ -124,6 +127,7 @@ function renderEnvSettings() {
             <p class="muted">Credentials are managed by the operator of this demo.</p>
             ${isActive ? '' : `<div class="button-row"><button type="button" class="env-switch-btn" data-env="${esc(env.key)}">Make Active</button></div>`}
             <div class="receiver-storage" data-env="${esc(env.key)}" data-configured="${env.configured}"></div>
+            <div class="e2ee-partners" data-env="${esc(env.key)}" data-locked="true"></div>
         ` : `
             <div class="env-head">
                 <span class="env-name">${esc(env.label)}</span>
@@ -163,8 +167,10 @@ function renderEnvSettings() {
                 </div>
             </form>
             <div class="receiver-storage" data-env="${esc(env.key)}" data-configured="${env.configured}"></div>
+            <div class="e2ee-partners" data-env="${esc(env.key)}"></div>
         `;
         host.appendChild(card);
+        renderE2eePartners(card.querySelector('.e2ee-partners'), env);
     }
     host.querySelectorAll('.env-cred-form').forEach(form =>
         form.addEventListener('submit', onSaveEnvCredentials));
@@ -180,6 +186,142 @@ function renderEnvSettings() {
     host.querySelectorAll('.env-switch-btn').forEach(btn =>
         btn.addEventListener('click', () => onSwitchEnvironment(btn.dataset.env)));
     loadReceiverStorageIfShown();
+}
+
+// ---------- E2EE partner keys (Settings) ----------
+// Per environment: which partner companies the demo can encrypt for and verify from, each by a
+// pinned JWKS URL or a pasted public JWK set. Shown only when the demo holds its own keys; with
+// E2EE off the card is as it was. Values from the API are set through the DOM, not attributes.
+
+// Locked (tsanet.demo.credentials-locked): the table and the JWKS URL render read-only, with no form and
+// no Remove buttons; the server refuses the writes too, and the table comes from the seed variable.
+function renderE2eePartners(box, env) {
+    if (!box) return;
+    if (!state.e2ee?.enabled) {
+        box.innerHTML = '';
+        return;
+    }
+    const locked = state.settings?.credentialsLocked === true;
+    const jwksUrl = `${location.origin}${state.e2ee.jwksPath}`;
+    const rows = (env.e2eePartners ?? []).map(p => `
+        <tr>
+            <td><code>${esc(p.companyId)}</code></td>
+            <td>${p.source === 'url' ? `URL <code>${esc(p.jwksUrl)}</code>` : `pasted JWKS (${esc(p.kids.length)} key${p.kids.length === 1 ? '' : 's'}: <code>${esc(p.kids.join(', '))}</code>)`}</td>
+            ${locked ? '' : `<td><button type="button" class="danger e2ee-remove-btn" data-company="${esc(p.companyId).replaceAll('"', '&quot;')}">Remove</button></td>`}
+        </tr>`).join('');
+    const table = rows
+        ? `<table class="e2ee-table"><thead><tr><th>Company</th><th>Keys</th>${locked ? '' : '<th></th>'}</tr></thead><tbody>${rows}</tbody></table>`
+        : '<p class="muted">No partner keys yet: Encrypt stays unchecked for every partner.</p>';
+    if (locked) {
+        box.innerHTML = `<h4>E2EE partner keys</h4>
+            <p class="muted">The demo's public keys for a partner to pin: <code class="e2ee-own-url"></code>.
+                The partner table is managed by the operator of this demo.</p>
+            ${table}`;
+        box.querySelector('.e2ee-own-url').textContent = jwksUrl;
+        return;
+    }
+    box.innerHTML = `<h4>E2EE partner keys</h4>
+        <p class="muted">The demo's public keys for a partner to pin: <code class="e2ee-own-url"></code>.
+            Add each partner company you will exchange encrypted cases with, by its company id.</p>
+        ${table}
+        <form class="e2ee-partner-form">
+            <div class="form-grid">
+                <label>Partner company id
+                    <input type="text" name="companyId" inputmode="numeric" autocomplete="off" required>
+                </label>
+                <label>Key source
+                    <select name="source">
+                        <option value="url">JWKS URL (https)</option>
+                        <option value="jwks">Pasted public JWKS</option>
+                    </select>
+                </label>
+            </div>
+            <label class="e2ee-src-url">JWKS URL
+                <input type="url" name="jwksUrl" placeholder="https://..." autocomplete="off">
+            </label>
+            <label class="e2ee-src-jwks" hidden>Public JWK set (JSON; a set with a private key is refused)
+                <textarea name="jwks" rows="4" spellcheck="false"></textarea>
+            </label>
+            <div class="button-row">
+                <button type="submit">Add / Replace</button>
+            </div>
+        </form>
+        <p class="muted e2ee-result"></p>`;
+    box.querySelector('.e2ee-own-url').textContent = jwksUrl;
+    const form = box.querySelector('.e2ee-partner-form');
+    form.source.addEventListener('change', () => {
+        form.querySelector('.e2ee-src-url').hidden = form.source.value !== 'url';
+        form.querySelector('.e2ee-src-jwks').hidden = form.source.value !== 'jwks';
+    });
+    form.addEventListener('submit', event => onSaveE2eePartner(event, box, env.key));
+    box.querySelectorAll('.e2ee-remove-btn').forEach(btn =>
+        btn.addEventListener('click', () => onRemoveE2eePartner(box, env.key, btn.dataset.company)));
+}
+
+async function onSaveE2eePartner(event, box, envKey) {
+    event.preventDefault();
+    const form = event.target;
+    const result = box.querySelector('.e2ee-result');
+    const companyId = form.companyId.value.trim();
+    const body = form.source.value === 'url' ? {jwksUrl: form.jwksUrl.value.trim()} : {jwks: form.jwks.value};
+    result.textContent = 'Saving...';
+    try {
+        const settings = await fetchJson(
+            `/api/settings/${encodeURIComponent(envKey)}/e2ee-partners/${encodeURIComponent(companyId)}`,
+            {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+        state.settings = settings;
+        state.e2ee = settings.e2ee ?? {enabled: false};
+        renderE2eePartners(box, settings.environments.find(e => e.key === envKey));
+        box.querySelector('.e2ee-result').textContent = `Saved the keys for company ${companyId}.`;
+    } catch (err) {
+        result.textContent = `Failed: ${err.message}`;
+    }
+}
+
+async function onRemoveE2eePartner(box, envKey, companyId) {
+    const result = box.querySelector('.e2ee-result');
+    result.textContent = 'Removing...';
+    try {
+        await fetchJson(`/api/settings/${encodeURIComponent(envKey)}/e2ee-partners/${encodeURIComponent(companyId)}`,
+            {method: 'DELETE'});
+        const settings = await fetchJson('/api/settings');
+        state.settings = settings;
+        state.e2ee = settings.e2ee ?? {enabled: false};
+        renderE2eePartners(box, settings.environments.find(e => e.key === envKey));
+        box.querySelector('.e2ee-result').textContent = `Removed the keys for company ${companyId}.`;
+    } catch (err) {
+        result.textContent = `Failed: ${err.message}`;
+    }
+}
+
+/** Whether the active environment's partner table has keys for `companyId`. */
+function partnerHasKeys(companyId) {
+    if (!state.e2ee?.enabled || companyId == null) return false;
+    const active = state.settings?.environments.find(e => e.key === state.settings.activeEnvironment);
+    return (active?.e2eePartners ?? []).some(p => p.companyId === String(companyId));
+}
+
+// The chip for one record's `e2ee` block: verified, refused at a step (and field), cannot verify
+// (encrypted, but the demo had no profile for it), or none for plaintext.
+function e2eeChip(e2ee) {
+    if (!e2ee || e2ee.state === 'plaintext') return '';
+    if (e2ee.state === 'verified') return chip('Verified (E2EE)', 'e2ee-verified');
+    if (e2ee.state === 'unverified') return chip('Encrypted, cannot verify', 'e2ee-lock');
+    return chip(`Refused at ${e2ee.step}${e2ee.field ? `: ${e2ee.field}` : ''}`, 'e2ee-refused');
+}
+
+// The ciphertext as the API returned it, behind a disclosure, for the interop check.
+function cipherDisclosure(values) {
+    const details = document.createElement('details');
+    details.className = 'cipher';
+    details.innerHTML = '<summary>Ciphertext as stored</summary>';
+    for (const [name, value] of values) {
+        if (value == null) continue;
+        const pre = document.createElement('pre');
+        pre.textContent = `${name}: ${value}`;
+        details.appendChild(pre);
+    }
+    return details;
 }
 
 // ---------- V2 receiver storage (Settings) ----------
@@ -429,7 +571,7 @@ function renderRequests() {
             <td>${esc(r.id)}</td>
             <td>${dir ? chip(dir, dir) : ''}</td>
             <td>${statusChip(r.status)}</td>
-            <td>${esc(r.summary)}</td>
+            <td>${state.e2ee?.enabled && r.encrypted === true ? chip('\uD83D\uDD12 Encrypted', 'e2ee-lock') : esc(r.summary)}</td>
             <td>${esc(partnerNameOf(r))}</td>
             <td>${esc(r.updatedAt)}</td>
         `;
@@ -476,26 +618,54 @@ function kv(key, value, full) {
 function renderCase(detail) {
     const s = detail.status;
     const dir = directionOf(s);
-    document.getElementById('case-title').textContent = `Case #${s.id ?? '?'} — ${s.summary ?? ''}`;
-    document.getElementById('case-summary').innerHTML = [
-        kv('Status', statusChip(s.status)),
+    state.currentCaseEncrypted = s.encrypted === true;
+    // The e2ee block exists only while the demo holds keys; without it the page is as before #149.
+    const e2ee = detail.e2ee;
+    const encrypted = e2ee && e2ee.state !== 'plaintext';
+    const summaryText = encrypted ? (e2ee.state === 'verified' ? e2ee.summary : 'Encrypted') : s.summary;
+    document.getElementById('case-title').textContent = `Case #${s.id ?? '?'} — ${summaryText ?? ''}`;
+    const rows = [
+        kv('Status', statusChip(s.status) + (encrypted ? ' ' + e2eeChip(e2ee) : '')),
         kv('Direction', dir ? chip(dir, dir) : '—'),
         kv('Submitted by', esc(s.submitCompanyName)),
         kv('Received by', esc(s.receiveCompanyName)),
         kv('Created', esc(s.createdAt)),
         kv('Updated', esc(s.updatedAt)),
         kv('Case token', `<code>${esc(s.token)}</code>`, true),
-    ].join('');
+    ];
+    if (encrypted && e2ee.state === 'verified') {
+        // Decrypted values in place of the ciphertext; a refusal shows the chip and no value.
+        rows.push(kv('Description', esc(e2ee.description), true));
+        for (const [fieldId, value] of Object.entries(e2ee.customFields ?? {})) {
+            rows.push(kv(`Custom field ${fieldId}`, esc(value), true));
+        }
+    } else if (encrypted && e2ee.reason) {
+        // Refused or cannot verify: the module's or the demo's reason, which names a step or a cause, never a value.
+        rows.push(kv('E2EE', esc(e2ee.reason), true));
+    }
+    const summaryHost = document.getElementById('case-summary');
+    summaryHost.innerHTML = rows.join('');
+    if (encrypted && e2ee.state === 'verified') {
+        summaryHost.appendChild(cipherDisclosure([
+            ['problemSummary', s.summary], ['problemDescription', s.description],
+            ...(s.customFields ?? []).map(f => [`customFields[${f.id}] ${f.fieldName ?? ''}`, f.value]),
+        ]));
+    }
 
     renderCaseActions(dir);
-    renderTimeline('case-notes', detail.notes.map(n => ({
-        title: n.summary,
-        // type label and direction exactly as the API sent them; a note without them shows neither.
-        meta: `${n.creatorName ?? n.creatorUsername ?? '?'} (${n.companyName ?? '?'}) · ${n.priority ?? ''}`
-            + [n.typeDisplayName ?? n.type, n.direction].filter(Boolean).map(v => ` · ${v}`).join('')
-            + ` · ${n.createdAt ?? ''}`,
-        body: n.description,
-    })), 'No notes yet.');
+    renderTimeline('case-notes', detail.notes.map(n => {
+        const ne = n.e2ee && n.e2ee.state !== 'plaintext' ? n.e2ee : null;
+        return {
+            title: ne ? (ne.state === 'verified' ? ne.summary : 'Encrypted note') : n.summary,
+            // type label and direction exactly as the API sent them; a note without them shows neither.
+            meta: `${n.creatorName ?? n.creatorUsername ?? '?'} (${n.companyName ?? '?'}) · ${n.priority ?? ''}`
+                + [n.typeDisplayName ?? n.type, n.direction].filter(Boolean).map(v => ` · ${v}`).join('')
+                + ` · ${n.createdAt ?? ''}`,
+            body: ne ? (ne.state === 'verified' ? ne.description : (ne.reason ?? '')) : n.description,
+            chip: e2eeChip(ne),
+            cipher: ne && ne.state === 'verified' ? [['summary', n.summary], ['description', n.description]] : null,
+        };
+    }), 'No notes yet.');
     renderTimeline('case-responses', detail.responses.map(r => ({
         title: r.type,
         meta: `${r.engineerName ?? ''} ${r.engineerEmail ? '<' + r.engineerEmail + '>' : ''} · ${r.createdAt ?? ''}`,
@@ -545,7 +715,7 @@ function renderTimeline(hostId, items, emptyText) {
         const item = document.createElement('div');
         item.className = 'timeline-item';
         item.innerHTML = `
-            <div class="t-head"><span class="t-title">${esc(i.title)}</span><span>${esc(i.meta)}</span></div>
+            <div class="t-head"><span class="t-title">${esc(i.title)}${i.chip ? ' ' + i.chip : ''}</span><span>${esc(i.meta)}</span></div>
             <div class="t-body"></div>
         `;
         const body = item.querySelector('.t-body');
@@ -555,6 +725,7 @@ function renderTimeline(hostId, items, emptyText) {
         } else {
             body.textContent = i.body ?? '';
         }
+        if (i.cipher) item.appendChild(cipherDisclosure(i.cipher));
         host.appendChild(item);
     }
 }
@@ -664,10 +835,16 @@ async function showActionForm(action) {
         }
         return `<label>${esc(label)}<input type="${type}" name="${name}" required></label>`;
     }))).join('');
+    // Add note offers Encrypt (E2EE) only while the demo holds keys, prechecked on an encrypted case.
+    const encryptRow = action === 'note' && state.e2ee?.enabled
+        ? `<label class="check-row"><input type="checkbox" name="encrypt" ${state.currentCaseEncrypted ? 'checked' : ''}> Encrypt (E2EE)
+           <span class="muted">${state.currentCaseEncrypted ? 'This case is encrypted; the note is encrypted for the other party.' : 'This case is plaintext.'}</span></label>`
+        : '';
     host.innerHTML = `
         <form class="action-form" id="current-action-form">
             <h3>${esc(spec.title)}</h3>
             ${fieldsHtml}
+            ${encryptRow}
             <div class="button-row">
                 <button type="submit">Submit</button>
                 <button type="button" class="secondary" id="cancel-action">Cancel</button>
@@ -680,6 +857,7 @@ async function showActionForm(action) {
         const form = event.target;
         const body = {};
         for (const [name] of spec.fields) body[name] = form[name].value;
+        if (form.encrypt) body.encrypt = form.encrypt.checked;
         const status = document.getElementById('case-action-status');
         status.textContent = 'Submitting...';
         try {
@@ -851,11 +1029,32 @@ async function selectPartner(partner) {
             (partner.departmentName ? ` / ${partner.departmentName}` : '') +
             ` — ${template.fields?.length ?? 0} partner-defined field(s)`;
         renderCustomFields(template);
+        renderEncryptRow(template.receiverCompanyId ?? partner.companyId);
         panel.scrollIntoView({behavior: 'smooth'});
     } catch (err) {
         label.textContent = `Failed to load form: ${err.message}`;
         state.formTemplate = null;
+        renderEncryptRow(null);
     }
+}
+
+// Shown only while the demo holds keys; prechecked when the partner's company has a key entry in
+// the active environment, and the hint says which. Checked while the demo holds no keys is a 403 from the server.
+function renderEncryptRow(partnerCompanyId) {
+    const row = document.getElementById('encrypt-row');
+    const hint = document.getElementById('encrypt-hint');
+    const box = row.querySelector('input[name="encrypt"]');
+    if (!state.e2ee?.enabled || partnerCompanyId == null) {
+        row.classList.add('hidden');
+        box.checked = false;
+        return;
+    }
+    const hasKeys = partnerHasKeys(partnerCompanyId);
+    box.checked = hasKeys;
+    hint.textContent = hasKeys
+        ? `Company ${partnerCompanyId} has a key entry in ${state.settings.activeEnvironment.toUpperCase()}; the summary, description and custom-field values are encrypted for it.`
+        : `Company ${partnerCompanyId} has no key entry in ${state.settings.activeEnvironment.toUpperCase()}: add one under Settings before encrypting.`;
+    row.classList.remove('hidden');
 }
 
 function renderCustomFields(template) {
@@ -917,10 +1116,13 @@ document.getElementById('collab-form').addEventListener('submit', async (event) 
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 formTemplate: state.formTemplate,
+                // The company to encrypt for: a template fetched by document names no receiver.
+                receiverCompanyId: state.formTemplate.receiverCompanyId ?? state.selectedPartner?.companyId ?? null,
                 caseNumber: form.caseNumber.value,
                 summary: form.summary.value,
                 description: form.description.value,
                 customFieldValues,
+                encrypt: state.e2ee?.enabled ? form.encrypt.checked : false,
             }),
         });
         status.innerHTML = `Created case #${esc(created.id)} (${statusChip(created.status)}). `;
@@ -933,6 +1135,8 @@ document.getElementById('collab-form').addEventListener('submit', async (event) 
         });
         status.appendChild(link);
         form.reset();
+        // reset() clears the Encrypt box too; the partner is still selected, so its precheck comes back.
+        renderEncryptRow(state.formTemplate.receiverCompanyId ?? state.selectedPartner?.companyId ?? null);
     } catch (err) {
         status.textContent = `Failed: ${err.message}`;
     }

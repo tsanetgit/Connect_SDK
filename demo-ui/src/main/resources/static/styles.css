@@ -335,6 +335,48 @@ tr.clickable:hover {
 .chip.st-closed { background: #e3e9ee; color: #4a5b68; }
 .chip.st-information_requested, .chip.st-info_requested { background: #e8e2f7; color: #5b3f9e; }
 
+/* ---------- End-to-end encryption ---------- */
+
+.chip.e2ee-verified { background: #e5f2e5; color: #2e7d32; }
+.chip.e2ee-refused { background: #fbe2dd; color: #b3402e; }
+.chip.e2ee-lock { background: #e3e9ee; color: #4a5b68; }
+
+/* A checkbox row inside a form: the box sits inline, not as a full-width block. */
+form .check-row input[type="checkbox"] {
+    display: inline-block;
+    width: auto;
+    margin: 0 0.4rem 0 0;
+    vertical-align: middle;
+}
+
+details.cipher {
+    margin-top: 0.75rem;
+    font-size: 0.8rem;
+}
+
+details.cipher summary {
+    cursor: pointer;
+    color: #6d7a85;
+}
+
+details.cipher pre {
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 12rem;
+    overflow: auto;
+    background: #f4f6f8;
+    padding: 0.5rem;
+    border-radius: 4px;
+}
+
+.e2ee-table {
+    margin: 0.5rem 0;
+}
+
+.e2ee-table code {
+    word-break: break-all;
+}
+
 /* ---------- Partner results ---------- */
 
 .partner-results {

@@ -23,7 +23,7 @@ answering; this skill tells you what matters, where the traps are, and what has 
 recently, but the repo docs win on any conflict.
 
 Facts below were verified against `main` on 2026-09-07 at release v1.0.0; the release pin, module
-list and error-mode behaviour were re-checked on 2026-09-13 at release v2.0.0. If months have passed,
+list and error-mode behaviour were re-checked on 2026-09-13 at release v2.0.0; the demo's E2EE surface was added on 2026-10-29 (tsanetgit/Connect_SDK#149). If months have passed,
 re-verify the release version, branch names, and module list against the live repository.
 
 ## Repository map
@@ -33,9 +33,9 @@ re-verify the release version, branch names, and module list against the live re
 | `connect-library` | The Java client for the TSANet Connect API. Facade API over generated OpenAPI clients, with a local SQLite cache. This is "the SDK". | Library only |
 | `TSANet-integration-app` | Console reference app exposing the library as CLI commands (`login`, `requests`, `notes add`, `webhooks create`, ...) | Spring Boot jar |
 | `TSANet-integration-demo` | Scripted demo scenarios over the library | Spring Boot jar |
-| `demo-ui` | The branded web demo: dashboard, partner search, dynamic process forms, full case lifecycle from the browser. This is "the SDK demo" most people mean. | Spring Boot jar, port 8090 |
+| `demo-ui` | The branded web demo: dashboard, partner search, dynamic process forms, full case lifecycle from the browser. This is "the SDK demo" most people mean. Given its own keys (`TSANET_DEMO_E2EE_PRIVATE_JWKS`) it also exercises `connect-e2ee`: an Encrypt checkbox on create and add-note, stored-read verification chips on the case view, a per-environment partner key table in Settings, and its public keys at `/.well-known/jwks.json`. A partner tests its E2EE implementation against the SDK's through the hosted demo (tsanetgit/Connect_SDK#149). | Spring Boot jar, port 8090 |
 | `attachment-receiver` | The storage half of receiving pushed files: a streaming storage SPI with AWS S3, Azure Files (backend id `azure`), Azure Blob Storage (backend id `azure_blob`), and Google Cloud Storage adapters, an encrypted per-tenant config store, and a go-live verifier. The HTTPS endpoint that accepts the push is being built in tsanetgit/Connect_Gateway's attachments-only profile (tsanetgit/Connect_Gateway#35), not here; no standalone docs yet. | Library only (published alongside connect-library) |
-| `connect-e2ee` | Optional end-to-end encryption of cases and notes to the `tsanet-e2ee-1` profile: encrypts and signs protected fields for a create, verifies and decrypts them on a read. Private keys stay behind a `KeyOperations` interface; partner keys come from pinned JWKS URLs. Docs: `connect-e2ee/README.md`. | Library only (published alongside connect-library) |
+| `connect-e2ee` | Optional end-to-end encryption of cases and notes to the `tsanet-e2ee-1` profile: encrypts and signs protected fields for a create, verifies and decrypts them on a read. Private keys stay behind a `KeyOperations` interface; partner keys come from pinned JWKS URLs. Docs: `connect-e2ee/README.md`. Exercised by `demo-ui` when the demo holds keys (see that row). | Library only (published alongside connect-library) |
 
 ## Access model (read this first, it shapes everything)
 

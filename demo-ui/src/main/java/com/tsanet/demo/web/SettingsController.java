@@ -1,5 +1,6 @@
 package com.tsanet.demo.web;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.attachments.v2.AttachmentV2Exception;
 import com.tsanet.api.attachments.v2.StorageConfig;
@@ -7,7 +8,10 @@ import com.tsanet.api.attachments.v2.StorageTarget;
 import com.tsanet.api.attachments.v2.StorageTestResult;
 import com.tsanet.demo.config.CredentialsStore;
 import com.tsanet.demo.config.DemoProperties;
+import com.tsanet.demo.config.E2eeKeys;
 import com.tsanet.demo.config.EnvironmentService;
+import com.tsanet.demo.config.PartnerKeysStore;
+import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.function.Supplier;
@@ -48,11 +52,14 @@ public class SettingsController {
                     creds.isPresent(),
                     creds.map(CredentialsStore.Credentials::principal).orElse(null),
                     creds.map(CredentialsStore.Credentials::mode).orElse(null),
-                    e.getValue().oauthAvailable()
+                    e.getValue().oauthAvailable(),
+                    partnerKeyStatuses(e.getKey())
                 );
             })
             .toList();
-        return new SettingsStatus(environments.activeEnvironment(), envs, properties.credentialChangesLocked());
+        boolean e2ee = environments.e2eeKeys().enabled();
+        return new SettingsStatus(environments.activeEnvironment(), envs, properties.credentialChangesLocked(),
+            new E2eeStatus(e2ee, e2ee ? JwksController.PATH : null));
     }
 
     /**
@@ -66,6 +73,81 @@ public class SettingsController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                 "Credentials are managed by the operator of this demo (tsanet.demo.credentials-locked)");
         }
+    }
+
+    /**
+     * The lock covers the E2EE partner table too (Shawn's decision on tsanetgit/Connect_SDK#155):
+     * on a locked demo any gate login could otherwise replace a partner's keys with its own, and
+     * every later Encrypt to that company would go to the wrong key until a redeploy. Checked first,
+     * before the body is looked at. On a locked hosted demo the table comes from the seed variable.
+     */
+    private void requirePartnerTableUnlocked() {
+        if (properties.credentialChangesLocked()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "The E2EE partner table is managed by the operator of this demo (tsanet.demo.credentials-locked)");
+        }
+    }
+
+    // With E2EE off the table isn't read: the page shows nothing E2EE, as before #149.
+    private List<PartnerKeyStatus> partnerKeyStatuses(String env) {
+        if (!environments.e2eeKeys().enabled()) {
+            return List.of();
+        }
+        return environments.partnerKeysFor(env).entries().entrySet().stream()
+            .map(e -> new PartnerKeyStatus(e.getKey(), e.getValue().source(),
+                e.getValue().jwksUrl() == null ? null : e.getValue().jwksUrl().toString(), e.getValue().kids()))
+            .toList();
+    }
+
+    /**
+     * Adds or replaces {@code env}'s key entry for partner {@code companyId}: a pinned JWKS URL or
+     * a pasted public JWK set, exactly one. Refused before anything is parsed while E2EE is off,
+     * so the demo makes no JOSE call on any path without its own keys (tsanetgit/Connect_SDK#149).
+     */
+    @PutMapping("/api/settings/{env}/e2ee-partners/{companyId}")
+    public SettingsStatus putPartnerKeys(@PathVariable String env, @PathVariable String companyId,
+                                         @RequestBody PartnerKeysBody body) {
+        PartnerKeysStore store = partnerKeyStore(env);
+        boolean url = !isBlank(body.jwksUrl());
+        boolean jwks = !isBlank(body.jwks());
+        if (url == jwks) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Give exactly one of jwksUrl and jwks");
+        }
+        try {
+            if (url) {
+                URI jwksUrl = URI.create(body.jwksUrl().strip());
+                // The card admits HTTPS only (#149 §1). The module also allows loopback HTTP for a local key
+                // server in tests; a gate login, the guest included, must not be able to make the hosted
+                // task fetch its own ports through here.
+                if (!"https".equalsIgnoreCase(jwksUrl.getScheme())) {
+                    throw new IllegalArgumentException("A partner JWKS URL must be https");
+                }
+                store.putUrl(companyId, jwksUrl);
+            } else {
+                store.putJwks(companyId, body.jwks());
+            }
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+        return getSettings();
+    }
+
+    @DeleteMapping("/api/settings/{env}/e2ee-partners/{companyId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removePartnerKeys(@PathVariable String env, @PathVariable String companyId) {
+        partnerKeyStore(env).remove(companyId);
+    }
+
+    private PartnerKeysStore partnerKeyStore(String env) {
+        requirePartnerTableUnlocked();
+        if (!environments.e2eeKeys().enabled()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "E2EE is off for this demo: " + E2eeKeys.VARIABLE + " is not set");
+        }
+        if (!environments.environments().containsKey(env)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown environment: " + env);
+        }
+        return environments.partnerKeysFor(env);
     }
 
     @PostMapping("/api/settings/environment")
@@ -259,6 +341,18 @@ public class SettingsController {
                                       String clientId, String clientSecret) {
     }
 
+    /** One partner's key entry: {@code source} is "url" (with {@code jwksUrl}) or "jwks" (with the pasted set's {@code kids}). */
+    public record PartnerKeyStatus(String companyId, String source, String jwksUrl, List<String> kids) {
+    }
+
+    /** Exactly one of {@code jwksUrl} (HTTPS) and {@code jwks} (a public JWK set, as JSON text) is set. */
+    public record PartnerKeysBody(String jwksUrl, String jwks) {
+    }
+
+    /** Whether the demo holds its own E2EE keys, and where it publishes the public ones (null when off). */
+    public record E2eeStatus(boolean enabled, String jwksPath) {
+    }
+
     public record EnvironmentStatus(
         String key,
         String label,
@@ -266,11 +360,14 @@ public class SettingsController {
         boolean configured,
         String username,
         String mode,
-        boolean oauthAvailable
+        boolean oauthAvailable,
+        // Left out when empty, so with E2EE off each environment's status is as it was.
+        @JsonInclude(JsonInclude.Include.NON_EMPTY) List<PartnerKeyStatus> e2eePartners
     ) {
     }
 
-    /** {@code credentialsLocked} mirrors {@code tsanet.demo.credentials-locked}, so the page needn't guess. */
-    public record SettingsStatus(String activeEnvironment, List<EnvironmentStatus> environments, boolean credentialsLocked) {
+    /** {@code credentialsLocked} mirrors {@code tsanet.demo.credentials-locked}, so the page needn't guess; it covers the partner table too. */
+    public record SettingsStatus(String activeEnvironment, List<EnvironmentStatus> environments, boolean credentialsLocked,
+                                 E2eeStatus e2ee) {
     }
 }

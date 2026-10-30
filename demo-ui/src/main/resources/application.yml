@@ -65,6 +65,16 @@ tsanet:
         api-base-url: https://connect2.tahoelab.us
         entra-tenant-id: ${TSANET_DEMO_ENTRA_TENANT:}
         entra-audience: ${TSANET_DEMO_ENTRA_AUDIENCE_DEV:}
+    # End-to-end encryption (tsanetgit/Connect_SDK#149). Off, and the demo unchanged, until the
+    # private JWKS is set: one RSA-OAEP-256 encryption key and one P-256 signing key, generated
+    # by the key generator (docs/RUNBOOK.md) and kept in SSM on the hosted demo. One key pair
+    # serves both environments; the partner table is per environment, and each seed restores
+    # that environment's table when its file is absent (the hosted data dir is ephemeral).
+    e2ee:
+      private-jwks: ${TSANET_DEMO_E2EE_PRIVATE_JWKS:}
+      partner-seeds:
+        beta: ${TSANET_DEMO_E2EE_PARTNERS_BETA:}
+        dev: ${TSANET_DEMO_E2EE_PARTNERS_DEV:}
     auth:
       # Blank usernames fall back to "demo" and "guest" in DemoAuthProperties, the one
       # place those defaults live.

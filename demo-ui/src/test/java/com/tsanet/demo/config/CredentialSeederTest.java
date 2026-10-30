@@ -116,7 +116,7 @@ class CredentialSeederTest {
         // during refresh (singleton initialization); that the embedded server starts only after
         // refresh is Spring Boot's lifecycle (WebServerStartStopLifecycle), not asserted here.
         new ApplicationContextRunner()
-            .withUserConfiguration(Bound.class, EnvironmentService.class, CredentialSeeder.class)
+            .withUserConfiguration(Bound.class, DemoSessionConfiguration.class, E2eeKeys.class, EnvironmentService.class, CredentialSeeder.class)
             .withPropertyValues(
                 "tsanet.demo.environments.beta.label=Beta",
                 "tsanet.demo.environments.beta.api-base-url=https://connect.example",
