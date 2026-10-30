@@ -73,6 +73,8 @@ public class PartnerKeysStore {
                 if (e.getValue().jwksUrl() != null) {
                     // A URL with no host (https:foo) passes the scheme check but can't be fetched, so it would
                     // otherwise surface only on a later Encrypt. Here it covers the card, the seed and the file.
+                    // PROVISIONAL(tsanetgit/Connect_SDK#162): the module should refuse this in PinnedJwksPartnerKeys;
+                    // this check goes once the demo picks that up.
                     if (e.getValue().jwksUrl().getHost() == null) {
                         throw new IllegalArgumentException("The JWKS URL for company " + e.getKey() + " has no usable host");
                     }
