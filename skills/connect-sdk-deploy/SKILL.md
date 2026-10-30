@@ -103,6 +103,9 @@ versions. Do not build from the historical `oauth` branch: it merged to `main` i
 
 These bite regardless of path, and none of them are visible in the OpenAPI schema:
 
+- **Diagnostic redaction is not serialization redaction.** Credential and case/note token records
+  redact `toString()`, but accessors and serialized bodies still contain the values. Do not log
+  them. Pinned JWKS URLs must include a host; the E2EE module rejects host-less URLs at construction.
 - **Two error modes, and the SDK is on the right one.** By default the Connect API's
   legacy error mode answers a wrong username or password with
   `500 "Error processing request"`; sending `Accept: application/json, application/problem+json`

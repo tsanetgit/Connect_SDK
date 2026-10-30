@@ -11,4 +11,8 @@ public record CaseResponseDto(
     String nextSteps,
     String createdAt
 ) {
+    @Override
+    public String toString() {
+        return "CaseResponseDto[<redacted>]";
+    }
 }

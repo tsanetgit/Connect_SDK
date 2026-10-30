@@ -166,8 +166,10 @@ entered per environment on the Settings card and stored in the data dir, so it i
 like the credentials. To restore it at startup set `TSANET_DEMO_E2EE_PARTNERS_BETA` and/or
 `TSANET_DEMO_E2EE_PARTNERS_DEV` (SSM SecureStrings and `secrets` entries like the above) to the
 table as JSON: each partner company id maps to `{"jwksUrl": "https://..."}` or
-`{"jwks": {"keys": [...]}}` (public keys only; a set with a private key is refused at startup). The
-seed applies only when that environment's table file is absent; a table edited on the card wins
+`{"jwks": {"keys": [...]}}` (public keys only; a set with a private key is refused at startup).
+SDK also refuses a JWKS URL without a host at startup or when saving the table; use a full
+`https://<host>/<path>` URL, not `https:<host>`.
+The seed applies only when that environment's table file is absent; a table edited on the card wins
 until the next redeploy. On a locked demo (`TSANET_DEMO_CREDENTIALS_LOCKED`) the card cannot
 edit the table, so the seed is the only way the pilot's keys get in. The same JSON shape is what the demo writes to `e2ee-partners-<env>.json`
 in the data dir, so a table built on the card can be copied out as the seed.

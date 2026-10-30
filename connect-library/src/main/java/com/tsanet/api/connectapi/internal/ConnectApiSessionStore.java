@@ -23,6 +23,11 @@ public class ConnectApiSessionStore {
         Instant expiresAt,
         UserContextDto userContext
     ) {
+        @Override
+        public String toString() {
+            return "Snapshot[<redacted>]";
+        }
+
         static final Snapshot EMPTY = new Snapshot(null, null, null, null, null, null);
 
         boolean isExpired(Instant now) {

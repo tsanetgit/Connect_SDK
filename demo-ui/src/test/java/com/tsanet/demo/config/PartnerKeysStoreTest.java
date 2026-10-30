@@ -88,6 +88,11 @@ class PartnerKeysStoreTest {
         assertThat(store.entries()).isEmpty();
         assertThat(file()).doesNotExist();
 
+        assertThatThrownBy(() -> store.putUrl("2087", URI.create("https:keys.partner.example")))
+            .isInstanceOf(IllegalArgumentException.class).hasMessage("A JWKS URL must have a host");
+        assertThat(store.entries()).isEmpty();
+        assertThat(file()).doesNotExist();
+
         store.putUrl("2087", URI.create("https://keys.partner.example/.well-known/jwks.json"));
         assertThat(store.entries().get("2087").source()).isEqualTo(PartnerKeysStore.SOURCE_URL);
         assertThat(store.entries().get("2087").kids()).isEmpty();
@@ -129,6 +134,18 @@ class PartnerKeysStoreTest {
         Files.writeString(file(), plainHttp);
         assertThatThrownBy(() -> new PartnerKeysStore(file(), null, SEED_VAR))
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("Fix or delete the file").hasMessageContaining("HTTPS");
+    }
+
+    @Test
+    void hostlessUrlsInSeedsAndFilesAreRejectedByTheModule() throws Exception {
+        String hostless = "{\"2087\": {\"jwksUrl\": \"https:keys.partner.example\"}}";
+        assertThatThrownBy(() -> new PartnerKeysStore(file(), hostless, SEED_VAR))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining(SEED_VAR)
+            .hasMessageContaining("must have a host");
+        Files.writeString(file(), hostless);
+        assertThatThrownBy(() -> new PartnerKeysStore(file(), null, SEED_VAR))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("Fix or delete the file")
+            .hasMessageContaining("must have a host");
     }
 
     @Test

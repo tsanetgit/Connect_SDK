@@ -51,6 +51,9 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
             if (!"https".equalsIgnoreCase(url.getScheme()) && !isLoopback(url)) {
                 throw new IllegalArgumentException("A JWKS URL must be HTTPS");
             }
+            if (url.getHost() == null || url.getHost().isBlank()) {
+                throw new IllegalArgumentException("A JWKS URL must have a host");
+            }
         }
         this.jwksUrls = Map.copyOf(jwksUrls);
         this.cacheLifetime = cacheLifetime;

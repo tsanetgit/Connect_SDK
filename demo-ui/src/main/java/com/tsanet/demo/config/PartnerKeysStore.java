@@ -74,7 +74,7 @@ public class PartnerKeysStore {
                     urls.put(e.getKey(), e.getValue().jwksUrl());
                 }
             }
-            // The constructor is also the URL check: anything but HTTPS (or loopback HTTP) is refused.
+            // The module constructor validates the scheme and host of every URL.
             // Insertion order is kept (Map.copyOf would shuffle the listing and the file between runs).
             return new Snapshot(Collections.unmodifiableMap(new LinkedHashMap<>(entries)),
                 new PinnedJwksPartnerKeys(urls, CACHE_LIFETIME));
@@ -91,7 +91,7 @@ public class PartnerKeysStore {
      */
     public PartnerKeysStore(Path path, String seedJson, String seedName) {
         this.path = Objects.requireNonNull(path);
-        // Snapshot.of runs inside each try: it holds the URL scheme check, so a plain-http URL in a
+        // Snapshot.of runs inside each try: it holds the URL check, so an invalid URL in a
         // seed or a file is reported with the same message as any other unusable entry.
         if (Files.exists(path)) {
             try {

@@ -104,6 +104,11 @@ public class CredentialsStore {
      */
     public record Credentials(String mode, String username, String password, String clientId, String clientSecret) {
 
+        @Override
+        public String toString() {
+            return "Credentials[<redacted>]";
+        }
+
         static Credentials password(String username, String password) {
             return new Credentials(MODE_PASSWORD, username, password, null, null);
         }

@@ -12,6 +12,9 @@ end-to-end encryption of cases and notes over `connect-library`; see
 the SDK facades, which exercises `connect-e2ee` when given its own keys: a partner can test its
 E2EE implementation against the SDK's through the hosted demo, `tsanetgit/Connect_SDK#149`).
 
+Secret-bearing SDK and configuration records redact their `toString()` output, including case
+and note tokens. Accessors and serialization still carry the original values; do not log those.
+
 ## Building
 
 The client code in `connect-library` is generated from the Connect API's OpenAPI

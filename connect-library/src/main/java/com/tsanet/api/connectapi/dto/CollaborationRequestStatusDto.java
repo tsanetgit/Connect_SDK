@@ -34,6 +34,11 @@ public record CollaborationRequestStatusDto(
     String description,
     List<CaseCustomFieldDto> customFields
 ) {
+    @Override
+    public String toString() {
+        return "CollaborationRequestStatusDto[<redacted>]";
+    }
+
     /**
      * Compatibility constructor from before {@code submitterCaseNumber}, {@code description} and
      * {@code customFields} existed; leaves all three null, which readers must treat as "not

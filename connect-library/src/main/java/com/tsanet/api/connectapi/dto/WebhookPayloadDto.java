@@ -6,4 +6,8 @@ public record WebhookPayloadDto(
     String noteToken,
     String timestamp
 ) {
+    @Override
+    public String toString() {
+        return "WebhookPayloadDto[<redacted>]";
+    }
 }

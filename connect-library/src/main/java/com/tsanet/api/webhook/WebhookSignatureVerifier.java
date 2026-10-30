@@ -46,5 +46,9 @@ public final class WebhookSignatureVerifier {
     }
 
     public record SecretCandidate(Long subscriptionId, String secret) {
+        @Override
+        public String toString() {
+            return "SecretCandidate[<redacted>]";
+        }
     }
 }

@@ -2,6 +2,10 @@
 
 Standalone Java client for the TSANet Connect API. The library wraps generated OpenAPI clients behind a small facade API, and persists fetched data to a local SQLite database for offline review.
 
+Credential and token-bearing records redact `toString()`, including case, request and note tokens,
+which are treated as sensitive identifiers. Constructors, accessors and serialization are unchanged:
+redaction is not permission to log accessor values, serialized records or HTTP bodies.
+
 ## Maven dependency
 
 ```xml

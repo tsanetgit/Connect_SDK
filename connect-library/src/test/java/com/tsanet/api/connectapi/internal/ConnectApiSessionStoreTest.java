@@ -9,6 +9,26 @@ import org.junit.jupiter.api.Test;
 
 class ConnectApiSessionStoreTest {
     @Test
+    void snapshotRedactsBearerWithoutChangingSessionAccessors() {
+        String bearer = "synthetic-snapshot-bearer-private";
+        String username = "synthetic-snapshot-user";
+        String accountId = "synthetic-snapshot-account";
+        Instant expiresAt = Instant.parse("2030-01-01T12:00:00Z");
+        UserContextDto context = new UserContextDto(7L, "Example", 42L, username, username, "Test", "User");
+        ConnectApiSessionStore.Snapshot snapshot = new ConnectApiSessionStore.Snapshot(
+            bearer, username, accountId, AuthMode.CLIENT_CREDENTIALS, expiresAt, context);
+
+        assertThat(snapshot.toString()).isEqualTo("Snapshot[<redacted>]").doesNotContain(bearer);
+        assertThat(snapshot.bearerToken()).isEqualTo(bearer);
+        assertThat(snapshot.username()).isEqualTo(username);
+        assertThat(snapshot.accountId()).isEqualTo(accountId);
+        assertThat(snapshot.authMode()).isEqualTo(AuthMode.CLIENT_CREDENTIALS);
+        assertThat(snapshot.expiresAt()).isEqualTo(expiresAt);
+        assertThat(snapshot.userContext()).isSameAs(context);
+        assertThat(ConnectApiSessionStore.Snapshot.EMPTY.toString()).isEqualTo("Snapshot[<redacted>]");
+    }
+
+    @Test
     void itTracksPasswordSessionWithoutExpiry() {
         ConnectApiSessionStore store = new ConnectApiSessionStore();
         store.savePassword("api@test.com", "token");

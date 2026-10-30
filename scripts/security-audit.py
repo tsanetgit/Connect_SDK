@@ -251,6 +251,79 @@ def check_credentials_not_logged(root):
                "no log statements referencing credential-shaped names", cat)
 
 
+def check_record_secrets_redacted(root):
+    """Require an explicit toString on main-source records carrying secrets."""
+    # Mask comments and literals without moving line numbers or delimiters. Braces
+    # in a string must not end a record; a commented-out override must not pass it.
+    non_code = re.compile(
+        r'//[^\n]*|/\*.*?\*/|"""(?:.*?)"""|"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'',
+        re.S)
+    declaration = re.compile(r'\brecord\s+(\w+)\s*(?:<[^{};]*?>\s*)?\(')
+    secret_name = re.compile(
+        r'(?i)\w*(?:password|passwd|pwd|secret|token|credential|api_?key|private_?key)\w*')
+    override = re.compile(
+        r'\b(?:final\s+)?public\s+(?:final\s+)?(?:java\.lang\.)?String\s+toString\s*\(\s*\)\s*\{')
+
+    def closing(text, start, opening, ending):
+        depth = 0
+        for pos in range(start, len(text)):
+            if text[pos] == opening:
+                depth += 1
+            elif text[pos] == ending:
+                depth -= 1
+                if depth == 0:
+                    return pos
+        return None
+
+    def has_secret_component(header):
+        depth, start = 0, 0
+        for pos, char in enumerate(header + ','):
+            if char in '(<{[':
+                depth += 1
+            elif char in ')>}]':
+                depth -= 1
+            elif char == ',' and depth == 0:
+                component = header[start:pos].strip()
+                name = re.search(r'(\w+)\s*(?:\[\s*\]\s*)*$', component)
+                # Flags such as credentialsLocked report state, not a credential value.
+                if (name and secret_name.fullmatch(name.group(1))
+                        and not re.search(r'\b(?:boolean|Boolean)\s+\w+$', component)):
+                    return True
+                start = pos + 1
+        return False
+
+    hits = []
+    for rel, body in walk_sources(root):
+        if not rel.endswith(".java") or "/src/main/java/" not in "/" + rel.replace(os.sep, "/"):
+            continue
+        code = non_code.sub(lambda m: re.sub(r'[^\n]', ' ', m.group()), body)
+        for match in declaration.finditer(code):
+            header_end = closing(code, match.end() - 1, '(', ')')
+            if header_end is None:
+                continue
+            if not has_secret_component(code[match.end():header_end]):
+                continue
+            body_start = code.find('{', header_end)
+            body_end = closing(code, body_start, '{', '}') if body_start != -1 else None
+            if body_end is None:
+                continue
+            record_body = code[body_start + 1:body_end]
+            # Only this record's method counts, not one on a nested record/class.
+            if any(record_body[:m.start()].count('{') == record_body[:m.start()].count('}')
+                   for m in override.finditer(record_body)):
+                continue
+            line = code[:match.start()].count("\n") + 1
+            hits.append(f"{rel}:{line} ({match.group(1)})")
+    if hits:
+        record("FAIL", "secret-bearing records override toString",
+               "generated toString exposes secret-shaped components: " + "; ".join(sorted(hits)),
+               "credentials")
+    else:
+        record("PASS", "secret-bearing records override toString",
+               "all main-source records with secret-shaped components have an explicit toString",
+               "credentials")
+
+
 # ── Transport ───────────────────────────────────────────────────────────
 
 def check_tls(root):
@@ -323,6 +396,7 @@ def main():
         check_dependency_pinning(root)
         check_no_embedded_secrets(root)
         check_credentials_not_logged(root)
+        check_record_secrets_redacted(root)
         check_tls(root)
         check_deprecated_endpoints(root)
     except Exception as e:  # noqa: BLE001 - a crashed audit must not read as a pass

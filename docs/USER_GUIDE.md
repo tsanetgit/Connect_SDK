@@ -46,6 +46,8 @@ Each environment keeps an isolated credentials file (mode 600) and its own
 SQLite cache under `~/.tsanet-demo-ui/` (ephemeral `/tmp` in the container),
 so BETA and DEV data never mix. Passwords and secrets are never committed, logged, or
 returned by the API — `GET /api/settings` reports only the username.
+Credential request and configuration records also redact their diagnostic `toString()` output;
+this does not sanitize raw HTTP bodies or individual accessor values.
 **Clear** wipes that environment's file.
 
 ### V2 receiver storage

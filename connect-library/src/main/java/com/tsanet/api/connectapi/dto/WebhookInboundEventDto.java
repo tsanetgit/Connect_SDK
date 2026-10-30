@@ -13,4 +13,8 @@ public record WebhookInboundEventDto(
     String syncMessage,
     String rawPayload
 ) {
+    @Override
+    public String toString() {
+        return "WebhookInboundEventDto[<redacted>]";
+    }
 }

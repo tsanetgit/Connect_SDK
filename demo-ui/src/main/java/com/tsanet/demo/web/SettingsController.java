@@ -339,6 +339,10 @@ public class SettingsController {
     /** {@code mode} is "password" (default when absent) or "oauth". */
     public record SaveCredentialsBody(String mode, String username, String password,
                                       String clientId, String clientSecret) {
+        @Override
+        public String toString() {
+            return "SaveCredentialsBody[<redacted>]";
+        }
     }
 
     /** One partner's key entry: {@code source} is "url" (with {@code jwksUrl}) or "jwks" (with the pasted set's {@code kids}). */

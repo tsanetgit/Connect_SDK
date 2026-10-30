@@ -143,6 +143,40 @@ class SupportingPiecesTest {
     }
 
     @Test
+    void hostlessJwksUrlsAreRefusedBeforeEncrypting() {
+        // Without constructor validation this reaches encryptCase and throws "unsupported URI".
+        assertThatThrownBy(() -> {
+            PartnerKeys partners = new PinnedJwksPartnerKeys(
+                Map.of(Vectors.MEMBER_B, URI.create("https:keys.partner.example")), Duration.ZERO);
+            E2eeProfile profile = new E2eeProfile(Vectors.MEMBER_A, v.memberAKeys(), partners,
+                (company, jti, issuedAt) -> ReplayGuard.Result.FIRST, Vectors.clockAt(1_800_000_000L));
+            profile.encryptCase(new Records.CasePlaintext("A-1", "summary", "description", Map.of(), java.util.List.of()),
+                Vectors.MEMBER_B);
+        }).isInstanceOf(IllegalArgumentException.class).hasMessage("A JWKS URL must have a host");
+    }
+
+    @Test
+    void hostlessJwksUrlsAreRefusedBeforeVerifying() {
+        // Without constructor validation this reaches verifyCase and throws "unsupported URI".
+        assertThatThrownBy(() -> {
+            PartnerKeys partners = new PinnedJwksPartnerKeys(
+                Map.of(Vectors.MEMBER_A, URI.create("https:keys.partner.example")), Duration.ZERO);
+            E2eeProfile profile = new E2eeProfile(Vectors.MEMBER_B, v.memberBKeys(), partners,
+                (company, jti, issuedAt) -> ReplayGuard.Result.FIRST, Vectors.clockAt(v.iat("example1_case_create")));
+            profile.verifyCase(v.caseRecord(), E2eeProfile.Receipt.FIRST_RECEIPT);
+        }).isInstanceOf(IllegalArgumentException.class).hasMessage("A JWKS URL must have a host");
+    }
+
+    @Test
+    void hostlessJwksUrlShapesAreRejectedWithoutEchoingTheUrl() {
+        for (String url : java.util.List.of("https:keys.partner.example", "https:/jwks",
+            "https:///jwks?api_key=test-placeholder", "https://keys_partner.example/jwks")) {
+            assertThatThrownBy(() -> new PinnedJwksPartnerKeys(Map.of("1", URI.create(url)), Duration.ZERO))
+                .isInstanceOf(IllegalArgumentException.class).hasMessage("A JWKS URL must have a host");
+        }
+    }
+
+    @Test
     void softwareSigningGivesTheRaw64ByteFormThatVerifies() throws Exception {
         KeyOperations keys = v.memberAKeys();
         String signingInput = Base64URL.encode("{\"alg\":\"ES256\"}") + "." + Base64URL.encode("{}");

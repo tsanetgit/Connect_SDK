@@ -24,6 +24,11 @@ public record ConnectFacadeProperties(
     }
 
     public record Auth(String username, String password) {
+        @Override
+        public String toString() {
+            return "Auth[<redacted>]";
+        }
+
         public boolean isConfigured() {
             return username != null && !username.isBlank() && password != null && !password.isBlank();
         }
@@ -40,6 +45,11 @@ public record ConnectFacadeProperties(
         AccountAuthProperties auth,
         java.util.List<Long> allowedReceiverCompanyIds
     ) {
+        @Override
+        public String toString() {
+            return "ApplicationUserAccountConfig[<redacted>]";
+        }
+
         /** The account, with its V2 receiver allowlist ({@code allowed-receiver-company-ids}); absent or empty is unrestricted. */
         public ApplicationUserAccount toAccount() {
             return baseAccount().withAllowedReceiverCompanyIds(allowedReceiverCompanyIds);
@@ -76,6 +86,10 @@ public record ConnectFacadeProperties(
         String audience,
         String scope
     ) {
+        @Override
+        public String toString() {
+            return "AccountAuthProperties[<redacted>]";
+        }
     }
 
     public ApplicationUserAccountRegistry toAccountRegistry() {

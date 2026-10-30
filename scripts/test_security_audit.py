@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Probes for scripts/security-audit.py's embedded-credentials check (#63).
+"""Probes for scripts/security-audit.py's credential checks (#63, #162).
 
 Each probe builds a throwaway tree (a pom.xml so the script accepts the root,
 plus one fixture file), runs the check, and asserts the verdict. The point is
@@ -158,6 +158,88 @@ class EmbeddedCredentialsProbe(unittest.TestCase):
         self.assertPasses("Login.java", "String password = credentials.password;\n")
 
 
+class RecordSecretsProbe(unittest.TestCase):
+
+    def verdict(self, content, source="src/main/java/Config.java"):
+        audit = load_audit()
+        with tempfile.TemporaryDirectory() as root:
+            path = os.path.join(root, source)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w") as f:
+                f.write(content)
+            audit.check_record_secrets_redacted(root)
+        [result] = audit.RESULTS
+        return result["status"], result["detail"]
+
+    def test_single_line_secret_record_fails(self):
+        status, detail = self.verdict("public record Auth(String username, String password) {}")
+        self.assertEqual("FAIL", status)
+        self.assertIn("Config.java:1 (Auth)", detail)
+
+    def test_multiline_secret_record_fails(self):
+        status, detail = self.verdict(
+            "public record Auth(\n String clientId,\n String clientSecret,\n String accessToken\n) {}")
+        self.assertEqual("FAIL", status)
+        self.assertIn("(Auth)", detail)
+
+    def test_explicit_override_passes(self):
+        self.assertEqual("PASS", self.verdict(
+            'record Auth(String password) {\n @Override public String toString() { return "Auth[redacted]"; }\n}')[0])
+        self.assertEqual("PASS", self.verdict(
+            'record Auth(String password) { public final String toString() { return "redacted"; } }')[0])
+
+    def test_generic_type_names_are_not_component_names(self):
+        self.assertEqual("PASS", self.verdict(
+            "record Config(Map<Secret, String> values, List<Token> names) {}")[0])
+        self.assertEqual("FAIL", self.verdict(
+            "record Config(Map<String, String> credentials) {}")[0])
+
+    def test_comment_or_string_is_not_an_override(self):
+        self.assertEqual("FAIL", self.verdict(
+            'record Auth(String password) {\n // public String toString() { }\n'
+            'String text() { return "public String toString() { }"; }\n}')[0])
+
+    def test_nested_or_neighbor_override_does_not_hide_secret(self):
+        for content in (
+            'record Auth(String password) { record Inner() { public String toString() { return ""; } } }',
+            'record Other() { public String toString() { return ""; } } record Auth(String password) {}',
+        ):
+            with self.subTest(content=content):
+                self.assertEqual("FAIL", self.verdict(content)[0])
+
+    def test_nested_secret_record_is_checked(self):
+        self.assertEqual("FAIL", self.verdict(
+            'class Config { record Auth(String bearerToken) {} }')[0])
+        self.assertEqual("FAIL", self.verdict(
+            'record Config(String password) { public String toString() { return ""; }\n'
+            'record Auth(String bearerToken) {} }')[0])
+
+    def test_annotation_parentheses_and_literal_braces(self):
+        self.assertEqual("FAIL", self.verdict(
+            'record Auth(@Label(value = "}") String password) {}')[0])
+        self.assertEqual("PASS", self.verdict(
+            'record Auth(String password) { String text() { return "}"; }\n'
+            'public String toString() { return "redacted"; } }')[0])
+
+    def test_token_variants_are_secret_shaped(self):
+        for name in ("caseToken", "requestToken", "noteToken", "token", "apiKey", "privateKey"):
+            with self.subTest(name=name):
+                self.assertEqual("FAIL", self.verdict(f"record Value(String {name}) {{}}")[0])
+
+    def test_text_block_and_character_delimiters_do_not_hide_a_record(self):
+        self.assertEqual("FAIL", self.verdict(
+            'class Config { String text = """\n record Fake() { public String toString() {} }\n""";\n'
+            "char brace = '}'; record Auth(String password) {} }")[0])
+
+    def test_non_secret_record_and_test_source_pass(self):
+        self.assertEqual("PASS", self.verdict("record User(String name) {}")[0])
+        self.assertEqual("PASS", self.verdict(
+            "record Status(boolean credentialsLocked, Boolean passwordConfigured) {}")[0])
+        self.assertEqual("PASS", self.verdict(
+            "record Auth(String password) {}", "src/test/java/Auth.java")[0])
+        self.assertEqual("PASS", self.verdict("// record Auth(String password) {}")[0])
+
+
 class ExitCodeContract(unittest.TestCase):
     """The workflow keys on the exit code, so one probe runs the script for real."""
 
@@ -171,6 +253,19 @@ class ExitCodeContract(unittest.TestCase):
                                  capture_output=True, text=True)
             self.assertEqual(1, run.returncode, run.stdout + run.stderr)
             self.assertIn("FAIL  [credentials] no embedded credentials in source", run.stdout)
+
+    def test_a_secret_record_without_override_exits_one(self):
+        with tempfile.TemporaryDirectory() as root:
+            with open(os.path.join(root, "pom.xml"), "w") as f:
+                f.write("<project/>")
+            source = os.path.join(root, "src", "main", "java")
+            os.makedirs(source)
+            with open(os.path.join(source, "Auth.java"), "w") as f:
+                f.write("record Auth(\n String password\n) {}")
+            run = subprocess.run([sys.executable, SCRIPT, "--repo-root", root],
+                                 capture_output=True, text=True)
+            self.assertEqual(1, run.returncode, run.stdout + run.stderr)
+            self.assertIn("FAIL  [credentials] secret-bearing records override toString", run.stdout)
 
 
 if __name__ == "__main__":

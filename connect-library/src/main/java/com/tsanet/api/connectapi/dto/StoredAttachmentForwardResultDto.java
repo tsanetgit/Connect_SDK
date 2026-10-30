@@ -11,4 +11,8 @@ public record StoredAttachmentForwardResultDto(
     Boolean completeSuccess,
     Boolean partialSuccess
 ) {
+    @Override
+    public String toString() {
+        return "StoredAttachmentForwardResultDto[<redacted>]";
+    }
 }

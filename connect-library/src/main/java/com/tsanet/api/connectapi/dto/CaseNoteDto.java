@@ -40,6 +40,11 @@ public record CaseNoteDto(
     String manifest,
     Boolean encrypted
 ) {
+    @Override
+    public String toString() {
+        return "CaseNoteDto[<redacted>]";
+    }
+
     /**
      * Compatibility constructor from before {@code manifest} and {@code encrypted} existed;
      * leaves both null. A null {@code encrypted} means "not known" (an explicit null from the API, or

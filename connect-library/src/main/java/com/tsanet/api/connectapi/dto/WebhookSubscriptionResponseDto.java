@@ -8,4 +8,8 @@ public record WebhookSubscriptionResponseDto(
     String secret,
     String createdAt
 ) {
+    @Override
+    public String toString() {
+        return "WebhookSubscriptionResponseDto[<redacted>]";
+    }
 }

@@ -28,6 +28,15 @@ public record DemoAuthProperties(String username, String password, Guest guest) 
 
     /** The guest login; absent from the configuration binds as a record of nulls. */
     public record Guest(String username, String password) {
+        @Override
+        public String toString() {
+            return "Guest[<redacted>]";
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "DemoAuthProperties[<redacted>]";
     }
 
     public DemoAuthProperties {
