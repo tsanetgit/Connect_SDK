@@ -102,7 +102,7 @@ exactly as before.
   the demo's URL, outside the login; the panel shows the full URL to give a
   partner so its key fetcher can pin it.
 - **Partner table:** one entry per partner company id, for the companies you will
-  exchange encrypted cases with. An entry is either a **JWKS URL** (https; the
+  exchange encrypted cases with. An entry is either a **JWKS URL** (https only; the
   demo fetches and caches it) or a **pasted public JWKS** (the JSON text of the
   partner's public keys, for a partner that hardcodes its keys instead of
   publishing them). A pasted set that holds a private key is refused. **Add /

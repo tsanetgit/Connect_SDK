@@ -200,20 +200,33 @@ class CollaborationRequestsE2eeTest {
     }
 
     @Test
-    void anEncryptedSimpleCreateUsesTheE2eeOverload() throws Exception {
+    @SuppressWarnings("unchecked")
+    void anEncryptedSimpleCreateUsesTheE2eeOverloadAndEncryptsNoCustomFields() throws Exception {
         demoIs(E2eeTestVectors.MEMBER_A);
 
+        // customFieldValues on a simple create: the simple overload sends no custom fields, so the manifest
+        // must name none, or the receiver would refuse the stored record at FIELDS.
         mvc.perform(post("/api/requests").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"receiverCompanyId\":2087,\"caseNumber\":\"A-1\",\"summary\":\"" + SECRET_SUMMARY
-                    + "\",\"description\":\"d\",\"encrypt\":true}"))
+                    + "\",\"description\":\"" + SECRET_DESCRIPTION + "\",\"customFieldValues\":{\"101\":\"" + SECRET_FIELD
+                    + "\"},\"encrypt\":true}"))
             .andExpect(status().isOk());
 
         ArgumentCaptor<String> summary = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> description = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<E2eeFields> e2ee = ArgumentCaptor.forClass(E2eeFields.class);
-        verify(requests).createRequest(eq(2087L), eq("A-1"), summary.capture(), anyString(), eq(true), e2ee.capture());
+        verify(requests).createRequest(eq(2087L), eq("A-1"), summary.capture(), description.capture(), eq(true), e2ee.capture());
         verify(requests, never()).createRequest(anyLong(), anyString(), anyString(), anyString(), anyBoolean());
         assertThat(summary.getValue()).startsWith("{\"protected\"").doesNotContain(SECRET_SUMMARY);
         assertThat(e2ee.getValue().encrypted()).isTrue();
+
+        // Member B reads the stored record, which has no custom fields, and verifies it.
+        E2eeProfile b = v.profileFor(E2eeTestVectors.MEMBER_B, dir);
+        CollaborationRequestStatusDto stored = E2eeTestVectors.caseRecord(summary.getValue(), description.getValue(),
+            List.of(), e2ee.getValue().manifest(), true, "A-1");
+        Verification<DecryptedCase> result = b.verifyCase(stored, Receipt.STORED_READ);
+        assertThat(result).as("%s", result).isInstanceOf(Verified.class);
+        assertThat(((Verified<DecryptedCase>) result).content().summary()).isEqualTo(SECRET_SUMMARY);
     }
 
     @Test

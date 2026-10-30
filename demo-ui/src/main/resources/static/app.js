@@ -1008,7 +1008,7 @@ async function selectPartner(partner) {
 }
 
 // Shown only while the demo holds keys; prechecked when the partner's company has a key entry in
-// the active environment, and the hint says which. Checked without keys is a 400 from the server.
+// the active environment, and the hint says which. Checked while the demo holds no keys is a 403 from the server.
 function renderEncryptRow(partnerCompanyId) {
     const row = document.getElementById('encrypt-row');
     const hint = document.getElementById('encrypt-hint');

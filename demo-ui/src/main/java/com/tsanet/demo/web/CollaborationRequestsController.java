@@ -88,7 +88,9 @@ public class CollaborationRequestsController {
                 "either formTemplate or receiverCompanyId is required");
         }
         if (encrypt) {
-            EncryptedCase out = encryptCase(guard.e2ee(session), body, customFieldValues, body.receiverCompanyId(), null);
+            // Simple mode sends no custom fields, so none may be encrypted: a manifest naming fields the
+            // record lacks would be refused at FIELDS by the receiver.
+            EncryptedCase out = encryptCase(guard.e2ee(session), body, Map.of(), body.receiverCompanyId(), null);
             return session.collaborationRequests().createRequest(
                 body.receiverCompanyId(), out.caseNumber(), out.summary(), out.description(), true, out.e2ee());
         }

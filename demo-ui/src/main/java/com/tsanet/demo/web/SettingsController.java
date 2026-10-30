@@ -89,7 +89,14 @@ public class SettingsController {
         }
         try {
             if (url) {
-                store.putUrl(companyId, URI.create(body.jwksUrl().strip()));
+                URI jwksUrl = URI.create(body.jwksUrl().strip());
+                // The card admits HTTPS only (#149 §1). The module also allows loopback HTTP for a local key
+                // server in tests; a gate login, the guest included, must not be able to make the hosted
+                // task fetch its own ports through here.
+                if (!"https".equalsIgnoreCase(jwksUrl.getScheme())) {
+                    throw new IllegalArgumentException("A partner JWKS URL must be https");
+                }
+                store.putUrl(companyId, jwksUrl);
             } else {
                 store.putJwks(companyId, body.jwks());
             }

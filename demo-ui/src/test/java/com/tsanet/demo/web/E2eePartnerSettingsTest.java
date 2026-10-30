@@ -138,6 +138,12 @@ class E2eePartnerSettingsTest {
         mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)
                 .content(json("jwksUrl", "http://keys.partner.example/jwks.json")))
             .andExpect(status().isBadRequest());
+        // Loopback HTTP, which the module allows for a local key server in tests, is refused on the card:
+        // a gate login must not make the hosted task fetch its own ports.
+        mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)
+                .content(json("jwksUrl", "http://127.0.0.1:8090/healthz")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("https")));
         mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"jwksUrl\":\"https://keys.partner.example/jwks.json\",\"jwks\":\"{}\"}"))
             .andExpect(status().isBadRequest());
