@@ -50,7 +50,7 @@ It fails without scenario company configuration. It writes to `tsanet.api.base-u
 
 ## Branches and PRs
 
-- **Base branch:** `develop` for library and console work, including a `demo-ui` change that needs it. `main` for changes only to `demo-ui` and its docs, the hosted demo or repo config, which don't wait for a promotion. Other docs and skill changes follow what they describe: `main` for released behavior, `develop` for unreleased.
+- **Base branch:** `develop` for library and console work, including a `demo-ui` change that needs it. `main` for changes only to `demo-ui` and its docs, the hosted demo or repo config, which don't wait for a promotion. Other docs and skill changes follow what they describe: `main` for released behavior, `develop` for unreleased. A library fix that can't wait for a promotion goes to `main`, then syncs to `develop`.
 - **`main` reaches `develop`** through a sync PR before the next promotion, not after every change, so `develop` can sit behind `main`. Sync sooner if work on `develop` needs what landed on `main`.
 - **`develop` reaches `main`** through one promotion PR, which builds against `beta` and stays red until `beta` carries what it needs. Releases are cut from `main`.
 - **Branch names:** `feat/<slug>`, `fix/<slug>`, `chore/<slug>`, `docs/<slug>`, `test/<slug>`, `ci/<slug>`.

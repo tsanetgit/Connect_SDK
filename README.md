@@ -39,8 +39,9 @@ The working steps, in order:
   Connect-API-Code `develop`. Library and console PRs target `develop`, including a
   `demo-ui` change that needs library work; a change only to `demo-ui` and its docs, the
   hosted demo or repo config targets `main`. Other docs and skill changes follow what
-  they describe: `main` for released behavior, `develop` for unreleased. `develop` reaches `main` through one promotion PR once `beta` carries
-  what it needs; that PR builds against `beta`, so it stays red until then. `main` is
+  they describe: `main` for released behavior, `develop` for unreleased. A library fix that can't wait
+  for a promotion goes to `main`, then syncs to `develop`. `develop` reaches `main` through
+  one promotion PR once `beta` carries what it needs; that PR builds against `beta`, so it stays red until then. `main` is
   synced into `develop` by one PR before the next promotion, or sooner if work on
   `develop` needs it. Issues close on the promotion to `main`, not on the merge into
   `develop`, because GitHub closes issues only on merges into the default branch.
