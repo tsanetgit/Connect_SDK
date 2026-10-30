@@ -608,6 +608,9 @@ function renderCase(detail) {
         for (const [fieldId, value] of Object.entries(e2ee.customFields ?? {})) {
             rows.push(kv(`Custom field ${fieldId}`, esc(value), true));
         }
+    } else if (encrypted && e2ee.reason) {
+        // Refused or cannot verify: the module's or the demo's reason, which names a step or a cause, never a value.
+        rows.push(kv('E2EE', esc(e2ee.reason), true));
     }
     const summaryHost = document.getElementById('case-summary');
     summaryHost.innerHTML = rows.join('');
@@ -627,7 +630,7 @@ function renderCase(detail) {
             meta: `${n.creatorName ?? n.creatorUsername ?? '?'} (${n.companyName ?? '?'}) · ${n.priority ?? ''}`
                 + [n.typeDisplayName ?? n.type, n.direction].filter(Boolean).map(v => ` · ${v}`).join('')
                 + ` · ${n.createdAt ?? ''}`,
-            body: ne ? (ne.state === 'verified' ? ne.description : '') : n.description,
+            body: ne ? (ne.state === 'verified' ? ne.description : (ne.reason ?? '')) : n.description,
             chip: e2eeChip(ne),
             cipher: ne && ne.state === 'verified' ? [['summary', n.summary], ['description', n.description]] : null,
         };
