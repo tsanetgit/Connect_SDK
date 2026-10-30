@@ -1,5 +1,10 @@
 # Hosting options for the Connect demo UI
 
+> **Update (2026-10-29).** The hosted demo now runs on **Amazon ECS Express Mode**
+> (one Fargate task behind a managed load balancer, fed by this repo's ECR image).
+> The procedure is in [RUNBOOK.md](RUNBOOK.md) section 6. The App Runner notes below
+> are history.
+
 > **Deprecation note (2026-07-13).** AWS stopped accepting new App Runner
 > customers on 2026-04-30; existing services remain operational (security and
 > availability maintained, no new features). The successor is **Amazon ECS

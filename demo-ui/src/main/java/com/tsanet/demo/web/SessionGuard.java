@@ -4,6 +4,7 @@ import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.demo.config.CredentialsStore;
 import com.tsanet.demo.config.DemoProperties;
 import com.tsanet.demo.config.EnvironmentService;
+import com.tsanet.e2ee.E2eeProfile;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -68,5 +69,21 @@ public class SessionGuard {
             session.auth().authenticate();
         }
         return session;
+    }
+
+    /**
+     * The E2EE profile paired with {@code session} (one of {@link #session()}'s), or null when
+     * E2EE is off, or when the session was replaced by a credentials change since it was looked up
+     * (tsanetgit/Connect_SDK#149). Resolved from the session, not from the active environment, for
+     * the same reason {@link #session()} snapshots it once. A caller that was asked to encrypt and
+     * gets null refuses; it never falls back to plaintext.
+     */
+    public E2eeProfile e2ee(TsaNetApiSession session) {
+        return environments.e2eeFor(session);
+    }
+
+    /** Whether the demo holds its own E2EE keys; with them loaded, a null {@link #e2ee} means a replaced session. */
+    public boolean e2eeEnabled() {
+        return environments.e2eeKeys().enabled();
     }
 }

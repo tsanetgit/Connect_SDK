@@ -44,7 +44,7 @@ card holds that environment's credentials; the highlighted card is the
 
 Each environment keeps an isolated credentials file (mode 600) and its own
 SQLite cache under `~/.tsanet-demo-ui/` (ephemeral `/tmp` in the container),
-so BETA and DEV data never mix. Credentials are never committed, logged, or
+so BETA and DEV data never mix. Passwords and secrets are never committed, logged, or
 returned by the API — `GET /api/settings` reports only the username.
 **Clear** wipes that environment's file.
 
@@ -84,7 +84,44 @@ Save replaces it.
 When the app is deployed with the Basic-auth gate enabled
 (`TSANET_DEMO_AUTH_PASSWORD` set), the browser prompts for the gate
 credentials before the page loads — that gate protects the demo itself and is
-unrelated to the BETA member credentials entered inside it.
+unrelated to the BETA member credentials entered inside it. The operator can
+also configure a second gate login for guests (`TSANET_DEMO_AUTH_GUEST_USER` and
+`TSANET_DEMO_AUTH_GUEST_PASSWORD`); it opens the same demo with the same rights,
+so a guest sees whatever member credentials are currently stored and, unless the
+operator has locked them, can change them. With `TSANET_DEMO_CREDENTIALS_LOCKED`
+set, each environment card shows who the demo is signed in as, with the Make Active
+button on the other environments; saving or clearing credentials is refused, and the
+receiver-storage section is unaffected. The lock covers the E2EE partner keys too: the
+card lists the table and the demo's JWKS URL read-only, with no Add / Replace form and
+no Remove buttons, and the add and remove endpoints refuse. On a locked hosted demo the
+pilot's keys arrive through `TSANET_DEMO_E2EE_PARTNERS_BETA` (RUNBOOK §6). When the operator has also seeded both environments
+(see the RUNBOOK), the hosted demo comes up already signed in on each, so a visitor only
+ever switches environments. Hand the guest login to
+people you would hand the demo to, not as a per-person account.
+
+### E2EE partner keys
+
+When the demo holds its own end-to-end encryption keys (the operator set
+`TSANET_DEMO_E2EE_PRIVATE_JWKS`, see the [Runbook](RUNBOOK.md) §6), each
+environment's card also shows an **E2EE partner keys** panel. Without keys the
+panel, the checkboxes and the chips below do not appear and the demo behaves
+exactly as before.
+
+- **The demo's own public keys** are published at `/.well-known/jwks.json` on
+  the demo's URL, outside the login; the panel shows the full URL to give a
+  partner so its key fetcher can pin it.
+- **Partner table:** one entry per partner company id, for the companies you will
+  exchange encrypted cases with. An entry is either a **JWKS URL** (https only; the
+  demo fetches and caches it) or a **pasted public JWKS** (the JSON text of the
+  partner's public keys, for a partner that hardcodes its keys instead of
+  publishing them). A pasted set that holds a private key is refused. **Add /
+  Replace** writes the entry for that company id; **Remove** deletes it.
+- The table is kept per environment next to that environment's credentials,
+  so on the hosted demo it is lost on redeploy like the credentials. The
+  operator's seed variable restores it at startup (Runbook §6). With
+  `TSANET_DEMO_CREDENTIALS_LOCKED` set the table is read-only on the card and
+  the seed is its only source.
+- The demo's own company is never in the table: its keys come from its own set.
 
 ## 4. Dashboard — collaboration cases
 
@@ -93,6 +130,8 @@ Lists every case visible to your member account, newest activity first.
 - **Direction chips**: *outbound* = submitted by your company; *inbound* =
   received from a partner. Computed by comparing each case's companies with
   the identity in the badge. The dropdown filters by direction.
+- An `encrypted` case shows a lock chip, **Encrypted**, in place of its summary
+  (when the demo holds keys). The list does not verify; opening the case does.
 - Click any row to open the case detail view.
 
 ## 5. New Collaboration — partner search and the dynamic form
@@ -107,6 +146,17 @@ The heart of the demo:
 3. Fill the standard fields (internal case number, summary, description) plus
    the partner's custom fields, then **Submit Collaboration Request**.
 4. On success you get the new case id + a link straight into the case detail.
+
+**Encrypt (E2EE)** appears above the submit button when the demo holds its own
+keys. It is pre-checked when the selected partner's company has an entry in the
+active environment's partner table, unchecked otherwise, and the line under it
+says which. Checked, the summary, description and every custom-field value are
+encrypted for that partner and signed before the SDK sends them; the case goes
+out with `encrypted: true` and a manifest. Checked for a partner with no key
+entry is a 400 naming the company id, never a plaintext send; so is a plaintext
+that breaks the form's rules (a required field without a value, a summary over
+500 characters), with the module's message. Asking to encrypt while the demo holds
+no keys is a 403; the page never offers it then.
 
 *Verified on DEV (2026-07-13):* partner search, form rendering (sections,
 required markers, text fields), and submit-through-to-created-case, all
@@ -124,7 +174,9 @@ Opens from the Dashboard or after creating a case.
   - *Inbound* (you are the receiver): **Approve** (with engineer contact +
     next steps), **Reject** (with reason), **Request Info**
   - *Outbound* (you submitted): **Respond to Info Request**, **Close Case**
-  - Always: **Add Note** (summary, description, priority)
+  - Always: **Add Note** (summary, description, priority, and **Encrypt (E2EE)**
+    when the demo holds keys, pre-checked on an encrypted case: the note is
+    encrypted for the case's other party)
   
   The demo deliberately does not second-guess which actions the case's current
   state allows — the API is the authority, and its validation errors surface
@@ -149,6 +201,21 @@ Opens from the Dashboard or after creating a case.
   500 with a `{"message"}` body appears only to clients that do not send the
   `application/problem+json` Accept header; the SDK does, and classifies a legacy
   body by its content if one ever arrives.)
+- **E2EE chip** — when the demo holds keys, every `encrypted` record is
+  verified as a stored read when the case opens (signature, binding and digests;
+  not freshness, since there is no webhook receiver) and shows a chip next to the
+  status: **Verified (E2EE)**, with the decrypted summary, description and
+  custom-field values in place of the ciphertext and the ciphertext behind a
+  *Ciphertext as stored* disclosure for the interop check; **Refused at
+  `<step>`: `<field>`**, which shows the step and field and never a value; or
+  **Encrypted, cannot verify**, when the demo holds keys but could not build its
+  profile for this session (an **E2EE** row under the summary grid gives the
+  reason; reload). A refused record shows its reason the same way, and a refused
+  or unverifiable note shows it as the note's body. A record not marked
+  `encrypted` is plaintext and gets no chip. Notes get the same chip per item.
+  With no keys the demo renders the record as the API returned it, with no chip
+  and no dashboard lock: the issue's "unchanged when unset" rule was chosen over
+  its "the chip says the demo cannot verify" line for that case.
 - **Notes Timeline** and **Response History** — the full conversation and
   every engineer response on the case. System-generated notes (e.g.
   "Case accepted.") arrive as HTML; the demo renders them formatted through a
@@ -193,7 +260,7 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 - No inbound webhook receiver (subscriptions management only)
 - No multi-user/session handling — one shared SDK session per server instance
 - No case assignment, SLA, or reporting views — outside the SDK's surface
-- No end-to-end encryption: the demo sends and shows cases in plaintext. A connector that needs it adds the optional `connect-e2ee` module (`connect-e2ee/README.md`)
+- No first-receipt (`iat`, `jti`) checks on encrypted records: with no webhook receiver every record is a stored read, verified for signature, binding and digests only. No key rotation (one current key pair; replace the value and redeploy) and no key service (`SoftwareKeyOperations` holds the demo's own keys)
 
 ## 10. References
 

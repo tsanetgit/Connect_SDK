@@ -7,6 +7,7 @@ import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.auth.AccountAuthConfig;
 import com.tsanet.api.auth.ClientCredentialsAuthConfig;
 import com.tsanet.api.auth.PasswordAuthConfig;
+import com.tsanet.e2ee.E2eeProfile;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +18,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -32,17 +35,33 @@ import org.springframework.stereotype.Component;
  * yields a <em>different</em> session rather than a logged-out one. The cache
  * therefore stores a credentials fingerprint next to each session and rebuilds
  * when it stops matching.
+ *
+ * <p>The E2EE profile (tsanetgit/Connect_SDK#149) joins that lifecycle: one per environment
+ * session, built lazily once the session can answer {@code /v1/me} for the company id, and held in
+ * the same holder, so a credentials change or {@link #invalidate} drops it with the session. With
+ * E2EE off ({@link E2eeKeys#enabled()} false) no profile is ever built.
  */
 @Component
 public class EnvironmentService {
 
     private final DemoProperties properties;
+    private final E2eeKeys e2eeKeys;
+    private final DemoE2eeProperties e2eeProperties;
     private final Map<String, SessionHolder> sessions = new ConcurrentHashMap<>();
     private final Map<String, CredentialsStore> credentialStores = new ConcurrentHashMap<>();
+    private final Map<String, PartnerKeysStore> partnerKeyStores = new ConcurrentHashMap<>();
     private final Path activeEnvFile;
     private volatile String activeEnvironment;
 
+    /** With E2EE off, as a deployment without the key variable runs. */
     public EnvironmentService(DemoProperties properties) {
+        this(properties, E2eeKeys.disabled(), new DemoE2eeProperties(null, null));
+    }
+
+    @Autowired
+    public EnvironmentService(DemoProperties properties, E2eeKeys e2eeKeys, DemoE2eeProperties e2eeProperties) {
+        this.e2eeKeys = e2eeKeys;
+        this.e2eeProperties = e2eeProperties;
         // Environments are configuration, not user input, so every base URL is checked once,
         // here at startup: a bearer over plain http is a credential on the wire.
         if (properties.environments() != null) {
@@ -54,6 +73,14 @@ public class EnvironmentService {
         this.properties = properties;
         this.activeEnvFile = dataDir().resolve("active-environment");
         this.activeEnvironment = loadPersistedEnvironment();
+        // With keys loaded, every environment's partner table is read now, so an unusable seed or file
+        // fails startup naming its variable instead of failing the Settings page on its first click.
+        // Gated on the keys so that, unset, nothing E2EE runs.
+        if (e2eeKeys.enabled() && properties.environments() != null) {
+            for (String key : properties.environments().keySet()) {
+                partnerKeysFor(key);
+            }
+        }
     }
 
     private Path dataDir() {
@@ -208,7 +235,62 @@ public class EnvironmentService {
         }
     }
 
-    private record SessionHolder(TsaNetApiSession session, String fingerprint) {
+    /** The profile reference is filled on first E2EE use and dies with the holder. */
+    private record SessionHolder(TsaNetApiSession session, String fingerprint, AtomicReference<E2eeProfile> e2ee) {
+        SessionHolder(TsaNetApiSession session, String fingerprint) {
+            this(session, fingerprint, new AtomicReference<>());
+        }
+    }
+
+    public E2eeKeys e2eeKeys() {
+        return e2eeKeys;
+    }
+
+    /**
+     * The E2EE profile for {@code session}, or null when E2EE is off. Keyed by the session itself
+     * rather than by the active environment, so a concurrent switch can't pair one environment's
+     * session with another's partner table. Built on first use from the company id {@code /v1/me}
+     * answers, which needs the session authenticated, and then reused.
+     *
+     * <p>A session that is no longer the one held for any environment (replaced by a credentials
+     * change between the caller's two lookups) also answers null: the caller then refuses to
+     * encrypt and renders the record unverified, and the next request gets the new session.
+     */
+    public E2eeProfile e2eeFor(TsaNetApiSession session) {
+        if (!e2eeKeys.enabled()) {
+            return null;
+        }
+        for (Map.Entry<String, SessionHolder> entry : sessions.entrySet()) {
+            SessionHolder holder = entry.getValue();
+            if (holder.session() != session) {
+                continue;
+            }
+            E2eeProfile existing = holder.e2ee().get();
+            if (existing != null) {
+                return existing;
+            }
+            Long companyId = session.users().getCurrentUser().companyId();
+            if (companyId == null) {
+                throw new IllegalStateException("/v1/me answered no company id; the E2EE profile needs one");
+            }
+            E2eeProfile built = new E2eeProfile(
+                companyId.toString(),
+                e2eeKeys.keyOperations(),
+                partnerKeysFor(entry.getKey()).view(companyId.toString(), e2eeKeys.publicKeySet()),
+                e2eeKeys.replayGuard(),
+                e2eeKeys.clock());
+            // Two first uses may both build; either profile is equivalent, so the first stored wins.
+            return holder.e2ee().compareAndSet(null, built) ? built : holder.e2ee().get();
+        }
+        return null;
+    }
+
+    /** Partner key table for environment {@code key}, next to its credentials. */
+    public PartnerKeysStore partnerKeysFor(String key) {
+        properties.require(key);
+        return partnerKeyStores.computeIfAbsent(key,
+            k -> new PartnerKeysStore(dataDir().resolve("e2ee-partners-" + k + ".json"),
+                e2eeProperties.partnerSeed(k), DemoE2eeProperties.partnerSeedVariable(k)));
     }
 
     /** Credentials store for the active environment. */

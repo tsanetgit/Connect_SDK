@@ -32,6 +32,21 @@ tsanet:
     # signed-in company. Reading and testing it are always available. Off by default: the platform
     # lets any API user of a company repoint its storage (tsanetgit/Connect-API-Code#170).
     receiver-storage-editable: ${TSANET_DEMO_RECEIVER_STORAGE_EDITABLE:false}
+    # Locks the stored member credentials: Settings shows who each environment is signed in as
+    # and the save / clear endpoints refuse (tsanetgit/Connect_SDK#152). For a hosted demo whose
+    # credentials the operator pre-loads, so visitors only switch environments. Off by default.
+    credentials-locked: ${TSANET_DEMO_CREDENTIALS_LOCKED:false}
+    # Optional member credentials (password mode) written into an environment's store at startup
+    # when that store is empty, so a hosted demo on an ephemeral filesystem comes up signed in and
+    # can run locked (tsanetgit/Connect_SDK#152). Never overwrites a stored credential. Real values
+    # come from the environment at launch (secrets on a hosted deploy); blank means no seed.
+    seeds:
+      beta:
+        username: ${TSANET_DEMO_SEED_BETA_USERNAME:}
+        password: ${TSANET_DEMO_SEED_BETA_PASSWORD:}
+      dev:
+        username: ${TSANET_DEMO_SEED_DEV_USERNAME:}
+        password: ${TSANET_DEMO_SEED_DEV_PASSWORD:}
     # Production is connect2.tsanet.org — deliberately NOT listed here.
     # entra-tenant-id / entra-audience enable the OAuth client-credentials
     # login mode for an environment. Tenant is shared; audiences differ per
@@ -50,6 +65,24 @@ tsanet:
         api-base-url: https://connect2.tahoelab.us
         entra-tenant-id: ${TSANET_DEMO_ENTRA_TENANT:}
         entra-audience: ${TSANET_DEMO_ENTRA_AUDIENCE_DEV:}
+    # End-to-end encryption (tsanetgit/Connect_SDK#149). Off, and the demo unchanged, until the
+    # private JWKS is set: one RSA-OAEP-256 encryption key and one P-256 signing key, generated
+    # by the key generator (docs/RUNBOOK.md) and kept in SSM on the hosted demo. One key pair
+    # serves both environments; the partner table is per environment, and each seed restores
+    # that environment's table when its file is absent (the hosted data dir is ephemeral).
+    e2ee:
+      private-jwks: ${TSANET_DEMO_E2EE_PRIVATE_JWKS:}
+      partner-seeds:
+        beta: ${TSANET_DEMO_E2EE_PARTNERS_BETA:}
+        dev: ${TSANET_DEMO_E2EE_PARTNERS_DEV:}
     auth:
-      username: ${TSANET_DEMO_AUTH_USER:demo}
+      # Blank usernames fall back to "demo" and "guest" in DemoAuthProperties, the one
+      # place those defaults live.
+      username: ${TSANET_DEMO_AUTH_USER:}
       password: ${TSANET_DEMO_AUTH_PASSWORD:}
+      # Optional second login with the same rights, for members using a hosted demo
+      # (tsanetgit/Connect_SDK#148). Active only when its password is set; a guest
+      # password with no operator password, or the same username for both, fails startup.
+      guest:
+        username: ${TSANET_DEMO_AUTH_GUEST_USER:}
+        password: ${TSANET_DEMO_AUTH_GUEST_PASSWORD:}

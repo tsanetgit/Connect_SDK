@@ -9,7 +9,8 @@ its four cloud adapters — the HTTPS endpoint that accepts the push is being bu
 `tsanetgit/Connect_Gateway`'s attachments-only profile, not here), `connect-e2ee` (optional
 end-to-end encryption of cases and notes over `connect-library`; see
 [`connect-e2ee/README.md`](connect-e2ee/README.md)), and `demo-ui` (the branded web demo over
-the SDK facades).
+the SDK facades, which exercises `connect-e2ee` when given its own keys: a partner can test its
+E2EE implementation against the SDK's through the hosted demo, `tsanetgit/Connect_SDK#149`).
 
 ## Building
 
@@ -35,14 +36,19 @@ The working steps, in order:
 - **`main` and `develop`.** `main` is what works against the released platform: it
   builds against Connect-API-Code `beta`, and releases are cut from it. `develop` is
   where work that needs unreleased API changes lands first: it builds against
-  Connect-API-Code `develop`. Feature PRs target `develop`. `develop` reaches `main`
-  through one promotion PR once `beta` carries what it needs; that PR builds against
-  `beta`, so it stays red until then. A fix that lands on `main` alone is merged back
-  into `develop`. Issues close on the promotion to `main`, not on the merge into
-  `develop`, because GitHub closes issues only on merges into the default branch.
-  `develop` is created from `main` once this branch setup is on `main`, so it carries
-  the same workflows. `main` already builds against Connect-API-Code `develop` (the
-  daily `spec-develop` run, green 2026-10-02 to 2026-10-05).
+  Connect-API-Code `develop`. Library and console PRs target `develop`, including a
+  `demo-ui` change that needs library work; a change only to `demo-ui` and its docs, the
+  hosted demo or repo config targets `main`. Other docs and skill changes follow what
+  they describe: `main` for released behavior, `develop` for unreleased. A library fix
+  that can't wait for a promotion goes to `main`, then syncs to `develop`. `develop`
+  reaches `main` through one promotion PR once `beta` carries what it needs; that PR
+  builds against `beta`, so it stays red until then. `main` is synced into `develop` by
+  one PR before the next promotion, or sooner if work on `develop` needs it. Issues
+  close on the promotion to `main`, not on the merge into `develop`, because GitHub
+  closes issues only on merges into the default branch. `develop` was created from
+  `main`, so it carries the same workflows. `main` already builds against
+  Connect-API-Code `develop` (the daily `spec-develop` run, green 2026-10-02 to
+  2026-10-05).
 - **`main` builds.** `tsanetgit/Connect_SDK#44` merged the `oauth` branch on
   2026-08-11 (commit `66f44fe`). `main` builds against the sibling `beta`
   specification and passes the full suite (verified 2026-08-11: `mvn install`,
@@ -63,6 +69,15 @@ at the vendored file (the pattern the Fin adapter used before it moved to the pu
 gateway-engine artifact; the Connect Gateway author kit still vendors the spec this way). That
 is a maintainer decision and is deliberately not part of this document.
 
+## Claude Code
+
+`.claude/settings.json` enables TSANet's team plugin from the private `tsanetgit/ai-devkit`
+repo. It only takes effect if you open this repo in Claude Code and trust the folder. Without
+access to that repo, the plugin doesn't install, Claude Code reports that it isn't installed,
+and your session otherwise works normally. With access, the plugin updates automatically.
+The settings also turn on Claude Code's advisor with Opus, with or without that access. It
+uses your own Claude usage, and setting `CLAUDE_CODE_DISABLE_ADVISOR_TOOL=1` turns it off.
+
 ## Demo UI documentation
 
 The `demo-ui` module (adopted from `shawn-tsanet/connect-sdk-demo` in
@@ -76,4 +91,18 @@ The `demo-ui` module (adopted from `shawn-tsanet/connect-sdk-demo` in
 
 The root `Dockerfile` builds the demo-ui runtime image; the jar is built outside
 docker first (see the Dockerfile header). A hosted deploy must set
-`TSANET_DEMO_AUTH_PASSWORD`, or the app runs with no auth gate.
+`TSANET_DEMO_AUTH_PASSWORD`, or the app runs with no auth gate. An optional
+second login for members, with the same rights, comes from
+`TSANET_DEMO_AUTH_GUEST_USER` (default `guest`) and
+`TSANET_DEMO_AUTH_GUEST_PASSWORD`; it is active only when that password is set
+(`tsanetgit/Connect_SDK#148`). When the operator pre-loads the member credentials,
+`TSANET_DEMO_CREDENTIALS_LOCKED=true` turns Settings into a read-only "Signed in as"
+view with the environment switch, and the save and clear endpoints refuse
+(`tsanetgit/Connect_SDK#152`). To pre-load those credentials on an ephemeral host,
+set the optional `TSANET_DEMO_SEED_BETA_USERNAME` / `_PASSWORD` and
+`TSANET_DEMO_SEED_DEV_USERNAME` / `_PASSWORD`: each pair is written into that
+environment's store at startup when the store is empty, and never overwrites one. End-to-end encryption is on when
+`TSANET_DEMO_E2EE_PRIVATE_JWKS` holds the demo's own private JWK set (generated
+by `com.tsanet.demo.E2eeKeyGenerator`, see the RUNBOOK); unset, the demo is
+unchanged. On a locked demo the E2EE partner table is read-only too and comes
+from `TSANET_DEMO_E2EE_PARTNERS_BETA` / `_DEV`.

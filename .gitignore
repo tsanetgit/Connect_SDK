@@ -1,2 +1,6 @@
 .idea
 target
+.env
+.claude/settings.local.json
+docs/RUNBOOK.local.md
+application-local.yml
