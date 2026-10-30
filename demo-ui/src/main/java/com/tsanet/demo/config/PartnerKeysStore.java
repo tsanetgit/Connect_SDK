@@ -71,6 +71,11 @@ public class PartnerKeysStore {
             Map<String, URI> urls = new LinkedHashMap<>();
             for (Map.Entry<String, Entry> e : entries.entrySet()) {
                 if (e.getValue().jwksUrl() != null) {
+                    // A URL with no host (https:foo) passes the scheme check but can't be fetched, so it would
+                    // otherwise surface only on a later Encrypt. Here it covers the card, the seed and the file.
+                    if (e.getValue().jwksUrl().getHost() == null) {
+                        throw new IllegalArgumentException("The JWKS URL for company " + e.getKey() + " names no host");
+                    }
                     urls.put(e.getKey(), e.getValue().jwksUrl());
                 }
             }

@@ -149,6 +149,11 @@ class E2eePartnerSettingsTest {
                 .content(json("jwksUrl", "http://127.0.0.1:8090/healthz")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("https")));
+        // Https with no host is refused at save, not left to fail on a later Encrypt.
+        mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)
+                .content(json("jwksUrl", "https:keys.partner.example")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("names no host")));
         mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"jwksUrl\":\"https://keys.partner.example/jwks.json\",\"jwks\":\"{}\"}"))
             .andExpect(status().isBadRequest());
