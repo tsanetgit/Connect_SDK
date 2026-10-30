@@ -143,15 +143,11 @@ whole JSON on one line to standard output and nowhere else (never log it, never 
 
 Put it in SSM as a SecureString like the gate values (a 2048-bit RSA private JWK plus a P-256 JWK
 is under the standard tier's 4 KB), piped straight from the generator so it never sits in a file or
-on a command line, and add the matching `secrets` entry to `primary-container.json`:
+on a command line. Its `secrets` entry is already in the `primary-container.json` example below:
 
 ```bash
 "$JAVA_HOME/bin/java" -cp <DEMO_REPO>/demo-ui/target/demo-ui-0.0.1-SNAPSHOT.jar -Dloader.main=com.tsanet.demo.E2eeKeyGenerator org.springframework.boot.loader.launch.PropertiesLauncher \
   | aws ssm put-parameter --region <REGION> --name /connect-sdk-demo/TSANET_DEMO_E2EE_PRIVATE_JWKS --type SecureString --overwrite --value file:///dev/stdin
-```
-
-```json
-    {"name": "TSANET_DEMO_E2EE_PRIVATE_JWKS", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_E2EE_PRIVATE_JWKS"}
 ```
 
 One key pair serves both environments. The JWKS URL to give a partner is
@@ -164,7 +160,7 @@ pair stop verifying.
 The partner key table (which partner company ids the demo encrypts for and verifies from) is
 entered per environment on the Settings card and stored in the data dir, so it is lost on redeploy
 like the credentials. To restore it at startup set `TSANET_DEMO_E2EE_PARTNERS_BETA` and/or
-`TSANET_DEMO_E2EE_PARTNERS_DEV` (SSM SecureStrings and `secrets` entries like the above) to the
+`TSANET_DEMO_E2EE_PARTNERS_DEV` (SSM SecureStrings, with `secrets` entries in the example below) to the
 table as JSON: each partner company id maps to `{"jwksUrl": "https://..."}` or
 `{"jwks": {"keys": [...]}}` (public keys only; a set with a private key is refused at startup). The
 seed applies only when that environment's table file is absent; a table edited on the card wins
@@ -276,8 +272,8 @@ password with no operator password, or the same username for both logins) exits 
 startup, so the deployment never reaches `SUCCESSFUL` in `list-service-deployments`; the reason
 is the `APPLICATION FAILED TO START` block in `aws logs tail <LOG_GROUP>`. A seed the demo cannot
 write (an unwritable data dir) or a seed naming an environment that does not exist fails startup
-the same way, and so does a partner seed the demo cannot use (a private key, or a JWKS URL that
-isn't HTTPS or names no host).
+the same way. With E2EE on, so does a partner seed the demo cannot use (a private key, or a JWKS
+URL that names no host or isn't HTTPS; HTTP to loopback is the one exception).
 
 **Turning it off:** there is no pause. Delete the service with
 `aws ecs delete-express-gateway-service --service-arn <SERVICE_ARN>` when the demo is not
