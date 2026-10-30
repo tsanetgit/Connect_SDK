@@ -103,6 +103,46 @@ password prompt in front of everything. `/healthz` stays open for platform healt
 checks. Remember what sits behind the gate: a UI that holds live member credentials
 and can create real collaboration cases against partner companies.
 
+### End-to-end encryption on the demo (optional)
+
+The demo encrypts and verifies with `connect-e2ee` only when it holds its own keys. The
+operator generates one private JWK set from the built jar and exports it as
+`TSANET_DEMO_E2EE_PRIVATE_JWKS` (locally) or stores it in SSM as a SecureString with a
+`secrets` entry in the container definition (hosted); the exact commands are in
+`docs/RUNBOOK.md` §6:
+
+```bash
+java -cp demo-ui/target/demo-ui-0.0.1-SNAPSHOT.jar \
+  -Dloader.main=com.tsanet.demo.E2eeKeyGenerator org.springframework.boot.loader.launch.PropertiesLauncher
+```
+
+The output is the private set: it goes to standard output only, never into a log, a chat or
+git. With the variable unset the demo is unchanged (no checkbox, no chips, the JWKS path
+answers 404), so an existing deployment is not affected by the upgrade.
+
+What a member gets once it is on:
+
+- The demo's public keys at `https://<demo>/.well-known/jwks.json`, outside the login, for the
+  partner's key fetcher to pin.
+- **Settings → E2EE partner keys** per environment: the partner's company id with either its
+  JWKS URL (https) or its pasted public JWKS (for a partner that hardcodes keys per endpoint).
+  A pasted set holding a private key is refused. The table lives in the ephemeral data dir on
+  a hosted demo; `TSANET_DEMO_E2EE_PARTNERS_BETA` / `_DEV` (the same JSON shape) restore it at
+  startup when the file is absent.
+- **Encrypt (E2EE)** on New Collaboration (pre-checked when the partner has a key entry) and on
+  Add Note (pre-checked on an encrypted case). Checked without a key entry is a 400 naming the
+  company id, never a plaintext send.
+- On the case view, every `encrypted` record verified as a stored read: **Verified (E2EE)** with
+  the decrypted fields and the ciphertext behind a disclosure, or **Refused at `<step>`:
+  `<field>`** with no value shown. The dashboard shows a lock chip for encrypted cases.
+
+Known platform limits while testing with a partner, none of them the demo's: the API rewrites
+`"` as `&#34;` in descriptions and note text (`tsanetgit/Connect-API-Code#214`; the module
+decodes it before checking, a partner's receiver must too), E2EE relationships are not yet
+gated by Groups on Beta so an encrypted case travels as a normal case whose content is
+ciphertext, and an unavailable partner key is reported as a `SENDER_KEY` refusal
+(`tsanetgit/Connect_SDK#147`).
+
 ## Hosting notes
 
 Any container host that can run an amd64 image with one exposed port and a health

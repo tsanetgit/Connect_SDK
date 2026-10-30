@@ -56,6 +56,15 @@ Both configured environments (BETA, DEV) are https and the app refuses to start 
 `api-base-url` is plain http. `tsanet.demo.allow-insecure-http=true` admits one for a local
 mock only; leave it unset everywhere else.
 
+To exercise end-to-end encryption locally, export the demo's private JWK set first (generate it as
+in section 6; the value is the generator's whole one-line JSON):
+
+```bash
+export TSANET_DEMO_E2EE_PRIVATE_JWKS='<generator output>'
+```
+
+Unset, E2EE is off and the demo is unchanged: no Encrypt checkbox, no chips, no `/.well-known/jwks.json`.
+
 ## 3. Enter credentials (first time, or after clearing)
 
 1. Open http://localhost:8090 → **Settings** tab — one card per environment (BETA / DEV)
@@ -118,6 +127,46 @@ public subnets in `<REGION>`, and two roles per the ECS guide
 `AmazonECSInfrastructureRoleforExpressGatewayServices`). Wait a minute after creating roles
 before the first create call: IAM is eventually consistent, and a create that runs too early
 fails with "infrastructure role doesn't have enough permission".
+
+**End-to-end encryption** (`tsanetgit/Connect_SDK#149`; optional). The demo holds one private
+key pair of its own, read from `TSANET_DEMO_E2EE_PRIVATE_JWKS`, and publishes the public half at
+`/.well-known/jwks.json` outside the gate. Generate the set once from the built jar; it prints the
+whole JSON on one line to standard output and nowhere else (never log it, never commit it):
+
+```bash
+"$JAVA_HOME/bin/java" -cp <DEMO_REPO>/demo-ui/target/demo-ui-0.0.1-SNAPSHOT.jar \
+  -Dloader.main=com.tsanet.demo.E2eeKeyGenerator org.springframework.boot.loader.launch.PropertiesLauncher
+```
+
+Put it in SSM as a SecureString like the gate values (a 2048-bit RSA private JWK plus a P-256 JWK
+is under the standard tier's 4 KB), straight from the generator so it never sits in a file, and add
+the matching `secrets` entry to `primary-container.json`:
+
+```bash
+aws ssm put-parameter --region <REGION> --name /connect-sdk-demo/TSANET_DEMO_E2EE_PRIVATE_JWKS --type SecureString --overwrite \
+  --value "$("$JAVA_HOME/bin/java" -cp <DEMO_REPO>/demo-ui/target/demo-ui-0.0.1-SNAPSHOT.jar -Dloader.main=com.tsanet.demo.E2eeKeyGenerator org.springframework.boot.loader.launch.PropertiesLauncher)"
+```
+
+```json
+    {"name": "TSANET_DEMO_E2EE_PRIVATE_JWKS", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_E2EE_PRIVATE_JWKS"}
+```
+
+One key pair serves both environments. The JWKS URL to give a partner is
+`https://<service endpoint>/.well-known/jwks.json`; it answers 404 while the variable is unset. A
+value that is set but unusable (not a JWK set, a public-only set, two RSA keys, a key under 2048
+bits) fails startup with a message naming the variable and the rule, never the value. Rotation is
+not supported: to replace the pair, put a new value and redeploy; records encrypted to the old
+pair stop verifying.
+
+The partner key table (which partner company ids the demo encrypts for and verifies from) is
+entered per environment on the Settings card and stored in the data dir, so it is lost on redeploy
+like the credentials. To restore it at startup set `TSANET_DEMO_E2EE_PARTNERS_BETA` and/or
+`TSANET_DEMO_E2EE_PARTNERS_DEV` (SSM SecureStrings and `secrets` entries like the above) to the
+table as JSON: each partner company id maps to `{"jwksUrl": "https://..."}` or
+`{"jwks": {"keys": [...]}}` (public keys only; a set with a private key is refused at startup). The
+seed applies only when that environment's table file is absent; a table edited on the card wins
+until the next redeploy. The same JSON shape is what the demo writes to `e2ee-partners-<env>.json`
+in the data dir, so a table built on the card can be copied out as the seed.
 
 **Build, push, create.** Build the jar (step 1), then:
 

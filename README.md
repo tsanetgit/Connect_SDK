@@ -9,7 +9,8 @@ its four cloud adapters — the HTTPS endpoint that accepts the push is being bu
 `tsanetgit/Connect_Gateway`'s attachments-only profile, not here), `connect-e2ee` (optional
 end-to-end encryption of cases and notes over `connect-library`; see
 [`connect-e2ee/README.md`](connect-e2ee/README.md)), and `demo-ui` (the branded web demo over
-the SDK facades).
+the SDK facades, which exercises `connect-e2ee` when given its own keys: a partner can test its
+E2EE implementation against the SDK's through the hosted demo, `tsanetgit/Connect_SDK#149`).
 
 ## Building
 
@@ -80,4 +81,7 @@ docker first (see the Dockerfile header). A hosted deploy must set
 second login for members, with the same rights, comes from
 `TSANET_DEMO_AUTH_GUEST_USER` (default `guest`) and
 `TSANET_DEMO_AUTH_GUEST_PASSWORD`; it is active only when that password is set
-(`tsanetgit/Connect_SDK#148`).
+(`tsanetgit/Connect_SDK#148`). End-to-end encryption is on when
+`TSANET_DEMO_E2EE_PRIVATE_JWKS` holds the demo's own private JWK set (generated
+by `com.tsanet.demo.E2eeKeyGenerator`, see the RUNBOOK); unset, the demo is
+unchanged.
