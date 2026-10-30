@@ -84,10 +84,10 @@ class PartnerKeysStoreTest {
             .hasMessageContaining("HTTPS");
         assertThatThrownBy(() -> store.putUrl("2087", URI.create("https:keys.partner.example")))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("names no host");
+            .hasMessageContaining("has no usable host");
         assertThatThrownBy(() -> store.putUrl("2087", URI.create("https://keys_partner/jwks.json")))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("names no host");
+            .hasMessageContaining("has no usable host");
         assertThatThrownBy(() -> store.putUrl("acme", URI.create("https://keys.partner.example/jwks.json")))
             .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> store.putJwks("", v.publicJwks("memberB"))).isInstanceOf(IllegalArgumentException.class);
@@ -139,10 +139,10 @@ class PartnerKeysStoreTest {
         Files.delete(file());
         String noHost = "{\"2087\": {\"jwksUrl\": \"https:keys.partner.example\"}}";
         assertThatThrownBy(() -> new PartnerKeysStore(file(), noHost, SEED_VAR))
-            .isInstanceOf(IllegalStateException.class).hasMessageContaining(SEED_VAR).hasMessageContaining("names no host");
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining(SEED_VAR).hasMessageContaining("has no usable host");
         Files.writeString(file(), noHost);
         assertThatThrownBy(() -> new PartnerKeysStore(file(), null, SEED_VAR))
-            .isInstanceOf(IllegalStateException.class).hasMessageContaining("Fix or delete the file").hasMessageContaining("names no host");
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("Fix or delete the file").hasMessageContaining("has no usable host");
     }
 
     @Test

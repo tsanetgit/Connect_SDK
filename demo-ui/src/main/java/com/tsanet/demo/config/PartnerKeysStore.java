@@ -74,12 +74,12 @@ public class PartnerKeysStore {
                     // A URL with no host (https:foo) passes the scheme check but can't be fetched, so it would
                     // otherwise surface only on a later Encrypt. Here it covers the card, the seed and the file.
                     if (e.getValue().jwksUrl().getHost() == null) {
-                        throw new IllegalArgumentException("The JWKS URL for company " + e.getKey() + " names no host");
+                        throw new IllegalArgumentException("The JWKS URL for company " + e.getKey() + " has no usable host");
                     }
                     urls.put(e.getKey(), e.getValue().jwksUrl());
                 }
             }
-            // The constructor is also the URL check: anything but HTTPS (or loopback HTTP) is refused.
+            // The constructor is also the scheme check: anything but HTTPS (or loopback HTTP) is refused.
             // Insertion order is kept (Map.copyOf would shuffle the listing and the file between runs).
             return new Snapshot(Collections.unmodifiableMap(new LinkedHashMap<>(entries)),
                 new PinnedJwksPartnerKeys(urls, CACHE_LIFETIME));
@@ -131,7 +131,7 @@ public class PartnerKeysStore {
      * Adds or replaces the URL entry for {@code companyId}.
      *
      * @throws IllegalArgumentException for a URL that is not HTTPS (loopback HTTP is allowed, for a
-     *                                  local key server in tests) or names no host, or a company id
+     *                                  local key server in tests) or has no usable host, or a company id
      *                                  that is not a number
      */
     public synchronized void putUrl(String companyId, URI jwksUrl) {

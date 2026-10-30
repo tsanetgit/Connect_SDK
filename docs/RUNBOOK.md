@@ -273,7 +273,7 @@ startup, so the deployment never reaches `SUCCESSFUL` in `list-service-deploymen
 is the `APPLICATION FAILED TO START` block in `aws logs tail <LOG_GROUP>`. A seed the demo cannot
 write (an unwritable data dir) or a seed naming an environment that does not exist fails startup
 the same way. With E2EE on, so does a partner seed the demo cannot use (a private key, or a JWKS
-URL that names no host or isn't HTTPS; HTTP to loopback is the one exception).
+URL that has no usable host or isn't HTTPS; HTTP to loopback is the one exception).
 
 **Turning it off:** there is no pause. Delete the service with
 `aws ecs delete-express-gateway-service --service-arn <SERVICE_ARN>` when the demo is not
