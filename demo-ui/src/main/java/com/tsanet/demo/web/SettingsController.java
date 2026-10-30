@@ -1,5 +1,6 @@
 package com.tsanet.demo.web;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.attachments.v2.AttachmentV2Exception;
 import com.tsanet.api.attachments.v2.StorageConfig;
@@ -7,7 +8,10 @@ import com.tsanet.api.attachments.v2.StorageTarget;
 import com.tsanet.api.attachments.v2.StorageTestResult;
 import com.tsanet.demo.config.CredentialsStore;
 import com.tsanet.demo.config.DemoProperties;
+import com.tsanet.demo.config.E2eeKeys;
 import com.tsanet.demo.config.EnvironmentService;
+import com.tsanet.demo.config.PartnerKeysStore;
+import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.function.Supplier;
@@ -48,11 +52,68 @@ public class SettingsController {
                     creds.isPresent(),
                     creds.map(CredentialsStore.Credentials::principal).orElse(null),
                     creds.map(CredentialsStore.Credentials::mode).orElse(null),
-                    e.getValue().oauthAvailable()
+                    e.getValue().oauthAvailable(),
+                    partnerKeyStatuses(e.getKey())
                 );
             })
             .toList();
-        return new SettingsStatus(environments.activeEnvironment(), envs);
+        boolean e2ee = environments.e2eeKeys().enabled();
+        return new SettingsStatus(environments.activeEnvironment(), envs,
+            new E2eeStatus(e2ee, e2ee ? JwksController.PATH : null));
+    }
+
+    // With E2EE off the table isn't read: the page shows nothing E2EE, as before #149.
+    private List<PartnerKeyStatus> partnerKeyStatuses(String env) {
+        if (!environments.e2eeKeys().enabled()) {
+            return List.of();
+        }
+        return environments.partnerKeysFor(env).entries().entrySet().stream()
+            .map(e -> new PartnerKeyStatus(e.getKey(), e.getValue().source(),
+                e.getValue().jwksUrl() == null ? null : e.getValue().jwksUrl().toString(), e.getValue().kids()))
+            .toList();
+    }
+
+    /**
+     * Adds or replaces {@code env}'s key entry for partner {@code companyId}: a pinned JWKS URL or
+     * a pasted public JWK set, exactly one. Refused before anything is parsed while E2EE is off,
+     * so the demo makes no JOSE call on any path without its own keys (tsanetgit/Connect_SDK#149).
+     */
+    @PutMapping("/api/settings/{env}/e2ee-partners/{companyId}")
+    public SettingsStatus putPartnerKeys(@PathVariable String env, @PathVariable String companyId,
+                                         @RequestBody PartnerKeysBody body) {
+        PartnerKeysStore store = partnerKeyStore(env);
+        boolean url = !isBlank(body.jwksUrl());
+        boolean jwks = !isBlank(body.jwks());
+        if (url == jwks) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Give exactly one of jwksUrl and jwks");
+        }
+        try {
+            if (url) {
+                store.putUrl(companyId, URI.create(body.jwksUrl().strip()));
+            } else {
+                store.putJwks(companyId, body.jwks());
+            }
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        }
+        return getSettings();
+    }
+
+    @DeleteMapping("/api/settings/{env}/e2ee-partners/{companyId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void removePartnerKeys(@PathVariable String env, @PathVariable String companyId) {
+        partnerKeyStore(env).remove(companyId);
+    }
+
+    private PartnerKeysStore partnerKeyStore(String env) {
+        if (!environments.e2eeKeys().enabled()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "E2EE is off for this demo: " + E2eeKeys.VARIABLE + " is not set");
+        }
+        if (!environments.environments().containsKey(env)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown environment: " + env);
+        }
+        return environments.partnerKeysFor(env);
     }
 
     @PostMapping("/api/settings/environment")
@@ -244,6 +305,18 @@ public class SettingsController {
                                       String clientId, String clientSecret) {
     }
 
+    /** One partner's key entry: {@code source} is "url" (with {@code jwksUrl}) or "jwks" (with the pasted set's {@code kids}). */
+    public record PartnerKeyStatus(String companyId, String source, String jwksUrl, List<String> kids) {
+    }
+
+    /** Exactly one of {@code jwksUrl} (HTTPS) and {@code jwks} (a public JWK set, as JSON text) is set. */
+    public record PartnerKeysBody(String jwksUrl, String jwks) {
+    }
+
+    /** Whether the demo holds its own E2EE keys, and where it publishes the public ones (null when off). */
+    public record E2eeStatus(boolean enabled, String jwksPath) {
+    }
+
     public record EnvironmentStatus(
         String key,
         String label,
@@ -251,10 +324,12 @@ public class SettingsController {
         boolean configured,
         String username,
         String mode,
-        boolean oauthAvailable
+        boolean oauthAvailable,
+        // Left out when empty, so with E2EE off each environment's status is as it was.
+        @JsonInclude(JsonInclude.Include.NON_EMPTY) List<PartnerKeyStatus> e2eePartners
     ) {
     }
 
-    public record SettingsStatus(String activeEnvironment, List<EnvironmentStatus> environments) {
+    public record SettingsStatus(String activeEnvironment, List<EnvironmentStatus> environments, E2eeStatus e2ee) {
     }
 }

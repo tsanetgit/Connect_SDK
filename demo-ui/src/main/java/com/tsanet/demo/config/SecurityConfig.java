@@ -1,5 +1,6 @@
 package com.tsanet.demo.config;
 
+import com.tsanet.demo.web.JwksController;
 import java.util.ArrayList;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -26,7 +27,8 @@ public class SecurityConfig {
         http.csrf(csrf -> csrf.disable());
         if (auth.enabled()) {
             http.authorizeHttpRequests(a -> a
-                    .requestMatchers("/healthz").permitAll()
+                    // The published public keys are read by partners' key fetchers, which hold no login.
+                    .requestMatchers("/healthz", JwksController.PATH).permitAll()
                     .anyRequest().authenticated())
                 .httpBasic(Customizer.withDefaults());
         } else {
