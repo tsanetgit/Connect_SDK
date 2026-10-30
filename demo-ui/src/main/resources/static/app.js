@@ -636,8 +636,11 @@ function renderCase(detail) {
     if (encrypted && e2ee.state === 'verified') {
         // Decrypted values in place of the ciphertext; a refusal shows the chip and no value.
         rows.push(kv('Description', esc(e2ee.description), true));
+        // The value and its fieldId are verified; the name is the stored record's unsigned form
+        // metadata, so the authenticated fieldId stays beside it. kv escapes the label.
+        const names = e2ee.customFieldNames ?? {};
         for (const [fieldId, value] of Object.entries(e2ee.customFields ?? {})) {
-            rows.push(kv(`Custom field ${fieldId}`, esc(value), true));
+            rows.push(kv(names[fieldId] ? `${names[fieldId]} (${fieldId})` : `Custom field ${fieldId}`, esc(value), true));
         }
     } else if (encrypted && e2ee.reason) {
         // Refused or cannot verify: the module's or the demo's reason, which names a step or a cause, never a value.
