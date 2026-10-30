@@ -36,14 +36,19 @@ The working steps, in order:
 - **`main` and `develop`.** `main` is what works against the released platform: it
   builds against Connect-API-Code `beta`, and releases are cut from it. `develop` is
   where work that needs unreleased API changes lands first: it builds against
-  Connect-API-Code `develop`. Feature PRs target `develop`. `develop` reaches `main`
-  through one promotion PR once `beta` carries what it needs; that PR builds against
-  `beta`, so it stays red until then. A fix that lands on `main` alone is merged back
-  into `develop`. Issues close on the promotion to `main`, not on the merge into
-  `develop`, because GitHub closes issues only on merges into the default branch.
-  `develop` is created from `main` once this branch setup is on `main`, so it carries
-  the same workflows. `main` already builds against Connect-API-Code `develop` (the
-  daily `spec-develop` run, green 2026-10-02 to 2026-10-05).
+  Connect-API-Code `develop`. Library and console PRs target `develop`, including a
+  `demo-ui` change that needs library work; a change only to `demo-ui` and its docs, the
+  hosted demo or repo config targets `main`. Other docs and skill changes follow what
+  they describe: `main` for released behavior, `develop` for unreleased. A library fix
+  that can't wait for a promotion goes to `main`, then syncs to `develop`. `develop`
+  reaches `main` through one promotion PR once `beta` carries what it needs; that PR
+  builds against `beta`, so it stays red until then. `main` is synced into `develop` by
+  one PR before the next promotion, or sooner if work on `develop` needs it. Issues
+  close on the promotion to `main`, not on the merge into `develop`, because GitHub
+  closes issues only on merges into the default branch. `develop` was created from
+  `main`, so it carries the same workflows. `main` already builds against
+  Connect-API-Code `develop` (the daily `spec-develop` run, green 2026-10-02 to
+  2026-10-05).
 - **`main` builds.** `tsanetgit/Connect_SDK#44` merged the `oauth` branch on
   2026-08-11 (commit `66f44fe`). `main` builds against the sibling `beta`
   specification and passes the full suite (verified 2026-08-11: `mvn install`,
@@ -63,6 +68,13 @@ vendoring the specification into the repository and pointing `connect.openapi.sp
 at the vendored file (the pattern the Fin adapter used before it moved to the published
 gateway-engine artifact; the Connect Gateway author kit still vendors the spec this way). That
 is a maintainer decision and is deliberately not part of this document.
+
+## Claude Code
+
+`.claude/settings.json` enables TSANet's team plugin from the private `tsanetgit/ai-devkit`
+repo. It only takes effect if you open this repo in Claude Code and trust the folder. Without
+access to that repo, the plugin doesn't install, Claude Code reports that it isn't installed,
+and your session otherwise works normally. With access, the plugin updates automatically.
 
 ## Demo UI documentation
 
