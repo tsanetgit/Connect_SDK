@@ -223,10 +223,34 @@ record Login(String password) {
 ''')
         self.assertEqual("FAIL", result["status"])
 
+    def test_escaped_text_block_delimiter_cannot_supply_override(self):
+        result = self.verdict(r'''
+record Login(String password) {
+    static String example = """
+        \"""
+        public String toString() { return null; }
+        """;
+}
+''')
+        self.assertEqual("FAIL", result["status"])
+
+    def test_generic_types_and_annotations_are_not_component_names(self):
+        result = self.verdict("""
+record Parsed<T>(@Label(value = "text", token = "label")
+                 Map<TokenType, Map<SecretType, String>> values) {}
+""")
+        self.assertEqual("PASS", result["status"])
+        self.assertEqual("FAIL", self.verdict("""
+record Parsed(Map<String, String> values, @Label("text") String[] tokens) {}
+""")["status"])
+
     def test_non_secret_record_and_test_sources_pass(self):
         self.assertEqual("PASS", self.verdict("record User(String name) {}")["status"])
         self.assertEqual("PASS", self.verdict(
             "record Status(boolean credentialsLocked, Boolean secretConfigured) {}")["status"])
+        self.assertEqual("PASS", self.verdict("""
+record Status(@JsonProperty("credentialsLocked") boolean credentialsLocked) {}
+""")["status"])
         self.assertEqual("PASS", self.verdict(
             "record Login(String password) {}", source="test")["status"])
 

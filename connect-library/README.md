@@ -2,6 +2,15 @@
 
 Standalone Java client for the TSANet Connect API. The library wraps generated OpenAPI clients behind a small facade API, and persists fetched data to a local SQLite database for offline review.
 
+## Sensitive values in diagnostics
+
+SDK-owned records redact passwords, client/webhook secrets and authentication tokens in
+`toString()` using `<redacted>`. Case, note and request tokens are sensitive capability
+identifiers, not safe logging IDs, and are redacted too (including webhook raw payloads).
+Nested configuration records follow the same policy. Constructors and accessors still
+return the original values for API calls; redaction does not sanitize serialization or
+explicit accessor logging. Do not log those values or generated API models.
+
 ## Maven dependency
 
 ```xml

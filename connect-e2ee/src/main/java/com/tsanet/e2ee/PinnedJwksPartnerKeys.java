@@ -39,6 +39,7 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
      * @param jwksUrls      each company id's JWKS URL, this member's own included; HTTPS only
      * @param cacheLifetime how long a fetched set is used before it is fetched again. Shorter picks
      *                      up a partner's key rotation sooner
+     * @throws IllegalArgumentException if a URL has no host or uses an unsupported scheme
      */
     public PinnedJwksPartnerKeys(Map<String, URI> jwksUrls, Duration cacheLifetime) {
         this(jwksUrls, cacheLifetime, HttpClient.newBuilder().connectTimeout(FETCH_TIMEOUT).build(), Clock.systemUTC(),
@@ -48,6 +49,9 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
     PinnedJwksPartnerKeys(Map<String, URI> jwksUrls, Duration cacheLifetime, HttpClient http, Clock clock,
                           Duration fetchTimeout) {
         for (URI url : jwksUrls.values()) {
+            if (url.getHost() == null) {
+                throw new IllegalArgumentException("A JWKS URL must have a host");
+            }
             if (!"https".equalsIgnoreCase(url.getScheme()) && !isLoopback(url)) {
                 throw new IllegalArgumentException("A JWKS URL must be HTTPS");
             }

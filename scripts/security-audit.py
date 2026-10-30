@@ -255,12 +255,12 @@ def check_record_secrets_redacted(root):
     # Mask literals and comments before balancing delimiters. Preserve offsets
     # for diagnostics, including newlines inside text blocks.
     non_code = re.compile(
-        r'"""[\s\S]*?"""|"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\''
+        r'"""(?:\\[\s\S]|"(?!"")|[^"\\])*"""|"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\''
         r'|//[^\n]*|/\*[\s\S]*?\*/')
     declaration = re.compile(r'\brecord\s+(\w+)\s*(?:<[^{};]*?>\s*)?\(')
-    secret = re.compile(
-        r'(?i)\b\w*(?:password|secret|token|credential|api_?key)\w*\s*(?=,|$)')
-    boolean_component = re.compile(r'\b(?:boolean|Boolean)\s+\w+\s*(?=,|$)')
+    secret = re.compile(r'(?i)password|secret|token|credential|api_?key')
+    component_name = re.compile(r'\b(\w+)\s*(?:\[\s*\]\s*)*$')
+    boolean_component = re.compile(r'\b(?:boolean|Boolean)\s+\w+\s*$')
     override = re.compile(r'\bpublic\s+(?:final\s+)?String\s+toString\s*\(\s*\)')
 
     def closing(text, start, left, right):
@@ -274,6 +274,23 @@ def check_record_secrets_redacted(root):
                     return i
         return None
 
+    def has_secret(header):
+        depth = 0
+        start = 0
+        for i, char in enumerate(header + ','):
+            if char in '(<[':
+                depth += 1
+            elif char in ')>]':
+                depth -= 1
+            elif char == ',' and depth == 0:
+                component = header[start:i]
+                start = i + 1
+                name = component_name.search(component)
+                # Presence/locking flags describe credentials; they do not hold them.
+                if name and secret.search(name.group(1)) and not boolean_component.search(component):
+                    return True
+        return False
+
     hits = []
     for rel, body in walk_sources(root):
         if not rel.endswith(".java") or "/src/main/java/" not in "/" + rel.replace(os.sep, "/"):
@@ -284,9 +301,7 @@ def check_record_secrets_redacted(root):
             end_header = closing(masked, match.end() - 1, '(', ')')
             if end_header is None:
                 continue
-            # Presence/locking flags describe credentials; they do not hold them.
-            header = boolean_component.sub('', masked[match.end():end_header])
-            if not secret.search(header):
+            if not has_secret(masked[match.end():end_header]):
                 continue
             start_body = masked.find('{', end_header)
             if start_body == -1:

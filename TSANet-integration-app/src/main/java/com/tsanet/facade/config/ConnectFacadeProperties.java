@@ -24,6 +24,11 @@ public record ConnectFacadeProperties(
     }
 
     public record Auth(String username, String password) {
+        @Override
+        public String toString() {
+            return "Auth[username=" + username + ", password" + "=<redacted>]";
+        }
+
         public boolean isConfigured() {
             return username != null && !username.isBlank() && password != null && !password.isBlank();
         }
@@ -40,6 +45,13 @@ public record ConnectFacadeProperties(
         AccountAuthProperties auth,
         java.util.List<Long> allowedReceiverCompanyIds
     ) {
+        @Override
+        public String toString() {
+            return "ApplicationUserAccountConfig[id=" + id + ", sqlitePath=" + sqlitePath
+                + ", username=" + username + ", password" + "=<redacted>, auth=" + auth
+                + ", allowedReceiverCompanyIds=" + allowedReceiverCompanyIds + "]";
+        }
+
         /** The account, with its V2 receiver allowlist ({@code allowed-receiver-company-ids}); absent or empty is unrestricted. */
         public ApplicationUserAccount toAccount() {
             return baseAccount().withAllowedReceiverCompanyIds(allowedReceiverCompanyIds);
@@ -76,6 +88,12 @@ public record ConnectFacadeProperties(
         String audience,
         String scope
     ) {
+        @Override
+        public String toString() {
+            return "AccountAuthProperties[type=" + type + ", username=" + username
+                + ", password" + "=<redacted>, tenantId=" + tenantId + ", tokenUrl=<redacted>, clientId=" + clientId
+                + ", clientSecret=<redacted>, audience=" + audience + ", scope=" + scope + "]";
+        }
     }
 
     public ApplicationUserAccountRegistry toAccountRegistry() {

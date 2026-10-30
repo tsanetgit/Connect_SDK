@@ -8,6 +8,13 @@ public record ClientCredentialsAuthConfig(
     String audience,
     String scope
 ) implements AccountAuthConfig {
+    @Override
+    public String toString() {
+        return "ClientCredentialsAuthConfig[tenantId=" + tenantId
+            + ", tokenUrl=<redacted>, clientId=" + clientId
+            + ", clientSecret=<redacted>, audience=" + audience + ", scope=" + scope + "]";
+    }
+
     public ClientCredentialsAuthConfig {
         if (clientId == null || clientId.isBlank()) {
             throw new IllegalArgumentException("clientId is required for client-credentials auth");
