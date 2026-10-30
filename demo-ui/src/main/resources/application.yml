@@ -36,6 +36,17 @@ tsanet:
     # and the save / clear endpoints refuse (tsanetgit/Connect_SDK#152). For a hosted demo whose
     # credentials the operator pre-loads, so visitors only switch environments. Off by default.
     credentials-locked: ${TSANET_DEMO_CREDENTIALS_LOCKED:false}
+    # Optional member credentials (password mode) written into an environment's store at startup
+    # when that store is empty, so a hosted demo on an ephemeral filesystem comes up signed in and
+    # can run locked (tsanetgit/Connect_SDK#152). Never overwrites a stored credential. Real values
+    # come from the environment at launch (secrets on a hosted deploy); blank means no seed.
+    seeds:
+      beta:
+        username: ${TSANET_DEMO_SEED_BETA_USERNAME:}
+        password: ${TSANET_DEMO_SEED_BETA_PASSWORD:}
+      dev:
+        username: ${TSANET_DEMO_SEED_DEV_USERNAME:}
+        password: ${TSANET_DEMO_SEED_DEV_PASSWORD:}
     # Production is connect2.tsanet.org — deliberately NOT listed here.
     # entra-tenant-id / entra-audience enable the OAuth client-credentials
     # login mode for an environment. Tenant is shared; audiences differ per

@@ -51,7 +51,8 @@ class CredentialsLockTest {
             dataDir.toString(),
             true,  // never contacted: the session is a mock
             null,
-            locked
+            locked,
+            null  // no seeds
         );
         environments = new EnvironmentService(properties);
         TsaNetApiSession session = mock(TsaNetApiSession.class);

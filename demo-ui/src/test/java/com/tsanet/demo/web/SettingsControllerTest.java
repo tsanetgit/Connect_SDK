@@ -39,7 +39,8 @@ class SettingsControllerTest {
             dataDir.toString(),
             true,  // the tests point at a local http mock that is never contacted
             null,
-            null  // credentials not locked
+            null,  // credentials not locked
+            null  // no seeds
         );
         environments = new EnvironmentService(properties);
         mvc = MockMvcBuilders.standaloneSetup(new SettingsController(environments, new SessionGuard(environments), properties))
