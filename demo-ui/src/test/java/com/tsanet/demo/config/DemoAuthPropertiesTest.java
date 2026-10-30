@@ -72,4 +72,15 @@ class DemoAuthPropertiesTest {
         assertThat(props.enabled()).isTrue();
         assertThat(props.guestEnabled()).isFalse();
     }
+
+    @Test
+    void toStringNeverPrintsEitherPassword() {
+        var props = of("shawn", "s3cret-operator-pw", "oracle", "s3cret-guest-pw");
+        assertThat(props.toString())
+            .startsWith("DemoAuthProperties[username=shawn, password set")
+            .contains("oracle")
+            .doesNotContain("s3cret-operator-pw", "s3cret-guest-pw");
+        assertThat(props.guest().toString()).contains("oracle").doesNotContain("s3cret-guest-pw");
+        assertThat(of("shawn", "", null, null).toString()).startsWith("DemoAuthProperties[username=shawn, no password");
+    }
 }

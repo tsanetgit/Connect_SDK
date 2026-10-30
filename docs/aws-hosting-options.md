@@ -2,8 +2,9 @@
 
 > **Update (2026-10-29).** The hosted demo now runs on **Amazon ECS Express Mode**
 > (one Fargate task behind a managed load balancer, fed by this repo's ECR image).
-> The procedure is in [RUNBOOK.md](RUNBOOK.md) section 6. The App Runner notes below
-> are history.
+> The procedure is in [RUNBOOK.md](RUNBOOK.md) section 6. Everything below this note is
+> the July 2026 decision record for the old App Runner setup, kept as history. Don't
+> follow it for a new deploy.
 
 > **Deprecation note (2026-07-13).** AWS stopped accepting new App Runner
 > customers on 2026-04-30; existing services remain operational (security and
@@ -16,7 +17,7 @@
 
 Research only — nothing provisioned. `demo-ui` is a single Spring Boot jar (Tomcat embedded, serves its own static frontend) that calls out to `connect2.tsanet.net` (BETA) over HTTPS. No inbound webhook receiver, no persistent state beyond a local SQLite cache file.
 
-## AWS options
+## AWS options (July 2026, historical)
 
 | Option | Fit | Notes |
 |---|---|---|
@@ -26,7 +27,7 @@ Research only — nothing provisioned. `demo-ui` is a single Spring Boot jar (To
 | **Amplify** | Wrong shape | Built for static/SSR frontends with Lambda functions, not a monolithic Spring Boot backend. Would force splitting frontend/backend for no benefit here. |
 | **EC2** | Avoid | Full manual ops (patching, TLS termination, process supervision) for something App Runner does managed. Only worth it if you need arbitrary long-running processes or non-HTTP ports. |
 
-**Recommendation: AWS App Runner.** Lowest operational overhead for a single branded demo jar, built-in HTTPS, autoscaling down to near-zero cost between demos, straightforward source (GitHub) or image-based deploy.
+**Recommendation at the time: AWS App Runner.** Lowest operational overhead for a single branded demo jar, built-in HTTPS, autoscaling down to near-zero cost between demos, straightforward source (GitHub) or image-based deploy.
 
 ## Alternatives outside AWS
 
@@ -34,7 +35,7 @@ Research only — nothing provisioned. `demo-ui` is a single Spring Boot jar (To
 - **Railway / Render** — similar "push a repo, get a URL" experience to App Runner, arguably even less config.
 - **Local + tunnel (ngrok/Cloudflare Tunnel)** — zero hosting cost, good for a live walkthrough on a call, not suitable for an always-on link you hand out.
 
-## Decision (2026-07-12): on-demand, not always-on
+## Decision (2026-07-12, historical): on-demand, not always-on
 
 Shawn confirmed the demo link doesn't need to stay live between calls — spin it up around specific customer/prospect demos, not a persistent 24/7 URL. That changes the recommendation:
 

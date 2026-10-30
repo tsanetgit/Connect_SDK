@@ -82,6 +82,12 @@ class PartnerKeysStoreTest {
         assertThatThrownBy(() -> store.putUrl("2087", URI.create("http://keys.partner.example/jwks.json")))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("HTTPS");
+        assertThatThrownBy(() -> store.putUrl("2087", URI.create("https:keys.partner.example")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("has no usable host");
+        assertThatThrownBy(() -> store.putUrl("2087", URI.create("https://keys_partner/jwks.json")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("has no usable host");
         assertThatThrownBy(() -> store.putUrl("acme", URI.create("https://keys.partner.example/jwks.json")))
             .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> store.putJwks("", v.publicJwks("memberB"))).isInstanceOf(IllegalArgumentException.class);
@@ -129,6 +135,14 @@ class PartnerKeysStoreTest {
         Files.writeString(file(), plainHttp);
         assertThatThrownBy(() -> new PartnerKeysStore(file(), null, SEED_VAR))
             .isInstanceOf(IllegalStateException.class).hasMessageContaining("Fix or delete the file").hasMessageContaining("HTTPS");
+        // Well-formed but wrong the same way: https, with no host to fetch from.
+        Files.delete(file());
+        String noHost = "{\"2087\": {\"jwksUrl\": \"https:keys.partner.example\"}}";
+        assertThatThrownBy(() -> new PartnerKeysStore(file(), noHost, SEED_VAR))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining(SEED_VAR).hasMessageContaining("has no usable host");
+        Files.writeString(file(), noHost);
+        assertThatThrownBy(() -> new PartnerKeysStore(file(), null, SEED_VAR))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("Fix or delete the file").hasMessageContaining("has no usable host");
     }
 
     @Test

@@ -4,7 +4,7 @@
 > was drafted, so nothing here has been run end to end. Every command was taken
 > from Microsoft Learn on 2026-08-04 rather than from memory, and the sources are
 > linked at the bottom, but treat the first run as a shakedown rather than a
-> repeat of a known-good procedure. The AWS App Runner path in
+> repeat of a known-good procedure. The AWS ECS Express Mode path in
 > [RUNBOOK.md](RUNBOOK.md) §6 *is* runtime-verified; this is its Azure counterpart.
 
 Azure Container Apps is the closest analogue to App Runner for this app: it takes

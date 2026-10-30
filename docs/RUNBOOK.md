@@ -143,15 +143,11 @@ whole JSON on one line to standard output and nowhere else (never log it, never 
 
 Put it in SSM as a SecureString like the gate values (a 2048-bit RSA private JWK plus a P-256 JWK
 is under the standard tier's 4 KB), piped straight from the generator so it never sits in a file or
-on a command line, and add the matching `secrets` entry to `primary-container.json`:
+on a command line. Its `secrets` entry is already in the `primary-container.json` example below:
 
 ```bash
 "$JAVA_HOME/bin/java" -cp <DEMO_REPO>/demo-ui/target/demo-ui-0.0.1-SNAPSHOT.jar -Dloader.main=com.tsanet.demo.E2eeKeyGenerator org.springframework.boot.loader.launch.PropertiesLauncher \
   | aws ssm put-parameter --region <REGION> --name /connect-sdk-demo/TSANET_DEMO_E2EE_PRIVATE_JWKS --type SecureString --overwrite --value file:///dev/stdin
-```
-
-```json
-    {"name": "TSANET_DEMO_E2EE_PRIVATE_JWKS", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_E2EE_PRIVATE_JWKS"}
 ```
 
 One key pair serves both environments. The JWKS URL to give a partner is
@@ -164,13 +160,17 @@ pair stop verifying.
 The partner key table (which partner company ids the demo encrypts for and verifies from) is
 entered per environment on the Settings card and stored in the data dir, so it is lost on redeploy
 like the credentials. To restore it at startup set `TSANET_DEMO_E2EE_PARTNERS_BETA` and/or
-`TSANET_DEMO_E2EE_PARTNERS_DEV` (SSM SecureStrings and `secrets` entries like the above) to the
+`TSANET_DEMO_E2EE_PARTNERS_DEV` (SSM SecureStrings, with `secrets` entries in the example below) to the
 table as JSON: each partner company id maps to `{"jwksUrl": "https://..."}` or
 `{"jwks": {"keys": [...]}}` (public keys only; a set with a private key is refused at startup). The
 seed applies only when that environment's table file is absent; a table edited on the card wins
 until the next redeploy. On a locked demo (`TSANET_DEMO_CREDENTIALS_LOCKED`) the card cannot
 edit the table, so the seed is the only way the pilot's keys get in. The same JSON shape is what the demo writes to `e2ee-partners-<env>.json`
 in the data dir, so a table built on the card can be copied out as the seed.
+
+If you give a guest login to people outside your team with E2EE on, run the demo locked, which
+needs the member seeds (see the lock paragraph below). On an unlocked demo, any gate login can add
+a partner JWKS URL, and the demo task then fetches it.
 
 **Build, push, create.** Build the jar (step 1), then:
 
@@ -186,7 +186,9 @@ docker push "<ECR_REGISTRY>/connect-sdk-demo:${SHA}"
 ```
 
 `primary-container.json` (pin the sha tag, not `latest`, so the running build is always
-readable from `describe-express-gateway-service`):
+readable from `describe-express-gateway-service`; delete the `secrets` entry for any value you
+did not put in SSM, including the three `E2EE` entries when E2EE is off and any partner seed you
+don't use):
 
 ```json
 {
@@ -203,7 +205,10 @@ readable from `describe-express-gateway-service`):
     {"name": "TSANET_DEMO_SEED_BETA_USERNAME", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_BETA_USERNAME"},
     {"name": "TSANET_DEMO_SEED_BETA_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_BETA_PASSWORD"},
     {"name": "TSANET_DEMO_SEED_DEV_USERNAME", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_DEV_USERNAME"},
-    {"name": "TSANET_DEMO_SEED_DEV_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_DEV_PASSWORD"}
+    {"name": "TSANET_DEMO_SEED_DEV_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_SEED_DEV_PASSWORD"},
+    {"name": "TSANET_DEMO_E2EE_PRIVATE_JWKS", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_E2EE_PRIVATE_JWKS"},
+    {"name": "TSANET_DEMO_E2EE_PARTNERS_BETA", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_E2EE_PARTNERS_BETA"},
+    {"name": "TSANET_DEMO_E2EE_PARTNERS_DEV", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_E2EE_PARTNERS_DEV"}
   ],
   "environment": [
     {"name": "TSANET_DEMO_CREDENTIALS_LOCKED", "value": "true"}
@@ -254,7 +259,7 @@ the `environment` block from the example above (`TSANET_DEMO_CREDENTIALS_LOCKED`
 deploy: Settings becomes a read-only "Signed in as" view with the environment switch, and
 credential saves and clears are refused. The lock covers the E2EE partner table as well: its
 add and remove endpoints refuse, the card shows the table read-only, and the pilot's keys come
-from `TSANET_DEMO_E2EE_PARTNERS_BETA` (above), which the locked demo reads at startup. Rotating a seeded credential is a new SSM value plus a
+from `TSANET_DEMO_E2EE_PARTNERS_BETA` and `TSANET_DEMO_E2EE_PARTNERS_DEV` (above), which the locked demo reads at startup. Rotating a seeded credential is a new SSM value plus a
 redeploy, and that works only because the ECS filesystem is ephemeral: a seed never overwrites a
 stored credential, so on a persisted data dir you would clear `credentials-<env>.properties`
 first. Two rules for every value that reaches the demo through an environment variable (seeds and
@@ -271,7 +276,8 @@ password with no operator password, or the same username for both logins) exits 
 startup, so the deployment never reaches `SUCCESSFUL` in `list-service-deployments`; the reason
 is the `APPLICATION FAILED TO START` block in `aws logs tail <LOG_GROUP>`. A seed the demo cannot
 write (an unwritable data dir) or a seed naming an environment that does not exist fails startup
-the same way.
+the same way. With E2EE on, so does a partner seed the demo cannot use (a private key, or a JWKS
+URL that has no usable host or isn't HTTPS; HTTP to loopback is the one exception).
 
 **Turning it off:** there is no pause. Delete the service with
 `aws ecs delete-express-gateway-service --service-arn <SERVICE_ARN>` when the demo is not
