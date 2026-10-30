@@ -69,6 +69,13 @@ at the vendored file (the pattern the Fin adapter used before it moved to the pu
 gateway-engine artifact; the Connect Gateway author kit still vendors the spec this way). That
 is a maintainer decision and is deliberately not part of this document.
 
+## Claude Code
+
+`.claude/settings.json` enables TSANet's team plugin from the private `tsanetgit/ai-devkit`
+repo. It only takes effect if you open this repo in Claude Code and trust the folder. Without
+access to that repo, the plugin doesn't install, Claude Code reports that it isn't installed,
+and your session otherwise works normally. With access, the plugin updates automatically.
+
 ## Demo UI documentation
 
 The `demo-ui` module (adopted from `shawn-tsanet/connect-sdk-demo` in
