@@ -9,10 +9,10 @@ import org.junit.jupiter.api.Test;
 class ConfigurationRecordRedactionTest {
     @Test
     void applicationCredentialsRemainAccessibleButNeverAppearInOuterDiagnostics() {
-        String legacyPassword = "synthetic-demo-legacy-password-private";
-        String accountPassword = "synthetic-demo-account-password-private";
-        String authPassword = "synthetic-demo-auth-password-private";
-        String clientSecret = "synthetic-demo-client-secret-private";
+        String legacyPassword = "test-synthetic-demo-legacy-password-private";
+        String accountPassword = "test-synthetic-demo-account-password-private";
+        String authPassword = "test-synthetic-demo-auth-password-private";
+        String clientSecret = "test-synthetic-demo-client-secret-private";
         String tokenUrl = "https://user:" + "synthetic-demo-url-private" + "@example.invalid/token";
         var auth = new TsaNetApplicationProperties.Auth("user", legacyPassword);
         var accountAuth = new TsaNetApplicationProperties.AccountAuthProperties(
@@ -51,8 +51,8 @@ class ConfigurationRecordRedactionTest {
 
     @Test
     void scenarioCredentialsAreRedactedIndividuallyAndThroughOuterProperties() {
-        String acmePassword = "synthetic-scenario-acme-password-private";
-        String betaPassword = "synthetic-scenario-beta-password-private";
+        String acmePassword = "test-synthetic-scenario-acme-password-private";
+        String betaPassword = "test-synthetic-scenario-beta-password-private";
         var acme = new TsaNetScenarioProperties.CompanyCredentials("acme-user", acmePassword);
         var beta = new TsaNetScenarioProperties.CompanyCredentials("beta-user", betaPassword);
         var properties = new TsaNetScenarioProperties(false, acme, beta);
@@ -70,7 +70,7 @@ class ConfigurationRecordRedactionTest {
 
     @Test
     void databaseCredentialsAndCredentialBearingUrlAreRedactedThroughOuterProperties() {
-        String password = "synthetic-database-password-private";
+        String password = "test-synthetic-database-password-private";
         String url = "jdbc:postgresql://example.invalid/test?" + "password" + "="
             + "synthetic-database-url-private";
         var database = new ConnectApiDatabaseProperties.ConnectDb(url, "test-user", password);

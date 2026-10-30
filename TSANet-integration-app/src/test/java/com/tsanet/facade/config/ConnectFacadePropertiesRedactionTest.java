@@ -8,10 +8,10 @@ import org.junit.jupiter.api.Test;
 class ConnectFacadePropertiesRedactionTest {
     @Test
     void nestedCredentialsRemainAccessibleButNeverAppearInOuterDiagnostics() {
-        String legacyPassword = "synthetic-app-legacy-password-private";
-        String accountPassword = "synthetic-app-account-password-private";
-        String authPassword = "synthetic-app-auth-password-private";
-        String clientSecret = "synthetic-app-client-secret-private";
+        String legacyPassword = "test-synthetic-app-legacy-password-private";
+        String accountPassword = "test-synthetic-app-account-password-private";
+        String authPassword = "test-synthetic-app-auth-password-private";
+        String clientSecret = "test-synthetic-app-client-secret-private";
         String tokenUrl = "https://user:" + "synthetic-app-url-private" + "@example.invalid/token";
         var auth = new ConnectFacadeProperties.Auth("user", legacyPassword);
         var accountAuth = new ConnectFacadeProperties.AccountAuthProperties(
