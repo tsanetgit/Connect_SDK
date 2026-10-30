@@ -205,7 +205,12 @@ deploy: Settings becomes a read-only "Signed in as" view with the environment sw
 credential saves and clears are refused. Rotating a seeded credential is a new SSM value plus a
 redeploy, and that works only because the ECS filesystem is ephemeral: a seed never overwrites a
 stored credential, so on a persisted data dir you would clear `credentials-<env>.properties`
-first. The gate passwords live only in SSM and your local untracked notes. Rotating either
+first. Two rules for every value that reaches the demo through an environment variable (seeds and
+gate passwords alike): it must not contain `${`, because Spring resolves `${name:default}` inside
+a bound value and would seed a different string; and put it with `--value`, not `file://`, so no
+trailing newline is stored, since values are seeded exactly as given. A locked demo warns at
+startup for every environment whose store is empty: seed both, or expect visitors who switch to
+the other one to see a demo signed in as nobody. The gate passwords live only in SSM and your local untracked notes. Rotating either
 password is a new SSM value plus the same `update-express-gateway-service` call, which starts a
 new deployment even when the container settings are unchanged (observed: an update with an
 identical container block started a new deployment; the app reads both logins once at startup,

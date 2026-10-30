@@ -133,16 +133,55 @@ class CredentialSeederTest {
     }
 
     @Test
-    void lockedWithNothingToSignInAsWarns(CapturedOutput output) {
+    void lockedWithNothingToSignInAsWarnsForEveryEnvironment(CapturedOutput output) {
         seeder(true, Map.of()).seed();
-        assertThat(output.getAll()).contains("WARN").contains("Credentials are locked but the active environment beta holds none");
+        assertThat(output.getAll())
+            .contains("Credentials are locked but environment beta holds none")
+            .contains("Credentials are locked but environment dev holds none");
     }
 
     @Test
-    void lockedAndSeededDoesNotWarn(CapturedOutput output) {
+    void lockedAndHalfSeededWarnsForTheUnseededEnvironmentOnly(CapturedOutput output) {
+        // The hosted case QA traced: beta seeded, dev not; a visitor can still switch to dev.
         seeder(true, Map.of("beta", new DemoProperties.Seed("api@demo.example", SECRET))).seed();
+        assertThat(output.getAll())
+            .contains("Credentials are locked but environment dev holds none")
+            .doesNotContain("environment beta holds none")
+            .doesNotContain(SECRET);
+    }
+
+    @Test
+    void lockedAndFullySeededDoesNotWarn(CapturedOutput output) {
+        seeder(true, Map.of(
+            "beta", new DemoProperties.Seed("api@demo.example", SECRET),
+            "dev", new DemoProperties.Seed("api@dev.example", SECRET))).seed();
         assertThat(environments.credentialsFor("beta").load()).isPresent();
+        assertThat(environments.credentialsFor("dev").load()).isPresent();
         assertThat(output.getAll()).doesNotContain("WARN").doesNotContain(SECRET);
+    }
+
+    @Test
+    void theShippedYmlWiresTheFourVariablesVerbatim() {
+        // Loads the real application.yml (ConfigDataApplicationContextInitializer) with the four
+        // environment names set as system properties, which placeholders also read. A typo in a
+        // placeholder name would pass every other test and show only on the hosted deploy. Values
+        // with ':', '$', '#' and spaces bind verbatim; a value containing "${x:y}" is rewritten by
+        // placeholder resolution, which is why the RUNBOOK forbids "${" in a seed.
+        new ApplicationContextRunner()
+            .withInitializer(new org.springframework.boot.test.context.ConfigDataApplicationContextInitializer())
+            .withUserConfiguration(Bound.class)
+            .withSystemProperties(
+                "TSANET_DEMO_SEED_BETA_USERNAME=api@demo.example",
+                "TSANET_DEMO_SEED_BETA_PASSWORD=ab:cd$ef#gh ij",
+                "TSANET_DEMO_SEED_DEV_USERNAME=api@dev.example",
+                "TSANET_DEMO_SEED_DEV_PASSWORD=ab${cd:zz}ef")
+            .run(context -> {
+                var seeds = context.getBean(DemoProperties.class).seedsOrEmpty();
+                assertThat(seeds.get("beta").username()).isEqualTo("api@demo.example");
+                assertThat(seeds.get("beta").password()).isEqualTo("ab:cd$ef#gh ij");
+                assertThat(seeds.get("dev").username()).isEqualTo("api@dev.example");
+                assertThat(seeds.get("dev").password()).isEqualTo("abzzef");
+            });
     }
 
     @Test

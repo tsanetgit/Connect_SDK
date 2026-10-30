@@ -59,9 +59,12 @@ public class CredentialSeeder {
             log.info("Seeded environment {} with credentials for {}", key, seed.username());
         }
         if (properties.credentialChangesLocked()) {
-            String active = environments.activeEnvironment();
-            if (environments.credentialsFor(active).load().isEmpty()) {
-                log.warn("Credentials are locked but the active environment {} holds none: visitors will see a demo signed in as nobody", active);
+            // Visitors can switch environments even when locked, so every configured environment
+            // with an empty store is a place a visitor can land signed in as nobody.
+            for (String key : envs.keySet()) {
+                if (environments.credentialsFor(key).load().isEmpty()) {
+                    log.warn("Credentials are locked but environment {} holds none: a visitor switching to it sees a demo signed in as nobody", key);
+                }
             }
         }
     }
