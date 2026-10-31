@@ -26,7 +26,7 @@ public record TsaNetApplicationProperties(
     public record Auth(String username, String password) {
         @Override
         public String toString() {
-            return "Auth[username=" + username + ", password" + "=<redacted>]";
+            return "Auth[username=" + username + ", password=<redacted>]";
         }
 
         public boolean isConfigured() {
@@ -47,7 +47,7 @@ public record TsaNetApplicationProperties(
         @Override
         public String toString() {
             return "ApplicationUserAccountConfig[id=" + id + ", sqlitePath=" + sqlitePath
-                + ", username=" + username + ", password" + "=<redacted>, auth=" + auth + "]";
+                + ", username=" + username + ", password=<redacted>, auth=" + auth + "]";
         }
 
         public ApplicationUserAccount toAccount() {
@@ -84,7 +84,7 @@ public record TsaNetApplicationProperties(
         @Override
         public String toString() {
             return "AccountAuthProperties[type=" + type + ", username=" + username
-                + ", password" + "=<redacted>, tenantId=" + tenantId + ", tokenUrl=<redacted>, clientId=" + clientId
+                + ", password=<redacted>, tenantId=" + tenantId + ", tokenUrl=<redacted>, clientId=" + clientId
                 + ", clientSecret=<redacted>, audience=" + audience + ", scope=" + scope + "]";
         }
     }

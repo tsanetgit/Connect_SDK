@@ -3,7 +3,7 @@ package com.tsanet.api.auth;
 public record PasswordAuthConfig(String username, String password) implements AccountAuthConfig {
     @Override
     public String toString() {
-        return "PasswordAuthConfig[username=" + username + ", password" + "=<redacted>]";
+        return "PasswordAuthConfig[username=" + username + ", password=<redacted>]";
     }
 
     public PasswordAuthConfig {

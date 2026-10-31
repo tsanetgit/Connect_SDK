@@ -9,7 +9,7 @@ public record NormalizedHttpsAttachmentConfigDto(
 ) {
     @Override
     public String toString() {
-        return "NormalizedHttpsAttachmentConfigDto[domain=" + domain + ", password" + "=<redacted>, expiration="
+        return "NormalizedHttpsAttachmentConfigDto[domain=" + domain + ", password=<redacted>, expiration="
             + expiration + ", httpsPath=" + httpsPath + ", httpsPort=" + httpsPort + "]";
     }
 
