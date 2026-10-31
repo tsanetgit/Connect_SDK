@@ -102,7 +102,8 @@ acceptable on localhost. Any deployment reachable by others MUST set
 password prompt in front of everything. `/healthz` stays open to a plain `GET` for
 platform health checks. An optional guest login (`TSANET_DEMO_AUTH_GUEST_USER`, `TSANET_DEMO_AUTH_GUEST_PASSWORD`)
 has the operator's rights and a lower upload limit: 1 GB by default, set with
-`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`, against the operator's 20 GB. Remember what sits behind the gate: a UI that holds live member credentials
+`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`, against the operator's 20 GB. A guest's request with a body must
+declare a `Content-Length` within that limit, so a guest can't send chunked: it answers `411`. Remember what sits behind the gate: a UI that holds live member credentials
 and can create real collaboration cases against partner companies.
 
 ### End-to-end encryption on the demo (optional)

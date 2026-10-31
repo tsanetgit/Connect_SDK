@@ -1,7 +1,6 @@
 package com.tsanet.demo.config;
 
 import com.tsanet.demo.web.JwksController;
-import jakarta.servlet.MultipartConfigElement;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -70,8 +69,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, DemoAuthProperties auth,
-                                                   MultipartConfigElement multipart) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, DemoAuthProperties auth) throws Exception {
         // A browser replays cached Basic credentials on a request another site triggers, so the gate
         // alone doesn't stop a cross-site form. fetchJson in app.js sends the cookie's token as a header.
         // The header alone: reading the form's parameter would read the whole body before the login check.
@@ -88,8 +86,7 @@ public class SecurityConfig {
                     .anyRequest().authenticated())
                 .httpBasic(Customizer.withDefaults());
             if (auth.guestEnabled()) {
-                http.addFilterAfter(new GuestUploadLimitFilter(auth.guestMaxUploadBytes(), multipart),
-                    BasicAuthenticationFilter.class);
+                http.addFilterAfter(new GuestUploadLimitFilter(auth.guestMaxUploadBytes()), BasicAuthenticationFilter.class);
             }
         } else {
             http.authorizeHttpRequests(a -> a.anyRequest().permitAll());
