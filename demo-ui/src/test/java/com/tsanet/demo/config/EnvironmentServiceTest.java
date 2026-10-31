@@ -39,7 +39,7 @@ class EnvironmentServiceTest {
             ),
             "beta",
             dataDir.toString(),
-            true,  // the tests point at a local http mock that is never contacted
+            true,  // the tests point at a local URL where nothing listens
             null,
             null,  // credentials not locked
             null  // no seeds
