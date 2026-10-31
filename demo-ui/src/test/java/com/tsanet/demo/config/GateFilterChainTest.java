@@ -10,8 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
-import org.junit.jupiter.api.BeforeEach;
 import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -149,6 +149,16 @@ class GateFilterChainTest {
                 .cookie(cookie)
                 .header("X-XSRF-TOKEN", cookie.getValue()))
             .andExpect(status().isPreconditionRequired());
+    }
+
+    @Test
+    void aTokenInTheFormParameterIsNotRead() throws Exception {
+        mvc.perform(post("/api/requests/t1/close")
+                .header(HttpHeaders.AUTHORIZATION, basic("shawn", "op"))
+                .cookie(new Cookie("XSRF-TOKEN", "matching"))
+                .param("_csrf", "matching"))
+            .andExpect(status().isForbidden())
+            .andExpect(content().string(SecurityConfig.CSRF_REFUSED));
     }
 
     @Test

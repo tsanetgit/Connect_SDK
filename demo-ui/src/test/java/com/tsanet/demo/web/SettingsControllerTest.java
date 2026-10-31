@@ -10,6 +10,7 @@ import com.tsanet.demo.config.DemoProperties;
 import com.tsanet.demo.config.EnvironmentService;
 import java.nio.file.Path;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -30,6 +31,11 @@ class SettingsControllerTest {
 
     private EnvironmentService environments;
     private MockMvc mvc;
+
+    @AfterEach
+    void closeSessions() {
+        environments.close();
+    }
 
     @BeforeEach
     void setUp() {

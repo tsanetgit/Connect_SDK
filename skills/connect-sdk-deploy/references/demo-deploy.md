@@ -99,8 +99,8 @@ member credentials in Settings.
 The app runs **open** when `TSANET_DEMO_AUTH_PASSWORD` is unset; that is only
 acceptable on localhost. Any deployment reachable by others MUST set
 `TSANET_DEMO_AUTH_USER` and `TSANET_DEMO_AUTH_PASSWORD`, which puts a browser
-password prompt in front of everything. `/healthz` stays open for platform health
-checks. Remember what sits behind the gate: a UI that holds live member credentials
+password prompt in front of everything. `/healthz` stays open to a plain `GET` for
+platform health checks. Remember what sits behind the gate: a UI that holds live member credentials
 and can create real collaboration cases against partner companies.
 
 ### End-to-end encryption on the demo (optional)
