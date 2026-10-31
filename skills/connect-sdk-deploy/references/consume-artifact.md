@@ -426,8 +426,9 @@ Watch the release notes on each release.
     as well as its summary; run `CacheRetention.sweep` if closed and rejected cases shouldn't
     stay on disk (it never sweeps an open case).
 - **5.0.0** reports a sender's keys being unavailable as their own `connect-e2ee` outcome
-  (`tsanetgit/Connect_SDK#147`) and redacts sensitive values in SDK records' `toString()`
-  (`tsanetgit/Connect_SDK#162`); the runtime line (Spring Boot 4.1, Jackson 3, JDK 21) is
+  (`tsanetgit/Connect_SDK#147`), redacts sensitive values in SDK records' `toString()`
+  (`tsanetgit/Connect_SDK#162`), and makes the mapping from the generated models to the records
+  public as `OpenApiRecords` (`tsanetgit/Connect_SDK#146`); the runtime line (Spring Boot 4.1, Jackson 3, JDK 21) is
   unchanged from 4.0.0. It is a major because of one source break: an exhaustive `switch` over
   `Verification`. A connector that doesn't use `connect-e2ee` needs no code change, but check
   anything that reads the changed records' `toString()`.
@@ -457,3 +458,11 @@ Watch the release notes on each release.
     serialization and to accessors, which are unchanged. The SDK's own exception and webhook sync
     messages no longer carry request tokens; rows that 4.0.0 wrote to `webhook_inbound_event`
     keep their old messages.
+  - `connect-library` adds `com.tsanet.api.connectapi.OpenApiRecords`, the mapping the facades
+    use from the generated OpenAPI models to `CollaborationRequestStatusDto`, `CaseNoteDto` and
+    `FormFieldDto`. A connector that calls the generated client directly and keeps its own copy
+    of that mapping should switch to it before handing records to `connect-e2ee`: a copy that
+    drops a value a manifest covers is refused at `FIELDS`. The generated note carries no case
+    token, so pass `caseNote` the token of the case the note was read under. The parameters are
+    generated types, so a rename in the Connect OpenAPI spec changes these signatures. Code that
+    doesn't call it needs no change.
