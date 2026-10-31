@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 public class WebhooksController {
@@ -30,7 +31,11 @@ public class WebhooksController {
 
     @PostMapping("/api/webhooks")
     public WebhookSubscriptionResponseDto createSubscription(@RequestBody CreateSubscriptionBody body) {
-        return guard.session().webhooks().createSubscription(body.callbackUrl(), body.eventTypes());
+        if (body.callbackUrl() == null || body.callbackUrl().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "callbackUrl is required");
+        }
+        var session = guard.session();
+        return SessionGuard.sdkInput(() -> session.webhooks().createSubscription(body.callbackUrl(), body.eventTypes()));
     }
 
     @DeleteMapping("/api/webhooks/{id}")

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.catchException;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -150,6 +151,39 @@ class SdkInputTest {
                     .content("{" + mode + ",\"caseNumber\":\"C-1\",\"summary\":\"s\",\"description\":\"d\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error").value(refusal));
+        }
+    }
+
+    /** What ConnectApiWebhooksGateway.java:59 throws for a mistyped event type on the page's free-text input. */
+    @Test
+    void aWebhookTheSdkRefusesIsABadRequest() throws Exception {
+        when(webhooks.createSubscription(anyString(), any())).thenThrow(new IllegalArgumentException("Unexpected value 'bogus'"));
+
+        mvc.perform(post("/api/webhooks").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"callbackUrl\":\"https://x.example/a\",\"eventTypes\":[\"bogus\"]}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("Unexpected value 'bogus'"));
+    }
+
+    /** What ConnectApiWebhooksGateway.java:57 throws for a callback URL that isn't one, from the real URI.create. */
+    @Test
+    void aBadCallbackUrlIsABadRequestWithItsReason() throws Exception {
+        Exception fromUri = catchException(() -> java.net.URI.create("not a url"));
+        when(webhooks.createSubscription(eq("not a url"), any())).thenThrow(fromUri);
+
+        mvc.perform(post("/api/webhooks").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"callbackUrl\":\"not a url\",\"eventTypes\":[]}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("not a url")));
+    }
+
+    /** {@code URI.create(null)} is a NullPointerException, so the SDK never gets the chance to refuse this. */
+    @Test
+    void aWebhookWithNoCallbackUrlIsABadRequest() throws Exception {
+        for (String body : new String[] {"{}", "{\"callbackUrl\":\"  \"}"}) {
+            mvc.perform(post("/api/webhooks").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("callbackUrl is required"));
         }
     }
 
