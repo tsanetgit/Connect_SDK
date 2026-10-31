@@ -219,5 +219,10 @@ class SdkInputTest {
                 assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
                 assertThat(e.getReason()).isEqualTo("OAuth client-credentials request failed: HTTP 401");
             });
+
+        // A subclass didn't come from the SDK's sign-in, so it stays for the catch-all's fixed message.
+        org.mockito.Mockito.doThrow(new java.util.concurrent.CancellationException(MARKER)).when(auth).authenticate();
+        assertThatThrownBy(() -> new SessionGuard(environments).session("beta"))
+            .isExactlyInstanceOf(java.util.concurrent.CancellationException.class);
     }
 }

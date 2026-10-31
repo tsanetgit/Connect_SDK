@@ -30,7 +30,7 @@ class RequestErrorsTest {
 
     private static final String CREDENTIALS = "/api/settings/beta/credentials";
     private static final String PARTNER = "/api/settings/beta/e2ee-partners/2087";
-    private static final String BODY_MESSAGE = "The request body is missing or is not valid JSON";
+    private static final String BODY_MESSAGE = "The request body is missing or does not match the expected JSON";
 
     @Autowired
     private WebApplicationContext context;
@@ -58,6 +58,13 @@ class RequestErrorsTest {
         mvc.perform(post(CREDENTIALS).contentType(MediaType.TEXT_PLAIN).content("{}"))
             .andExpect(status().isUnsupportedMediaType())
             .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("is not supported")));
+    }
+
+    /** Well-formed, but it can't bind: {@code encrypt} is a Boolean on the note body. */
+    @Test
+    void wellFormedJsonThatCannotBindIsABadRequest() throws Exception {
+        bodyRefused(mvc.perform(post("/api/requests/any-token/notes").contentType(MediaType.APPLICATION_JSON)
+            .content("{\"encrypt\":\"maybe\"}")));
     }
 
     @Test

@@ -92,7 +92,7 @@ public class ApiErrorHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException e, HttpHeaders headers,
                                                                   HttpStatusCode status, WebRequest request) {
-        ProblemDetail fixed = ProblemDetail.forStatusAndDetail(status, "The request body is missing or is not valid JSON");
+        ProblemDetail fixed = ProblemDetail.forStatusAndDetail(status, "The request body is missing or does not match the expected JSON");
         return handleExceptionInternal(e, fixed, headers, status, request);
     }
 

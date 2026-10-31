@@ -71,7 +71,11 @@ public class SessionGuard {
                 session.auth().authenticate();
             } catch (IllegalStateException refused) {
                 // The reason the page shows for a failed sign-in, such as "OAuth client-credentials request
-                // failed: HTTP 401". These messages name a status or a field, not a credential.
+                // failed: HTTP 401". These messages name a status or a field, not a credential. Only the
+                // exact type, as in sdkInput: a subclass didn't come from those throw sites.
+                if (refused.getClass() != IllegalStateException.class) {
+                    throw refused;
+                }
                 throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, refused.getMessage());
             }
         }
