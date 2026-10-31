@@ -76,45 +76,9 @@ class ApiErrorHandlerTest {
         assertThat(ApiErrorHandler.upstreamStatus(true, 404).value()).as("unreachable").isEqualTo(502);
     }
 
-    /** What the page reads as "Auth failed: ..." when the token endpoint refuses the credentials. */
+    /** A JDK exception carries whatever it was handed, so its message stays off the page and out of the log. */
     @Test
-    void aMessageTheSdkOrTheDemoWroteItselfStillReachesThePage() {
-        ResponseEntity<Map<String, String>> state = handler.handleOther(thrownHere("OAuth client-credentials request failed: HTTP 401"));
-        ResponseEntity<Map<String, String>> argument = handler.handleOther(thrownHereArgument("fileName must not be blank"));
-
-        assertThat(state.getStatusCode().value()).isEqualTo(502);
-        assertThat(state.getBody()).containsEntry("error", "OAuth client-credentials request failed: HTTP 401");
-        assertThat(argument.getStatusCode().value()).isEqualTo(502);
-        assertThat(argument.getBody()).containsEntry("error", "fileName must not be blank");
-    }
-
-    /** The real throw site, not a stand-in: its top frame is what lets the reason through. */
-    @Test
-    void aRefusedTokenRequestKeepsItsReasonForThePage() throws Exception {
-        com.sun.net.httpserver.HttpServer entra =
-            com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
-        entra.createContext("/token", exchange -> {
-            exchange.sendResponseHeaders(401, -1);
-            exchange.close();
-        });
-        entra.start();
-        try {
-            String tokenUrl = "http://127.0.0.1:" + entra.getAddress().getPort() + "/token";
-            Exception refused = org.assertj.core.api.Assertions.catchException(() ->
-                new com.tsanet.api.connectapi.internal.OAuthTokenGateway(java.net.http.HttpClient.newHttpClient())
-                    .fetchClientCredentialsToken(new com.tsanet.api.auth.ClientCredentialsAuthConfig(
-                        null, tokenUrl, "client-id", "client-secret", "api://audience", null)));
-
-            assertThat(handler.handleOther(refused).getBody())
-                .containsEntry("error", "OAuth client-credentials request failed: HTTP 401");
-        } finally {
-            entra.stop(0);
-        }
-    }
-
-    /** The same types from a JDK or framework frame carry whatever they were handed, so they don't pass. */
-    @Test
-    void aJdkMessageIsNotOurs(CapturedOutput output) {
+    void aJdkMessageReachesNeitherThePageNorTheLog(CapturedOutput output) {
         Exception fromTheJdk = null;
         try {
             java.net.URI.create("https://bad host/" + MARKER);
@@ -135,11 +99,6 @@ class ApiErrorHandlerTest {
 
         assertThat(output).contains("java.io.UncheckedIOException", "java.io.IOException", "ApiErrorHandlerTest")
             .doesNotContain(MARKER);
-    }
-
-    @Test
-    void aMessagelessFailureOfOurOwnIsStillAFixedMessage() {
-        assertUnexpected(handler.handleOther(thrownHere(null)));
     }
 
     /** Spring's own status for a request the size limit stopped, which the app's 20 GB limit makes slow to reach. */
@@ -168,14 +127,6 @@ class ApiErrorHandlerTest {
     }
 
     private static final String MARKER = "MARKER-not-for-the-caller";
-
-    private static IllegalStateException thrownHere(String message) {
-        return new IllegalStateException(message);
-    }
-
-    private static IllegalArgumentException thrownHereArgument(String message) {
-        return new IllegalArgumentException(message);
-    }
 
     private static void assertUnexpected(ResponseEntity<Map<String, String>> response) {
         assertThat(response.getStatusCode().value()).isEqualTo(502);

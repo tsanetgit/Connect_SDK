@@ -5,6 +5,7 @@ import com.tsanet.demo.config.CredentialsStore;
 import com.tsanet.demo.config.DemoProperties;
 import com.tsanet.demo.config.EnvironmentService;
 import com.tsanet.e2ee.E2eeProfile;
+import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
@@ -66,9 +67,33 @@ public class SessionGuard {
         }
         TsaNetApiSession session = environments.sessionFor(key, credentials);
         if (!session.auth().isAuthorized()) {
-            session.auth().authenticate();
+            try {
+                session.auth().authenticate();
+            } catch (IllegalStateException refused) {
+                // The reason the page shows for a failed sign-in, such as "OAuth client-credentials request
+                // failed: HTTP 401". These messages name a status or a field, not a credential.
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, refused.getMessage());
+            }
         }
         return session;
+    }
+
+    /**
+     * Runs a facade call whose input the SDK validates, so that a value it refuses, such as a note over
+     * its length limit, answers 400 with the SDK's own message instead of an unexpected failure. Resolve
+     * the session before this, so that a server misconfiguration isn't reported as the caller's mistake.
+     * Only the exact type: a subclass ({@link NumberFormatException}, Spring's {@code InvalidUrlException})
+     * didn't come from a validator, and its message can quote a value.
+     */
+    public static <T> T sdkInput(Supplier<T> call) {
+        try {
+            return call.get();
+        } catch (IllegalArgumentException refused) {
+            if (refused.getClass() != IllegalArgumentException.class) {
+                throw refused;
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, refused.getMessage());
+        }
     }
 
     /**

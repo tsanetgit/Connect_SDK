@@ -97,25 +97,15 @@ public class ApiErrorHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * Keeps the 502 this has always answered, with a fixed message. The exception to the fixed message is
-     * an {@link IllegalStateException} or {@link IllegalArgumentException} this codebase threw itself,
-     * such as "OAuth client-credentials request failed: HTTP 401", which the page shows as the reason:
-     * this repo's CLAUDE.md keeps secrets out of those messages, and a guest on the hosted demo can't read the log.
-     * The log gets the exception types and where it failed, not the messages, which can quote a value.
+     * Keeps the 502 this has always answered, with a fixed message. A message the page should show is
+     * translated where the call is made ({@link SessionGuard#sdkInput}, and the sign-in in
+     * {@link SessionGuard#session(String)}). The log gets the exception types and where it failed, not
+     * the messages, which can quote a value: this repo's CLAUDE.md keeps secrets out of logs.
      */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, String>> handleOther(Exception e) {
-        if (e.getMessage() != null && (e instanceof IllegalStateException || e instanceof IllegalArgumentException)
-            && thrownByThisCodebase(e)) {
-            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", e.getMessage()));
-        }
         logger.error("Unexpected failure: " + describe(e));
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(Map.of("error", UNEXPECTED));
-    }
-
-    private static boolean thrownByThisCodebase(Exception e) {
-        StackTraceElement[] stack = e.getStackTrace();
-        return stack.length > 0 && stack[0].getClassName().startsWith("com.tsanet.");
     }
 
     /** Each type in the cause chain, then the first frame in this codebase, or the top frame without one. */

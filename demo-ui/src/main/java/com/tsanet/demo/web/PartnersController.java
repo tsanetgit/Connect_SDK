@@ -20,7 +20,8 @@ public class PartnersController {
 
     @GetMapping("/api/partners")
     public List<PartnerSelectionDto> searchPartners(@RequestParam("q") String searchTerm) {
-        return guard.session().partners().searchPartners(searchTerm);
+        var session = guard.session();
+        return SessionGuard.sdkInput(() -> session.partners().searchPartners(searchTerm));
     }
 
     /**
