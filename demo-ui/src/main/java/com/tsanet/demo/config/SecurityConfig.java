@@ -1,6 +1,7 @@
 package com.tsanet.demo.config;
 
 import com.tsanet.demo.web.JwksController;
+import jakarta.servlet.MultipartConfigElement;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -24,6 +25,7 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.www.BasicAuthenticationFilter;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
@@ -68,7 +70,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, DemoAuthProperties auth) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, DemoAuthProperties auth,
+                                                   MultipartConfigElement multipart) throws Exception {
         // A browser replays cached Basic credentials on a request another site triggers, so the gate
         // alone doesn't stop a cross-site form. fetchJson in app.js sends the cookie's token as a header.
         // The header alone: reading the form's parameter would read the whole body before the login check.
@@ -84,6 +87,10 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.GET, "/healthz", JwksController.PATH).permitAll()
                     .anyRequest().authenticated())
                 .httpBasic(Customizer.withDefaults());
+            if (auth.guestEnabled()) {
+                http.addFilterAfter(new GuestUploadLimitFilter(auth.guestMaxUploadBytes(), multipart),
+                    BasicAuthenticationFilter.class);
+            }
         } else {
             http.authorizeHttpRequests(a -> a.anyRequest().permitAll());
         }
@@ -107,7 +114,8 @@ public class SecurityConfig {
             users.add(User.builder()
                 .username(auth.effectiveGuestUsername())
                 .password(encoder.encode(auth.guest().password()))
-                .roles("DEMO")
+                // The same role, and a marker only GuestUploadLimitFilter reads.
+                .authorities("ROLE_DEMO", GuestUploadLimitFilter.LIMITED_UPLOADS)
                 .build());
         }
         return new InMemoryUserDetailsManager(users);

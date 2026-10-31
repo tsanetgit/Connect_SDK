@@ -111,7 +111,8 @@ you pay for Fargate, the load balancer and logs while the service exists (there 
 **Auth gate** is mandatory on any hosted deploy. Put the gate values and the Entra values in
 SSM Parameter Store as SecureStrings and let the task read them as secrets, so nothing sits in
 plaintext in the service configuration. The two `GUEST` values are optional: set them to give
-members a second login with the same rights. Without a guest login, delete those two names from
+members a second login with the same rights and a lower upload limit (1 GB; change it with the
+`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES` environment variable). Without a guest login, delete those two names from
 the loop (SSM refuses an empty SecureString) and the two matching `secrets` entries below. To
 keep the default guest username (`guest`), delete only the `GUEST_USER` name and entry. The four
 `SEED` values are the member credentials written into each environment's store at startup (see

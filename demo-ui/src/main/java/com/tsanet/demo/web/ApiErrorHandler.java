@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
@@ -30,6 +31,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 public class ApiErrorHandler extends ResponseEntityExceptionHandler {
 
+    public static final String UPLOAD_TOO_LARGE = "The upload is over this login's limit";
     private static final int MAX_CAUSES = 10;
     private static final String UNEXPECTED = "The demo hit an unexpected failure; the server log says where";
 
@@ -97,6 +99,14 @@ public class ApiErrorHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException e, HttpHeaders headers,
                                                                   HttpStatusCode status, WebRequest request) {
         ProblemDetail fixed = ProblemDetail.forStatusAndDetail(status, "The request body is missing or does not match the expected JSON");
+        return handleExceptionInternal(e, fixed, headers, status, request);
+    }
+
+    /** The one message for an upload over a limit, the operator's or a guest's. */
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e, HttpHeaders headers,
+                                                                          HttpStatusCode status, WebRequest request) {
+        ProblemDetail fixed = ProblemDetail.forStatusAndDetail(status, UPLOAD_TOO_LARGE);
         return handleExceptionInternal(e, fixed, headers, status, request);
     }
 

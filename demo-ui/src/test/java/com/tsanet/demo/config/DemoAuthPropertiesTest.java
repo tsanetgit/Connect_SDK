@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 class DemoAuthPropertiesTest {
 
     private static DemoAuthProperties of(String user, String password, String guestUser, String guestPassword) {
-        return new DemoAuthProperties(user, password, new DemoAuthProperties.Guest(guestUser, guestPassword));
+        return new DemoAuthProperties(user, password, new DemoAuthProperties.Guest(guestUser, guestPassword, null));
     }
 
     @Test
@@ -82,5 +82,18 @@ class DemoAuthPropertiesTest {
             .doesNotContain("s3cret-operator-pw", "s3cret-guest-pw");
         assertThat(props.guest().toString()).contains("oracle").doesNotContain("s3cret-guest-pw");
         assertThat(of("shawn", "", null, null).toString()).startsWith("DemoAuthProperties[username=shawn, no password");
+    }
+
+    @org.junit.jupiter.api.Test
+    void aGuestUploadLimitDefaultsToOneGigabyteAndMustBePositive() {
+        var guest = new DemoAuthProperties.Guest("g", "gp", null);
+        org.assertj.core.api.Assertions.assertThat(new DemoAuthProperties("u", "p", guest).guestMaxUploadBytes())
+            .isEqualTo(1024L * 1024 * 1024);
+        org.assertj.core.api.Assertions.assertThat(
+                new DemoAuthProperties("u", "p", new DemoAuthProperties.Guest("g", "gp", 5L)).guestMaxUploadBytes())
+            .isEqualTo(5L);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> new DemoAuthProperties("u", "p", new DemoAuthProperties.Guest("g", "gp", 0L)))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES");
     }
 }

@@ -11,6 +11,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * TSANET_DEMO_AUTH_GUEST_PASSWORD) lets the operator hand members a login that
  * is not their own and rotate it on its own. It has the same rights as the
  * operator: the gate is the demo's only perimeter (tsanetgit/Connect_SDK#148).
+ * The one difference is a lower upload limit (TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES, 1 GB by default).
  * Both logins are read once at startup, so rotating either one means a
  * restart (on a hosted deploy, a redeploy that picks up the new secret).
  *
@@ -25,9 +26,10 @@ public record DemoAuthProperties(String username, String password, Guest guest) 
 
     private static final String DEFAULT_USERNAME = "demo";
     private static final String DEFAULT_GUEST_USERNAME = "guest";
+    private static final long DEFAULT_GUEST_MAX_UPLOAD_BYTES = 1024L * 1024 * 1024;
 
     /** The guest login; absent from the configuration binds as a record of nulls. */
-    public record Guest(String username, String password) {
+    public record Guest(String username, String password, Long maxUploadBytes) {
 
         /** Never the password: a record's default toString would print it. */
         @Override
@@ -38,7 +40,10 @@ public record DemoAuthProperties(String username, String password, Guest guest) 
 
     public DemoAuthProperties {
         if (guest == null) {
-            guest = new Guest(null, null);
+            guest = new Guest(null, null, null);
+        }
+        if (guest.maxUploadBytes() != null && guest.maxUploadBytes() <= 0) {
+            throw new IllegalStateException("TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES must be a positive number of bytes.");
         }
         boolean guestConfigured = hasText(guest.password());
         if (guestConfigured && !hasText(password)) {
@@ -60,6 +65,10 @@ public record DemoAuthProperties(String username, String password, Guest guest) 
     /** True only when the gate is on and a guest password is configured. */
     public boolean guestEnabled() {
         return enabled() && hasText(guest.password());
+    }
+
+    public long guestMaxUploadBytes() {
+        return guest.maxUploadBytes() != null ? guest.maxUploadBytes() : DEFAULT_GUEST_MAX_UPLOAD_BYTES;
     }
 
     public String effectiveUsername() {

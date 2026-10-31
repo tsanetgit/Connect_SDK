@@ -42,8 +42,8 @@ class CsrfWithoutGateTest {
     void aTokenInTheFormParameterIsNotReadWithTheGateOff() throws Exception {
         MockMvc mvc = MockMvcBuilders.webAppContextSetup(context).addFilters(springSecurityFilterChain).build();
         mvc.perform(post("/api/requests/t1/close")
-                .cookie(new jakarta.servlet.http.Cookie("XSRF-TOKEN", "matching"))
-                .param("_csrf", "matching"))
+                .cookie(new jakarta.servlet.http.Cookie("XSRF-TOKEN", "matching-token"))
+                .param("_csrf", GateFilterChainTest.maskedToken("matching-token")))
             .andExpect(status().isForbidden())
             .andExpect(content().string(SecurityConfig.CSRF_REFUSED));
     }

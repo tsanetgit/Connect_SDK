@@ -93,8 +93,9 @@ has to do the same: read the cookie from any `GET`, then send it back with the h
 them, its mutating call answers `403` before the gate is checked, even with no login. It has to be the header: the
 `_csrf` form parameter isn't read. With the gate on, `/healthz` and the public-key path are open to a plain `GET` only. The operator can
 also configure a second gate login for guests (`TSANET_DEMO_AUTH_GUEST_USER` and
-`TSANET_DEMO_AUTH_GUEST_PASSWORD`); it opens the same demo with the same rights,
-so a guest sees whatever member credentials are currently stored and, unless the
+`TSANET_DEMO_AUTH_GUEST_PASSWORD`); it opens the same demo with the same rights, except that a guest login has a
+lower upload limit: 1 GB by default (`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`), against the operator's 20 GB. An upload over it answers `413`. A guest
+sees whatever member credentials are currently stored and, unless the
 operator has locked them, can change them. With `TSANET_DEMO_CREDENTIALS_LOCKED`
 set, each environment card shows who the demo is signed in as, with the Make Active
 button on the other environments; saving or clearing credentials is refused, and the

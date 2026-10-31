@@ -75,13 +75,16 @@ class SessionGuardTest {
             null,  // credentials not locked
             null  // no seeds
         ));
-        two.credentialsFor("beta").save("user@example.com", "pw");
+        try {
+            two.credentialsFor("beta").save("user@example.com", "pw");
 
-        assertThatThrownBy(() -> new SessionGuard(two).session("dev"))
-            .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
-                assertThat(e.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
-                assertThat(e.getReason()).startsWith("Dev credentials not configured");
-            });
-        two.close();
+            assertThatThrownBy(() -> new SessionGuard(two).session("dev"))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
+                    assertThat(e.getReason()).startsWith("Dev credentials not configured");
+                });
+        } finally {
+            two.close();
+        }
     }
 }
