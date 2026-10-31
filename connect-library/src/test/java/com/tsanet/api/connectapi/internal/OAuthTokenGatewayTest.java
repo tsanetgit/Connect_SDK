@@ -139,6 +139,25 @@ class OAuthTokenGatewayTest {
             .hasNoCause();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "http://[MARKER/oauth2/v2.0/token",
+        "http://bad host/MARKER/oauth2/v2.0/token",
+        "http://login.example/{MARKER}/oauth2/v2.0/token",
+        "not a url MARKER"
+    })
+    void aTokenUrlThatCantBeParsedIsRefusedWithoutQuotingIt(String tokenUrl) {
+        OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
+
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> gateway.fetchClientCredentialsToken(
+            new ClientCredentialsAuthConfig("tenant", tokenUrl, "client-id", "client-secret", "api://audience", null)));
+
+        assertThat(thrown).isNotNull();
+        for (Throwable t = thrown; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            assertThat(t.toString()).doesNotContain("MARKER").doesNotContain("login.example");
+        }
+    }
+
     @Test
     void anUnreachableTokenEndpointIsConnectivityNamingNeitherTheUrlNorTheTenant() throws Exception {
         int closedPort;

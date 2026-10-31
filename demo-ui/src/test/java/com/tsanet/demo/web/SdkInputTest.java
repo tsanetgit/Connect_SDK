@@ -165,16 +165,16 @@ class SdkInputTest {
             .andExpect(jsonPath("$.error").value("Unexpected value 'bogus'"));
     }
 
-    /** What ConnectApiWebhooksGateway.java:57 throws for a callback URL that isn't one, from the real URI.create. */
+    /** What ConnectApiWebhooksGateway throws for a callback URL that isn't one. */
     @Test
     void aBadCallbackUrlIsABadRequestWithItsReason() throws Exception {
-        Exception fromUri = catchException(() -> java.net.URI.create("not a url"));
-        when(webhooks.createSubscription(eq("not a url"), any())).thenThrow(fromUri);
+        when(webhooks.createSubscription(eq("not a url"), any()))
+            .thenThrow(new IllegalArgumentException("The webhook callback URL is not a valid URI"));
 
         mvc.perform(post("/api/webhooks").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"callbackUrl\":\"not a url\",\"eventTypes\":[]}"))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("not a url")));
+            .andExpect(jsonPath("$.error").value("The webhook callback URL is not a valid URI"));
     }
 
     /** {@code URI.create(null)} is a NullPointerException, so the SDK never gets the chance to refuse this. */

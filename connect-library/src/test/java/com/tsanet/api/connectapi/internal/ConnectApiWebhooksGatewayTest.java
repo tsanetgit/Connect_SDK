@@ -70,6 +70,18 @@ class ConnectApiWebhooksGatewayTest {
     }
 
     @Test
+    void aCallbackUrlThatIsNotAUriIsRefusedWithoutQuotingIt() {
+        // A callback URL can carry a secret in its query, so its toString() redacts it too.
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> gateway.createWebhookSubscription(
+            "https://bad host/hook?token=MARKER", List.of("collaboration-request.created")));
+
+        assertThat(thrown)
+            .isExactlyInstanceOf(IllegalArgumentException.class)
+            .hasMessage("The webhook callback URL is not a valid URI")
+            .hasNoCause();
+    }
+
+    @Test
     void itCreatesWebhookSubscriptionAndStoresSecret() {
         WebhookSubscriptionResponseDTO created = new WebhookSubscriptionResponseDTO()
             .id(5L)

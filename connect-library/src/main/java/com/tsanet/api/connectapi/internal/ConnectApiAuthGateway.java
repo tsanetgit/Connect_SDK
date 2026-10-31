@@ -3,6 +3,8 @@ package com.tsanet.api.connectapi.internal;
 import com.tsanet.api.generated.api.IdentityApi;
 import com.tsanet.api.generated.model.LoginRequestDTO;
 import com.tsanet.api.generated.model.TokenDTO;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.client.RestClientException;
 
 public class ConnectApiAuthGateway {
     private final IdentityApi identityApi;
@@ -18,10 +20,19 @@ public class ConnectApiAuthGateway {
      */
     public PasswordLogin login(String username, String password) {
         LoginRequestDTO request = new LoginRequestDTO().username(username).password(password);
-        TokenDTO response = identityApi.login(request);
+        TokenDTO response;
+        try {
+            response = identityApi.login(request);
+        } catch (RestClientException unreadable) {
+            if (!unreadable.contains(HttpMessageNotReadableException.class)) {
+                throw unreadable;
+            }
+            // No cause: Jackson's message quotes a token it doesn't recognize, which can be this one.
+            throw new IllegalStateException("Failed to parse login response");
+        }
         if (response == null || response.getAccessToken() == null || response.getAccessToken().isBlank()) {
             throw new IllegalStateException("Login succeeded but accessToken is missing");
         }
-        return new PasswordLogin(response.getAccessToken(), response.getExpiresIn());
+        return new PasswordLogin(BearerTokens.requireSendable(response.getAccessToken()), response.getExpiresIn());
     }
 }
