@@ -67,6 +67,17 @@ class SupportingPiecesTest {
     }
 
     @Test
+    void bodiesThatParseToNullAreNotAJwks() {
+        for (String body : java.util.List.of("null", "{\"keys\":[null]}")) {
+            assertThatThrownBy(() -> Jwks.parsePublic(body))
+                .as(body)
+                .isInstanceOf(IOException.class)
+                .hasMessage("Not a JWKS")
+                .hasNoCause();
+        }
+    }
+
+    @Test
     void pinnedJwksAreFetchedCachedAndRefusedWhenTheyHoldAPrivateKey() throws Exception {
         AtomicInteger fetches = new AtomicInteger();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

@@ -133,6 +133,33 @@ class VerificationRefusalTest {
     }
 
     @Test
+    void aPartnerServingTheJsonNullIsUnavailableKeysAndStartsTheWait() throws Exception {
+        java.util.concurrent.atomic.AtomicInteger fetches = new java.util.concurrent.atomic.AtomicInteger();
+        com.sun.net.httpserver.HttpServer server =
+            com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/keys.json", exchange -> {
+            fetches.incrementAndGet();
+            byte[] body = "null".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+        try {
+            E2eeProfile receiver = memberBWith(new PinnedJwksPartnerKeys(
+                java.util.Map.of(Vectors.MEMBER_A,
+                    java.net.URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/keys.json")),
+                java.time.Duration.ofMinutes(5)));
+
+            assertThat(receiver.verifyCase(original, Receipt.FIRST_RECEIPT)).isInstanceOf(KeysUnavailable.class);
+            assertThat(receiver.verifyCase(original, Receipt.FIRST_RECEIPT)).isInstanceOf(KeysUnavailable.class);
+            assertThat(fetches).as("the second read waited instead of fetching").hasValue(1);
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void unavailableKeysUseNoJtiSoTheSameFirstReceiptVerifiesOnceTheyAreBack() throws Exception {
         AtomicBoolean reachable = new AtomicBoolean(false);
         E2eeProfile receiver = memberBWith(company -> {
