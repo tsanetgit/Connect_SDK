@@ -439,9 +439,10 @@ Watch the release notes on each release.
   record constructors (`tsanetgit/Connect_SDK#139`); the runtime line (Spring Boot 4.1, Jackson 3,
   JDK 21) is unchanged from 4.0.0. It is a major because of three source breaks: an exhaustive
   `switch` over `Verification`, the removed record constructors below, and an implementer of
-  `TsaNetApiSession`. A connector that uses none of those keeps compiling, and needs no other code
-  change unless it matches the refused-token message exactly, but check anything that reads the
-  changed records' `toString()`, and add a `close()` call where it drops a session.
+  `TsaNetApiSession`. A connector that uses none of those keeps compiling. One that doesn't use
+  `connect-e2ee` needs no other code change unless it matches the refused-token message exactly;
+  one that does should read the `KeysUnavailable` and `step` notes below. Either way, check anything
+  that reads the changed records' `toString()`, and add a `close()` call where it drops a session.
   - `Verification` gains a third permitted subtype, `KeysUnavailable`, returned when
     `PartnerKeys` throws `IOException` fetching the sending company's keys (at first, or on the
     refetch for an unknown `kid`). An exhaustive `switch` without the new case stops compiling,
@@ -496,9 +497,10 @@ Watch the release notes on each release.
     completion, and a later one fails the way an unreachable API does: a `ConnectApiException` of
     kind `CONNECTIVITY`, or `AttachmentV2Exception` `client/connectivity` on the V2 facades. So a
     `send` still running can't complete its grant, which stays open until it expires. A Spring
-    `@Bean` that returns a session is now closed when its context shuts down. `AccountScopedTsaNetApiSession` instead goes back to having no
-    session until the next login, and a login or authenticate as a different account closes the
-    previous account's session. Code that implements `TsaNetApiSession` itself must add
+    `@Bean` that returns a session is now closed when its context shuts down.
+    `AccountScopedTsaNetApiSession` instead goes back to having no session until the next login, and
+    a login or authenticate as a different account closes the previous account's session. Code that
+    implements `TsaNetApiSession` itself must add
     `close()`. A V2 upload now runs on a client of its own, stopped when that upload ends, so
     uploads no longer share pooled connections.
   - The deprecated record constructors are gone (`tsanetgit/Connect_SDK#139`): `CaseNoteDto`'s
