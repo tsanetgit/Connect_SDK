@@ -11,7 +11,7 @@ import com.tsanet.api.facade.PartnersFacade;
 import com.tsanet.api.facade.UserFacade;
 import com.tsanet.api.facade.WebhooksFacade;
 
-public interface TsaNetApiSession {
+public interface TsaNetApiSession extends AutoCloseable {
     AuthFacade auth();
 
     CollaborationRequestsFacade collaborationRequests();
@@ -33,4 +33,18 @@ public interface TsaNetApiSession {
 
     /** The receiver's side of V2: where files sent to this account's company land. */
     AttachmentStorageFacade attachmentStorage();
+
+    /**
+     * Stops this session's HTTP client, so a session you are done with doesn't keep its selector
+     * thread and pooled connections until it is garbage-collected. A session holds them from the
+     * moment it opens, whether or not it signed in. Close each session you drop, for example on a
+     * credential change.
+     *
+     * <p>This doesn't wait: requests already sent run to completion, and a request made afterward
+     * fails. An attachment upload runs on a client of its own, so its {@code PUT}s finish, but the
+     * grant and complete calls around them need this session. The SQLite cache stays on disk, and
+     * reads of stored data keep working. Closing twice does nothing more.
+     */
+    @Override
+    void close();
 }

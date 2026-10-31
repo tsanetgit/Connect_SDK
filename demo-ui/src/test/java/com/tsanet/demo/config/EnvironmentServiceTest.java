@@ -83,14 +83,38 @@ class EnvironmentServiceTest {
     @Test
     void itRebuildsTheSessionWhenCredentialsChange() {
         TsaNetApiSession first = service.sessionFor("beta", PW_ONE);
-        assertThat(service.sessionFor("beta", PW_TWO)).isNotSameAs(first);
+        TsaNetApiSession second = service.sessionFor("beta", PW_TWO);
+        assertThat(second).isNotSameAs(first);
+        assertThat(loginFailure(first)).hasRootCauseMessage("closed");
+        assertThat(rootCauseMessage(loginFailure(second))).isNotEqualTo("closed");
     }
 
     @Test
     void itRebuildsAfterInvalidate() {
         TsaNetApiSession first = service.sessionFor("beta", PW_ONE);
         service.invalidate("beta");
+        assertThat(loginFailure(first)).hasRootCauseMessage("closed");
         assertThat(service.sessionFor("beta", PW_ONE)).isNotSameAs(first);
+    }
+
+    @Test
+    void itKeepsTheSessionOpenWhileCredentialsAreUnchanged() {
+        TsaNetApiSession first = service.sessionFor("beta", PW_ONE);
+        service.sessionFor("beta", PW_ONE);
+        assertThat(rootCauseMessage(loginFailure(first))).isNotEqualTo("closed");
+    }
+
+    // Nothing listens on the test URL: an open client is refused there, and a closed one says closed.
+    private static Throwable loginFailure(TsaNetApiSession session) {
+        return org.assertj.core.api.Assertions.catchThrowable(() -> session.auth().login("user", "password"));
+    }
+
+    private static String rootCauseMessage(Throwable failure) {
+        Throwable root = failure;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        return root.getMessage();
     }
 
     @Test

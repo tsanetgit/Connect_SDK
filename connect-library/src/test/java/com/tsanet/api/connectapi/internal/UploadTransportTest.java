@@ -290,4 +290,16 @@ class UploadTransportTest {
         done.get(10, java.util.concurrent.TimeUnit.SECONDS);
         assertThat(collected.toByteArray()).isEqualTo(region(file, 70_000, 100_000));
     }
+
+    @Test
+    void closingTheCoordinatorStopsItsTransportsClientWithoutWaiting() {
+        java.net.http.HttpClient client = org.mockito.Mockito.mock(java.net.http.HttpClient.class);
+        UploadCoordinator coordinator = new UploadCoordinator(new UploadTransport(client), java.time.Clock.systemUTC(),
+            java.time.Duration.ofSeconds(60), java.time.Duration.ZERO);
+
+        coordinator.close();
+
+        org.mockito.Mockito.verify(client).shutdown();
+        org.mockito.Mockito.verify(client, org.mockito.Mockito.never()).close();
+    }
 }

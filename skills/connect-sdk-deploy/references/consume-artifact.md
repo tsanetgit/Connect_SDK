@@ -473,3 +473,10 @@ Watch the release notes on each release.
     token, so pass `caseNote` the token of the case the note was read under. The parameters are
     generated types, so a rename in the Connect OpenAPI spec changes these signatures. Code that
     doesn't call it needs no change.
+  - `TsaNetApiSession` is now `AutoCloseable` (`tsanetgit/Connect_SDK#139`). Each session holds a
+    JDK `HttpClient`, with its selector thread and pooled connections, from the moment it opens,
+    and until 5.0.0 nothing released them. Call `close()` on a session you drop, for example on a
+    credential change or after a one-off poll. It doesn't wait: requests already sent run to
+    completion, and a later one fails with a `ConnectApiException`, "cannot reach the Connect API
+    (IOException)". Code that implements `TsaNetApiSession` itself must add `close()`. A V2 upload
+    now runs on a client of its own, stopped when that upload ends.

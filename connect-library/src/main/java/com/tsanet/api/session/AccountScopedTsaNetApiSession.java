@@ -101,9 +101,24 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
         if (delegate != null && account.id().equals(activeAccountId)) {
             return;
         }
+        TsaNetApiSession replaced = delegate;
         delegate = sessionFactory.openSessionForApplicationUser(account);
         activeAccountId = account.id();
         activeSqlitePath = account.sqlitePath();
+        if (replaced != null) {
+            replaced.close();
+        }
+    }
+
+    /** Closes the active account's session; the next login or authenticate opens a new one. */
+    @Override
+    public synchronized void close() {
+        if (delegate != null) {
+            delegate.close();
+        }
+        delegate = null;
+        activeAccountId = null;
+        activeSqlitePath = null;
     }
 
     void bindAccountForTesting(String accountId) {

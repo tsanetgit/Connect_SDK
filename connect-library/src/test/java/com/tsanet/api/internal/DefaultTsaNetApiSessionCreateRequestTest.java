@@ -80,7 +80,8 @@ class DefaultTsaNetApiSessionCreateRequestTest {
             mock(WebhookInboundEventStorageService.class),
             mock(PartnerSelectionStorageService.class),
             mock(AttachmentConfigStorageService.class),
-            mock(AttachmentForwardResultStorageService.class)
+            mock(AttachmentForwardResultStorageService.class),
+            mock(java.net.http.HttpClient.class)
         );
 
         CollaborationRequestDTO form = new CollaborationRequestDTO();

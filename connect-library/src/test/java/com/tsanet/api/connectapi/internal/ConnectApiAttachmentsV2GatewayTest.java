@@ -105,6 +105,27 @@ class ConnectApiAttachmentsV2GatewayTest {
     }
 
     @Test
+    void eachUploadRunsOnItsOwnCoordinatorAndClosesItWhenTheUploadEnds() {
+        UploadCoordinator first = org.mockito.Mockito.mock(UploadCoordinator.class);
+        UploadCoordinator second = org.mockito.Mockito.mock(UploadCoordinator.class);
+        java.util.Iterator<UploadCoordinator> coordinators = List.of(first, second).iterator();
+        ConnectApiAttachmentsV2Gateway scoped = new ConnectApiAttachmentsV2Gateway(api,
+            GatewayTestSupport.authenticatedSessionStore(), coordinators::next, Duration.ZERO, java.util.Set.of(), caseToken -> java.util.Optional.empty());
+        when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.S3_MULTIPART,
+            AttachmentGrantStatus.OPEN));
+        when(first.upload(any(), eq(file), any(), any())).thenReturn(s3Receipts());
+        when(api.completeS3Multipart(eq(TOKEN), eq(GRANT_ID), any())).thenReturn(grantDto(AttachmentUploadMode.S3_MULTIPART,
+            AttachmentGrantStatus.COMPLETED));
+        scoped.send(TOKEN, file, null);
+        verify(first).close();
+        verify(second, never()).close();
+
+        when(second.upload(any(), eq(file), any(), any())).thenThrow(new IllegalStateException("storage refused"));
+        assertThatThrownBy(() -> scoped.send(TOKEN, file, null)).isInstanceOf(IllegalStateException.class);
+        verify(second).close();
+    }
+
+    @Test
     void sendGrantsForTheFilesNameAndSizeUploadsAndCompletesWithTheReceipts() {
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.S3_MULTIPART,
             AttachmentGrantStatus.OPEN));

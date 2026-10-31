@@ -40,7 +40,7 @@ import java.util.function.LongConsumer;
  * body here declares its exact length, which keeps a store that signs {@code Content-Length}
  * from refusing the PUT.
  */
-class UploadTransport {
+class UploadTransport implements AutoCloseable {
 
     static final int READ_BUFFER = 64 * 1024;
     private static final Set<String> RESTRICTED_HEADERS = Set.of("content-length", "host", "connection", "expect", "upgrade");
@@ -57,6 +57,11 @@ class UploadTransport {
 
     UploadTransport(HttpClient http) {
         this.http = http;
+    }
+
+    @Override
+    public void close() {
+        http.shutdown();
     }
 
     /** The storage's answer to one {@code PUT}: its status, and the two headers the coordinator reads. */

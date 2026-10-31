@@ -83,6 +83,8 @@ TsaNetApiSession account = factory.openSessionForAccount("api@appko.com", "secre
 
 Each `sessionLabel` gets its own database file: `data-acme.db`, `data-beta.db` (when the base path ends with `.db`). `openSessionForAccount()` uses `AccountSessionLabel.fromUsername()` so `api@appko.com` maps to `data-api-appko.com.db`.
 
+A session holds an HTTP client from the moment it opens. `TsaNetApiSession` is `AutoCloseable`: close a session you drop, for example when credentials change. `close()` doesn't wait: requests already sent run to completion, and a later request fails with a `ConnectApiException`. The SQLite cache stays on disk.
+
 ## SQLite persistence
 
 On startup the library creates tables if they do not exist (`CREATE TABLE IF NOT EXISTS`). Schema changes are additive and backward-compatible.

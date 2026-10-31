@@ -77,4 +77,34 @@ class AccountScopedTsaNetApiSessionTest {
             List.of(new CollaborationRequestStatusDto(id, "OPEN", summary, "A", 1L, "B", 2L, "tok" + id, null, null))
         );
     }
+
+    @Test
+    void itClosesTheSessionItReplacesAndItsOwnOnClose() {
+        ApplicationUserAccountRegistry registry = ApplicationUserAccountRegistry.of(
+            List.of(
+                ApplicationUserAccount.passwordAccount("alpha", tempDir.resolve("a.db").toString(), "alpha@test.com", "secret"),
+                ApplicationUserAccount.passwordAccount("beta", tempDir.resolve("b.db").toString(), "beta@test.com", "secret")
+            )
+        );
+        TsaNetApiSessionFactory factory = org.mockito.Mockito.mock(TsaNetApiSessionFactory.class);
+        com.tsanet.api.TsaNetApiSession alpha = org.mockito.Mockito.mock(com.tsanet.api.TsaNetApiSession.class);
+        com.tsanet.api.TsaNetApiSession beta = org.mockito.Mockito.mock(com.tsanet.api.TsaNetApiSession.class);
+        org.mockito.Mockito.when(factory.openSessionForApplicationUser(org.mockito.ArgumentMatchers.any()))
+            .thenReturn(alpha, beta);
+        AccountScopedTsaNetApiSession session = new AccountScopedTsaNetApiSession(factory, registry);
+        session.close();
+
+        session.bindAccountForTesting("alpha");
+        session.bindAccountForTesting("alpha");
+        org.mockito.Mockito.verify(alpha, org.mockito.Mockito.never()).close();
+
+        session.bindAccountForTesting("beta");
+        org.mockito.Mockito.verify(alpha).close();
+        org.mockito.Mockito.verify(beta, org.mockito.Mockito.never()).close();
+
+        session.close();
+        org.mockito.Mockito.verify(beta).close();
+        assertThat(session.activeAccountLabel()).isEmpty();
+        assertThatThrownBy(session::collaborationRequests).isInstanceOf(IllegalStateException.class);
+    }
 }

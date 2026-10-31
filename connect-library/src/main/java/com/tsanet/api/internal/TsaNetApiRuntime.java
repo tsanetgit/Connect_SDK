@@ -210,7 +210,8 @@ public final class TsaNetApiRuntime {
             webhookInboundEventStorageService,
             partnerSelectionStorageService,
             attachmentConfigStorageService,
-            attachmentForwardResultStorageService
+            attachmentForwardResultStorageService,
+            httpClient
         );
     }
 

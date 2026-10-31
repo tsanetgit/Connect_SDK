@@ -61,7 +61,7 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
 
     private final AttachmentGrantsApi api;
     private final ConnectApiSessionStore sessionStore;
-    private final UploadCoordinator coordinator;
+    private final Supplier<UploadCoordinator> coordinators;
     private final Duration completeBackoff;
     private final Set<Long> allowedReceiverCompanyIds;
     private final Function<String, Optional<CaseSide>> receivingCompanyOf;
@@ -114,7 +114,7 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     public ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,
                                           Set<Long> allowedReceiverCompanyIds,
                                           Function<String, Optional<CaseSide>> receivingCompanyOf) {
-        this(api, sessionStore, new UploadCoordinator(), Duration.ofSeconds(1), allowedReceiverCompanyIds,
+        this(api, sessionStore, UploadCoordinator::new, Duration.ofSeconds(1), allowedReceiverCompanyIds,
             receivingCompanyOf);
     }
 
@@ -127,9 +127,16 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
                                    UploadCoordinator coordinator, Duration completeBackoff,
                                    Set<Long> allowedReceiverCompanyIds,
                                    Function<String, Optional<CaseSide>> receivingCompanyOf) {
+        this(api, sessionStore, () -> coordinator, completeBackoff, allowedReceiverCompanyIds, receivingCompanyOf);
+    }
+
+    ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,
+                                   Supplier<UploadCoordinator> coordinators, Duration completeBackoff,
+                                   Set<Long> allowedReceiverCompanyIds,
+                                   Function<String, Optional<CaseSide>> receivingCompanyOf) {
         this.api = api;
         this.sessionStore = sessionStore;
-        this.coordinator = coordinator;
+        this.coordinators = coordinators;
         this.completeBackoff = completeBackoff;
         this.allowedReceiverCompanyIds = allowedReceiverCompanyIds == null ? Set.of() : Set.copyOf(allowedReceiverCompanyIds);
         if (!this.allowedReceiverCompanyIds.isEmpty() && receivingCompanyOf == null) {
@@ -304,7 +311,15 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         }
         requireSupportedMode(grant);
         requireRegularFile(file);
-        return coordinator.upload(grant, file, linkSource(caseToken, grant), listener);
+        return uploadOnItsOwnClient(caseToken, grant, file, listener);
+    }
+
+    // One upload client per coordinated upload, every part and retry included, stopped when it ends.
+    private UploadReceipts uploadOnItsOwnClient(String caseToken, AttachmentGrant grant, Path file,
+                                                UploadProgressListener listener) {
+        try (UploadCoordinator coordinator = coordinators.get()) {
+            return coordinator.upload(grant, file, linkSource(caseToken, grant), listener);
+        }
     }
 
     @Override
@@ -316,7 +331,7 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
         AttachmentGrant grant = createGrant(caseToken, file.getFileName().toString(), sizeOf(file));
         UploadReceipts receipts;
         try {
-            receipts = coordinator.upload(grant, file, linkSource(caseToken, grant), listener);
+            receipts = uploadOnItsOwnClient(caseToken, grant, file, listener);
         } catch (RuntimeException uploadFailure) {
             abandonUnlessTerminal(caseToken, grant.grantId(), uploadFailure);
             throw uploadFailure;
