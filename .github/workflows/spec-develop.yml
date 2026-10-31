@@ -1,9 +1,10 @@
 name: spec-develop
 
 # Builds connect-library against Connect-API-Code's develop spec, daily and on
-# demand. verify builds against beta and runs only when this repo changes, so a
-# develop spec change that breaks the generated client would otherwise go unseen
-# until it reached beta. It was first proposed as a job on every
+# demand. verify builds main against beta and develop against develop, and runs
+# only when this repo changes, so a develop spec change that breaks the generated
+# client would otherwise go unseen until the next change here, or until it reached
+# beta. It was first proposed as a job on every
 # Connect-API-Code PR (tsanetgit/Connect-API-Code#164) and lives here instead so
 # a red main in this repo cannot fail API PRs.
 on:
