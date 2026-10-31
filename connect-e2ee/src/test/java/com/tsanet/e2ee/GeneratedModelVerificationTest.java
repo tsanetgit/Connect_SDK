@@ -72,7 +72,7 @@ class GeneratedModelVerificationTest {
         note.setSummary((String) request.get("summary"));
         note.setDescription((String) request.get("description"));
         note.setManifest((String) request.get("manifest"));
-        note.setEncrypted(true);
+        note.setEncrypted((Boolean) request.get("encrypted"));
         CollaborationRequestStatusDto caseRecord = OpenApiRecords.collaborationRequest(caseAsRead());
         E2eeProfile b = v.profile(Vectors.MEMBER_B, v.memberBKeys(), Vectors.clockAt(v.iat("example2_note_create")));
 

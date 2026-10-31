@@ -57,7 +57,7 @@ switch (result) {
 
 Branch on the record's `encrypted` first: a partner without E2EE sends plaintext and no manifest, and verifying that record refuses it at `SIGNATURE`.
 
-A connector that calls the generated client directly builds these records with `connect-library`'s `OpenApiRecords` (`collaborationRequest`, `caseNote` and `formField`), the same mapping the facades use, rather than its own. Pass `caseNote` the token of the case the note was read under.
+A connector that calls the generated client directly builds these records with `connect-library`'s `OpenApiRecords` (`collaborationRequest` and `caseNote`), the same mapping the facades use, rather than its own, and `formField` for the form `encryptCase` checks. Pass `caseNote` the token of the case the note was read under.
 
 Verification runs the six checks of Addendum D §5 in order, except that step 3's party checks, which need no key, run before step 1's key lookup. It returns the content only when all pass. A failure is a `Refused` that names the step (`SENDER_KEY`, `SIGNATURE`, `CLAIMS`, `FIRST_RECEIPT`, `FIELDS`, `DECRYPT`) and the field. There is no partial result and no plaintext fallback.
 
