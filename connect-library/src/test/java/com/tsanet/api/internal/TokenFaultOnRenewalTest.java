@@ -97,8 +97,9 @@ class TokenFaultOnRenewalTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"500,server_error", "503,temporarily_unavailable"})
-    void aTokenEndpointFailingIsNotAnExpiredSession(int failing, String code) {
+    @CsvSource({"500,server_error", "503,temporarily_unavailable", "429,temporarily_unavailable",
+        "408,temporarily_unavailable"})
+    void aTokenEndpointFailingOrThrottlingIsNotAnExpiredSession(int failing, String code) {
         status = failing;
         body = "{\"error\":\"" + code + "\",\"error_description\":\"app MARKER\"}";
         Throwable thrown = renewAgainst(tokenUrl);

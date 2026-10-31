@@ -77,8 +77,9 @@ public class OAuthTokenGateway {
             // only the error code is read from the body, never error_description.
             String failed = "OAuth client-credentials request failed: HTTP " + ex.getStatusCode().value()
                 + oauthErrorCodeSuffix(ex.getResponseBodyAsString());
-            // A 5xx is the endpoint failing, not a refusal of these credentials.
-            if (ex.getStatusCode().is5xxServerError()) {
+            // A 5xx, a request timeout or throttling is the endpoint failing, not a refusal of these credentials.
+            int status = ex.getStatusCode().value();
+            if (ex.getStatusCode().is5xxServerError() || status == 408 || status == 429) {
                 throw ConnectApiException.tokenRequestFailed(failed);
             }
             throw new IllegalStateException(failed);

@@ -485,8 +485,8 @@ Watch the release notes on each release.
     answers with a known OAuth error code, for example `invalid_client`; otherwise it stays
     `... HTTP <status>`. Entra's `error_description` still isn't included, because it names the
     app. Code that matched the old message exactly should match its prefix. When an expired session
-    can't renew, the same text is in `ConnectApiException.detail()`. A 5xx from the token endpoint
-    isn't a refusal, so it carries that text in a `ConnectApiException` instead (see below).
+    can't renew, the same text is in `ConnectApiException.detail()`. A 5xx, 408 or 429 from the token
+    endpoint isn't a refusal, so it carries that text in a `ConnectApiException` instead (see below).
   - A token response whose access token isn't all visible ASCII now fails sign-in with
     `ConnectApiException`. In 4.0.0 a line break, most control characters or a character above
     Latin-1 failed at the first request with the JDK's `IllegalArgumentException`, which quoted
@@ -495,8 +495,8 @@ Watch the release notes on each release.
     that no longer quote them. Code that read those messages sees the new text. These also change
     type, so a 4.0.0 `catch` stops matching: an unusable token URL or API base URL at sign-in, and a
     token or login response the JDK client can't read, were `IllegalArgumentException`; a malformed
-    login body was `RestClientException`; a malformed token response and a 5xx from the token
-    endpoint were `IllegalStateException`. Each is now `ConnectApiException` of kind `OTHER`, status 0
+    login body was `RestClientException`; a malformed token response and a 5xx, 408 or 429 from the
+    token endpoint were `IllegalStateException`. Each is now `ConnectApiException` of kind `OTHER`, status 0
     and title `Token request`, because logging in again wouldn't fix it, so an expired session that
     meets one no longer reads as a 401 `Session expired`. A refusal by the token endpoint stays
     `IllegalStateException`, and a 401 `Session expired` on renewal. A webhook callback URL stays
