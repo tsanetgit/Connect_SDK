@@ -440,8 +440,11 @@ Watch the release notes on each release.
     and a consumer that bumps without recompiling throws `MatchException` at the first
     unavailable-keys read. Retry the record rather than refuse it: it comes before the replay
     check, so no `jti` is used, and a retry, including one as `FIRST_RECEIPT`, is verified
-    afresh. A failed fetch isn't cached, so each retry goes back to the partner's JWKS endpoint:
-    back off, and bound the retries. A timeout or a non-200 answer can clear on its own, but
+    afresh. After a failed fetch, `PinnedJwksPartnerKeys` doesn't fetch that company's keys again
+    for a minute: a retry inside the minute returns `KeysUnavailable` again without contacting the
+    partner, and keys can stay unavailable for up to a minute after the last failed fetch, even
+    once its endpoint has recovered. A set it holds that hasn't expired is still served. So back
+    off, and bound the retries. A timeout or a non-200 answer can clear on its own, but
     `PinnedJwksPartnerKeys` also throws for a company with no configured JWKS URL and for a set
     that is too large, unparseable or holds a private key, which a retry won't fix until the
     configuration or the partner's set changes. Code that matched the 4.0.0 `SENDER_KEY` reason

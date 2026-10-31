@@ -19,7 +19,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 /** The replay window, the sanitizer workaround, JWKS hygiene and fetching, and the signature form. */
@@ -160,6 +162,128 @@ class SupportingPiecesTest {
     void softwareUnwrapRefusesAKidThatIsNotThisMembers() throws Exception {
         assertThatThrownBy(() -> v.memberAKeys().unwrap("someone-else", new byte[256]))
             .isInstanceOf(java.security.InvalidKeyException.class);
+    }
+
+    /** A JWKS endpoint that can go down, counting every request, under a clock the test moves. */
+    private final class FlakyEndpoint implements AutoCloseable {
+        final AtomicInteger fetches = new AtomicInteger();
+        final AtomicBoolean up = new AtomicBoolean(true);
+        final AtomicReference<Instant> now = new AtomicReference<>(Instant.ofEpochSecond(1_800_000_000L));
+        final AtomicReference<Duration> failureTakes = new AtomicReference<>(Duration.ZERO);
+        final HttpServer server;
+        final PinnedJwksPartnerKeys keys;
+
+        FlakyEndpoint() throws IOException {
+            server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            byte[] jwks = Jwks.publicJson(new JWKSet(v.ec("memberA_sig"))).getBytes(StandardCharsets.UTF_8);
+            server.createContext("/a.json", exchange -> {
+                fetches.incrementAndGet();
+                if (up.get()) {
+                    exchange.sendResponseHeaders(200, jwks.length);
+                    exchange.getResponseBody().write(jwks);
+                } else {
+                    now.updateAndGet(t -> t.plus(failureTakes.get()));
+                    exchange.sendResponseHeaders(503, -1);
+                }
+                exchange.close();
+            });
+            server.start();
+            Clock clock = new Clock() {
+                public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
+                public Clock withZone(java.time.ZoneId zone) { return this; }
+                public Instant instant() { return now.get(); }
+            };
+            keys = new PinnedJwksPartnerKeys(
+                Map.of("1042", URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/a.json")),
+                Duration.ofMinutes(5), HttpClient.newHttpClient(), clock, Duration.ofSeconds(10));
+        }
+
+        void advance(Duration by) {
+            now.updateAndGet(t -> t.plus(by));
+        }
+
+        @Override
+        public void close() {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void aFailedFetchIsNotRepeatedWithinTheMinuteByEitherLookup() throws Exception {
+        try (FlakyEndpoint endpoint = new FlakyEndpoint()) {
+            endpoint.up.set(false);
+
+            assertThatThrownBy(() -> endpoint.keys.publicKeys("1042")).hasMessageContaining("503");
+            assertThat(endpoint.fetches).hasValue(1);
+
+            assertThatThrownBy(() -> endpoint.keys.publicKeys("1042"))
+                .isInstanceOf(IOException.class).hasMessageContaining("1042").hasMessageContaining("wasn't fetched");
+            assertThatThrownBy(() -> endpoint.keys.refreshedPublicKeys("1042"))
+                .isInstanceOf(IOException.class).hasMessageContaining("wasn't fetched");
+            assertThat(endpoint.fetches).as("no request within the minute").hasValue(1);
+
+            endpoint.advance(Duration.ofSeconds(59));
+            assertThatThrownBy(() -> endpoint.keys.publicKeys("1042")).hasMessageContaining("wasn't fetched");
+            assertThat(endpoint.fetches).as("one second short of the minute").hasValue(1);
+
+            endpoint.advance(Duration.ofSeconds(1));
+            assertThatThrownBy(() -> endpoint.keys.refreshedPublicKeys("1042")).hasMessageContaining("503");
+            assertThat(endpoint.fetches).as("fetched again at the minute, and failed").hasValue(2);
+
+            endpoint.up.set(true);
+            assertThatThrownBy(() -> endpoint.keys.publicKeys("1042")).hasMessageContaining("wasn't fetched");
+            assertThat(endpoint.fetches).as("recovery isn't seen until the wait ends").hasValue(2);
+
+            endpoint.advance(Duration.ofMinutes(1));
+            assertThat(endpoint.keys.publicKeys("1042").getKeyByKeyId(v.ec("memberA_sig").getKeyID())).isNotNull();
+            assertThat(endpoint.fetches).hasValue(3);
+        }
+    }
+
+    @Test
+    void aSetStillWithinItsLifetimeIsServedAfterAFailedRefetch() throws Exception {
+        try (FlakyEndpoint endpoint = new FlakyEndpoint()) {
+            String kid = v.ec("memberA_sig").getKeyID();
+            endpoint.keys.publicKeys("1042");
+            endpoint.advance(Duration.ofMinutes(2));
+            endpoint.up.set(false);
+
+            assertThatThrownBy(() -> endpoint.keys.refreshedPublicKeys("1042")).hasMessageContaining("503");
+            assertThat(endpoint.fetches).hasValue(2);
+
+            assertThat(endpoint.keys.publicKeys("1042").getKeyByKeyId(kid)).as("a known kid keeps working").isNotNull();
+            assertThatThrownBy(() -> endpoint.keys.refreshedPublicKeys("1042")).hasMessageContaining("wasn't fetched");
+            assertThat(endpoint.fetches).as("neither lookup made a request").hasValue(2);
+        }
+    }
+
+    @Test
+    void theWaitRunsFromWhenTheFetchFailedNotWhenItStarted() throws Exception {
+        try (FlakyEndpoint endpoint = new FlakyEndpoint()) {
+            endpoint.up.set(false);
+            endpoint.failureTakes.set(Duration.ofSeconds(30));
+
+            assertThatThrownBy(() -> endpoint.keys.publicKeys("1042")).hasMessageContaining("503");
+            endpoint.advance(Duration.ofSeconds(40));
+
+            assertThatThrownBy(() -> endpoint.keys.publicKeys("1042")).hasMessageContaining("wasn't fetched");
+            assertThat(endpoint.fetches).as("70 seconds after it started, 40 after it failed").hasValue(1);
+        }
+    }
+
+    @Test
+    void anInterruptedFetchDoesNotStartTheWait() throws Exception {
+        try (FlakyEndpoint endpoint = new FlakyEndpoint()) {
+            Thread.currentThread().interrupt();
+            try {
+                assertThatThrownBy(() -> endpoint.keys.publicKeys("1042"))
+                    .isInstanceOf(IOException.class).hasMessageContaining("Interrupted");
+            } finally {
+                assertThat(Thread.interrupted()).as("the flag stays set for the caller").isTrue();
+            }
+
+            assertThat(endpoint.keys.publicKeys("1042").getKeyByKeyId(v.ec("memberA_sig").getKeyID())).isNotNull();
+        }
     }
 
     private static void serve(HttpServer server, String path, java.util.function.Supplier<String> body) {
