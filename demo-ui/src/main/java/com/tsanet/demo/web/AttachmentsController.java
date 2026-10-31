@@ -121,13 +121,19 @@ public class AttachmentsController {
         deliveries.shutdownNow();
     }
 
-    /** The browser's file name reduced to its last segment; a bare separator or blank becomes a default. */
+    /**
+     * The browser's file name reduced to its last segment, for a path under the temp directory. Both
+     * separators and a drive prefix count, whatever this OS uses. A name with no usable last segment gets a default.
+     */
     static String lastSegmentOrDefault(String name) {
-        if (name == null || name.isBlank()) {
+        if (name == null) {
             return "attachment";
         }
-        Path last = Path.of(name).getFileName();
-        return last == null || last.toString().isBlank() ? "attachment" : last.toString();
+        int cut = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+        // A colon elsewhere is an ordinary character in a name, such as "meeting 10:30.txt".
+        String last = name.substring(cut + 1).replaceFirst("^[A-Za-z]:", "").strip();
+        boolean usable = !last.isEmpty() && last.indexOf('\0') < 0 && !last.chars().allMatch(c -> c == '.');
+        return usable ? last : "attachment";
     }
 
     @GetMapping("/api/uploads/{uploadId}")
@@ -155,7 +161,8 @@ public class AttachmentsController {
         List<Path> tempFiles = new ArrayList<>();
         try {
             for (MultipartFile file : files) {
-                String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "attachment";
+                // As in deliver: the browser's file name is client input.
+                String original = lastSegmentOrDefault(file.getOriginalFilename());
                 Path temp = Files.createTempDirectory("tsanet-demo-attach").resolve(original);
                 file.transferTo(temp);
                 tempFiles.add(temp);
