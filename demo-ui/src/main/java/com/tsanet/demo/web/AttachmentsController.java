@@ -9,6 +9,7 @@ import com.tsanet.api.facade.AttachmentsV2Facade;
 import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -17,8 +18,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
+import java.util.stream.Stream;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Executors;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -88,35 +91,33 @@ public class AttachmentsController {
         // Resolve the facade here, on the request thread: an account-scoped session picks its
         // delegate per call, and a delivery must not follow an account switch made mid-flight.
         AttachmentsV2Facade attachments = guard.session().attachmentsV2();
-        // The browser's file name is client input; keep only its last segment before it
-        // becomes a path under the temp directory.
-        String original = lastSegmentOrDefault(file.getOriginalFilename());
         Path temp;
         try {
-            temp = uploadPath(Files.createTempDirectory("tsanet-demo-deliver"), original);
-            file.transferTo(temp);
+            temp = store("tsanet-demo-deliver", file);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+        String original = temp.getFileName().toString();
         String uploadId = UUID.randomUUID().toString();
         uploads.put(uploadId, new UploadState(uploadId, original, "starting", null, 0, 0, 0, file.getSize(), null, null));
-        deliveries.submit(() -> {
-            try {
-                AttachmentGrant outcome = attachments.send(token, temp,
-                    progress -> uploads.computeIfPresent(uploadId, (k, v) -> v.progressed(progress)));
-                uploads.computeIfPresent(uploadId, (k, v) -> v.finished(outcome));
-            } catch (RuntimeException e) {
-                String failure = e instanceof AttachmentV2Exception v2 ? v2.code() + ": " + e.getMessage() : e.getMessage();
-                uploads.computeIfPresent(uploadId, (k, v) -> v.failed(failure));
-            } finally {
+        try {
+            deliveries.submit(() -> {
                 try {
-                    Files.deleteIfExists(temp);
-                    Files.deleteIfExists(temp.getParent());
-                } catch (IOException ignored) {
-                    // best-effort temp cleanup
+                    AttachmentGrant outcome = attachments.send(token, temp,
+                        progress -> uploads.computeIfPresent(uploadId, (k, v) -> v.progressed(progress)));
+                    uploads.computeIfPresent(uploadId, (k, v) -> v.finished(outcome));
+                } catch (RuntimeException e) {
+                    String failure = e instanceof AttachmentV2Exception v2 ? v2.code() + ": " + e.getMessage() : e.getMessage();
+                    uploads.computeIfPresent(uploadId, (k, v) -> v.failed(failure));
+                } finally {
+                    removeDirectory(temp.getParent());
                 }
-            }
-        });
+            });
+        } catch (RejectedExecutionException shuttingDown) {
+            uploads.remove(uploadId);
+            removeDirectory(temp.getParent());
+            throw shuttingDown;
+        }
         return Map.of("uploadId", uploadId);
     }
 
@@ -160,6 +161,42 @@ public class AttachmentsController {
         return directory.normalize().equals(resolved.getParent()) ? resolved : directory.resolve(DEFAULT_NAME);
     }
 
+    /**
+     * Writes an upload to a new temp directory of its own, under its last segment. The browser's file name
+     * is client input. On a failure, the directory goes too.
+     */
+    private static Path store(String prefix, MultipartFile file) throws IOException {
+        Path directory = Files.createTempDirectory(prefix);
+        try {
+            Path temp = createUpload(directory, lastSegmentOrDefault(file.getOriginalFilename()));
+            file.transferTo(temp);
+            return temp;
+        } catch (IOException | RuntimeException failed) {
+            removeDirectory(directory);
+            throw failed;
+        }
+    }
+
+    /** A name this host's file system refuses, such as one over its length limit, gets the default. */
+    private static Path createUpload(Path directory, String name) throws IOException {
+        try {
+            return Files.createFile(uploadPath(directory, name));
+        } catch (FileSystemException refused) {
+            return Files.createFile(directory.resolve(DEFAULT_NAME));
+        }
+    }
+
+    private static void removeDirectory(Path directory) {
+        try (Stream<Path> files = Files.list(directory)) {
+            for (Path file : (Iterable<Path>) files::iterator) {
+                Files.deleteIfExists(file);
+            }
+            Files.deleteIfExists(directory);
+        } catch (IOException ignored) {
+            // best-effort temp cleanup
+        }
+    }
+
     @GetMapping("/api/uploads/{uploadId}")
     public UploadState uploadState(@PathVariable String uploadId) {
         guard.session(); // same login requirement as every other case endpoint
@@ -185,23 +222,14 @@ public class AttachmentsController {
         List<Path> tempFiles = new ArrayList<>();
         try {
             for (MultipartFile file : files) {
-                // As in deliver: the browser's file name is client input.
-                String original = lastSegmentOrDefault(file.getOriginalFilename());
-                Path temp = uploadPath(Files.createTempDirectory("tsanet-demo-attach"), original);
-                file.transferTo(temp);
-                tempFiles.add(temp);
+                tempFiles.add(store("tsanet-demo-attach", file));
             }
             return SessionGuard.sdkInput(() -> session.attachments().forwardAttachments(token, description, tempFiles));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } finally {
             for (Path temp : tempFiles) {
-                try {
-                    Files.deleteIfExists(temp);
-                    Files.deleteIfExists(temp.getParent());
-                } catch (IOException ignored) {
-                    // best-effort temp cleanup
-                }
+                removeDirectory(temp.getParent());
             }
         }
     }

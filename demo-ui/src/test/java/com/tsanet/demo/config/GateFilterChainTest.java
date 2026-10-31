@@ -10,8 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
-import org.junit.jupiter.api.BeforeEach;
 import jakarta.servlet.http.Cookie;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -147,8 +147,30 @@ class GateFilterChainTest {
         mvc.perform(post("/api/requests/t1/close")
                 .header(HttpHeaders.AUTHORIZATION, login)
                 .cookie(cookie)
+                .content(new byte[0]) // a browser declares a length of 0 on a bodyless POST
                 .header("X-XSRF-TOKEN", cookie.getValue()))
             .andExpect(status().isPreconditionRequired());
+    }
+
+    /** The form the parameter was read in before: XorCsrfTokenRequestAttributeHandler's mask of the cookie's value. */
+    static String maskedToken(String token) {
+        byte[] plain = token.getBytes(StandardCharsets.UTF_8);
+        byte[] masked = new byte[plain.length * 2];
+        for (int i = 0; i < plain.length; i++) {
+            masked[i] = (byte) (i + 1);
+            masked[plain.length + i] = (byte) (plain[i] ^ masked[i]);
+        }
+        return Base64.getUrlEncoder().encodeToString(masked);
+    }
+
+    @Test
+    void aTokenInTheFormParameterIsNotRead() throws Exception {
+        mvc.perform(post("/api/requests/t1/close")
+                .header(HttpHeaders.AUTHORIZATION, basic("shawn", "op"))
+                .cookie(new Cookie("XSRF-TOKEN", "matching-token"))
+                .param("_csrf", maskedToken("matching-token")))
+            .andExpect(status().isForbidden())
+            .andExpect(content().string(SecurityConfig.CSRF_REFUSED));
     }
 
     @Test

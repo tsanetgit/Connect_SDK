@@ -110,16 +110,19 @@ you pay for Fargate, the load balancer and logs while the service exists (there 
 
 **Auth gate** is mandatory on any hosted deploy. Put the gate values and the Entra values in
 SSM Parameter Store as SecureStrings and let the task read them as secrets, so nothing sits in
-plaintext in the service configuration. The two `GUEST` values are optional: set them to give
-members a second login with the same rights. Without a guest login, delete those two names from
-the loop (SSM refuses an empty SecureString) and the two matching `secrets` entries below. To
-keep the default guest username (`guest`), delete only the `GUEST_USER` name and entry. The four
+plaintext in the service configuration. The three `GUEST` values are optional: set the user and password to give
+members a second login with the same rights and a lower upload limit. A guest's `POST`, `PUT` or `PATCH` must declare a
+`Content-Length`, and any request's must be within the limit. `TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES` is that limit in bytes,
+1 GB when it isn't set; it isn't a secret, and goes through SSM here because that's this deploy's one route for the task's settings.
+Without a guest login, delete all three names from the loop (SSM refuses an empty SecureString) and the three matching
+`secrets` entries below. To keep the default guest username (`guest`), delete only the `GUEST_USER` name and entry. To keep
+the 1 GB default, delete only the `GUEST_MAX_UPLOAD_BYTES` name and entry. The four
 `SEED` values are the member credentials written into each environment's store at startup (see
 the lock paragraph below); without them, delete those names, their `secrets` entries and the
 `environment` block, and run the demo unlocked.
 
 ```bash
-for v in TSANET_DEMO_AUTH_USER TSANET_DEMO_AUTH_PASSWORD TSANET_DEMO_AUTH_GUEST_USER TSANET_DEMO_AUTH_GUEST_PASSWORD TSANET_DEMO_ENTRA_TENANT TSANET_DEMO_ENTRA_AUDIENCE_BETA TSANET_DEMO_ENTRA_AUDIENCE_DEV TSANET_DEMO_SEED_BETA_USERNAME TSANET_DEMO_SEED_BETA_PASSWORD TSANET_DEMO_SEED_DEV_USERNAME TSANET_DEMO_SEED_DEV_PASSWORD; do
+for v in TSANET_DEMO_AUTH_USER TSANET_DEMO_AUTH_PASSWORD TSANET_DEMO_AUTH_GUEST_USER TSANET_DEMO_AUTH_GUEST_PASSWORD TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES TSANET_DEMO_ENTRA_TENANT TSANET_DEMO_ENTRA_AUDIENCE_BETA TSANET_DEMO_ENTRA_AUDIENCE_DEV TSANET_DEMO_SEED_BETA_USERNAME TSANET_DEMO_SEED_BETA_PASSWORD TSANET_DEMO_SEED_DEV_USERNAME TSANET_DEMO_SEED_DEV_PASSWORD; do
   aws ssm put-parameter --region <REGION> --name "/connect-sdk-demo/$v" --type SecureString --value "<value>" --overwrite
 done
 ```
@@ -203,6 +206,7 @@ don't use):
     {"name": "TSANET_DEMO_AUTH_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_PASSWORD"},
     {"name": "TSANET_DEMO_AUTH_GUEST_USER", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_USER"},
     {"name": "TSANET_DEMO_AUTH_GUEST_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_PASSWORD"},
+    {"name": "TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES"},
     {"name": "TSANET_DEMO_ENTRA_TENANT", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_TENANT"},
     {"name": "TSANET_DEMO_ENTRA_AUDIENCE_BETA", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_BETA"},
     {"name": "TSANET_DEMO_ENTRA_AUDIENCE_DEV", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_DEV"},

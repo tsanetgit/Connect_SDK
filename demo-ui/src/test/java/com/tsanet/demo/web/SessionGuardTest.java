@@ -7,6 +7,7 @@ import com.tsanet.demo.config.DemoProperties;
 import com.tsanet.demo.config.EnvironmentService;
 import java.nio.file.Path;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -20,6 +21,11 @@ class SessionGuardTest {
 
     private EnvironmentService environments;
     private SessionGuard guard;
+
+    @AfterEach
+    void closeSessions() {
+        environments.close();
+    }
 
     @BeforeEach
     void setUp() {
@@ -156,12 +162,16 @@ class SessionGuardTest {
             null,  // credentials not locked
             null  // no seeds
         ));
-        two.credentialsFor("beta").save("user@example.com", "pw");
+        try {
+            two.credentialsFor("beta").save("user@example.com", "pw");
 
-        assertThatThrownBy(() -> new SessionGuard(two).session("dev"))
-            .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
-                assertThat(e.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
-                assertThat(e.getReason()).startsWith("Dev credentials not configured");
-            });
+            assertThatThrownBy(() -> new SessionGuard(two).session("dev"))
+                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
+                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.PRECONDITION_REQUIRED);
+                    assertThat(e.getReason()).startsWith("Dev credentials not configured");
+                });
+        } finally {
+            two.close();
+        }
     }
 }

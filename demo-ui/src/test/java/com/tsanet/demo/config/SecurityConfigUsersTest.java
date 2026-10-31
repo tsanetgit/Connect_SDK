@@ -14,7 +14,7 @@ class SecurityConfigUsersTest {
     private static final PasswordEncoder ENCODER = PasswordEncoderFactories.createDelegatingPasswordEncoder();
 
     private static DemoAuthProperties of(String user, String password, String guestUser, String guestPassword) {
-        return new DemoAuthProperties(user, password, new DemoAuthProperties.Guest(guestUser, guestPassword));
+        return new DemoAuthProperties(user, password, new DemoAuthProperties.Guest(guestUser, guestPassword, null));
     }
 
     @Test
@@ -27,7 +27,8 @@ class SecurityConfigUsersTest {
         assertThat(ENCODER.matches("g", guest.getPassword())).isTrue();
         assertThat(ENCODER.matches("op", guest.getPassword())).isFalse();
         assertThat(operator.getAuthorities()).extracting(Object::toString).containsExactly("ROLE_DEMO");
-        assertThat(guest.getAuthorities()).extracting(Object::toString).containsExactly("ROLE_DEMO");
+        assertThat(guest.getAuthorities()).extracting(Object::toString)
+            .containsExactlyInAnyOrder("ROLE_DEMO", GuestUploadLimitFilter.LIMITED_UPLOADS);
     }
 
     @Test
