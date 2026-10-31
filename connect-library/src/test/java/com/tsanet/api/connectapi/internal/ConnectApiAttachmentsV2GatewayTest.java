@@ -65,7 +65,7 @@ class ConnectApiAttachmentsV2GatewayTest {
 
     @BeforeEach
     void setUp() throws Exception {
-        gateway = new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), coordinator,
+        gateway = new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), () -> coordinator,
             Duration.ZERO);
         file = tmp.resolve("diag.log");
         Files.write(file, "hello attachments".getBytes(StandardCharsets.UTF_8));
@@ -374,7 +374,7 @@ class ConnectApiAttachmentsV2GatewayTest {
     @Test
     void anInterruptDuringTheCompleteBackoffStopsWithNoMoreCalls() {
         ConnectApiAttachmentsV2Gateway backingOff = new ConnectApiAttachmentsV2Gateway(api,
-            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofMillis(50));
+            GatewayTestSupport.authenticatedSessionStore(), () -> coordinator, Duration.ofMillis(50));
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
         when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
@@ -397,7 +397,7 @@ class ConnectApiAttachmentsV2GatewayTest {
     @Test
     void anInterruptedCompleteBackoffKeepsTheFailureItWasRetrying() {
         ConnectApiAttachmentsV2Gateway backingOff = new ConnectApiAttachmentsV2Gateway(api,
-            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofMillis(50));
+            GatewayTestSupport.authenticatedSessionStore(), () -> coordinator, Duration.ofMillis(50));
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
         when(api.completeSingleUpload(TOKEN, GRANT_ID)).thenAnswer(invocation -> {
@@ -423,7 +423,7 @@ class ConnectApiAttachmentsV2GatewayTest {
     @Test
     void anInterruptDuringARealCompleteBackoffStopsTheWaitAndKeepsBothCauses() {
         ConnectApiAttachmentsV2Gateway slow = new ConnectApiAttachmentsV2Gateway(api,
-            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofSeconds(2));
+            GatewayTestSupport.authenticatedSessionStore(), () -> coordinator, Duration.ofSeconds(2));
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
         Thread caller = Thread.currentThread();
@@ -521,7 +521,7 @@ class ConnectApiAttachmentsV2GatewayTest {
     @Test
     void anInterruptDuringTheLastCompleteKeepsItsCodeAndTheFlag() {
         ConnectApiAttachmentsV2Gateway backingOff = new ConnectApiAttachmentsV2Gateway(api,
-            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ofMillis(1));
+            GatewayTestSupport.authenticatedSessionStore(), () -> coordinator, Duration.ofMillis(1));
         when(api.createAttachmentGrant(eq(TOKEN), any())).thenReturn(grantDto(AttachmentUploadMode.SINGLE,
             AttachmentGrantStatus.OPEN));
         ConnectApiException lost = ConnectApiException.connectivity(new java.net.SocketTimeoutException("read timed out"));
@@ -639,7 +639,7 @@ class ConnectApiAttachmentsV2GatewayTest {
     @Test
     void everyCallRequiresALogin() {
         ConnectApiAttachmentsV2Gateway loggedOut = new ConnectApiAttachmentsV2Gateway(api, new ConnectApiSessionStore(),
-            coordinator, Duration.ZERO);
+            () -> coordinator, Duration.ZERO);
 
         assertThatThrownBy(() -> loggedOut.createGrant(TOKEN, "a", 1)).isInstanceOf(IllegalStateException.class);
         assertThatThrownBy(() -> loggedOut.send(TOKEN, file, null)).isInstanceOf(IllegalStateException.class);
@@ -669,7 +669,7 @@ class ConnectApiAttachmentsV2GatewayTest {
 
     private ConnectApiAttachmentsV2Gateway allowlistedReading(java.util.Set<Long> allowed,
                                                               java.util.Optional<ConnectApiAttachmentsV2Gateway.CaseSide> side) {
-        return new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), coordinator,
+        return new ConnectApiAttachmentsV2Gateway(api, GatewayTestSupport.authenticatedSessionStore(), () -> coordinator,
             Duration.ZERO, allowed, caseToken -> {
                 caseLookups.add(caseToken);
                 return side;
@@ -774,7 +774,7 @@ class ConnectApiAttachmentsV2GatewayTest {
     @Test
     void aCaseLookupThatFailsKeepsItsOwnCodeAndRequestsNoGrant() {
         ConnectApiAttachmentsV2Gateway guarded = new ConnectApiAttachmentsV2Gateway(api,
-            GatewayTestSupport.authenticatedSessionStore(), coordinator, Duration.ZERO, java.util.Set.of(ALLOWED),
+            GatewayTestSupport.authenticatedSessionStore(), () -> coordinator, Duration.ZERO, java.util.Set.of(ALLOWED),
             caseToken -> {
                 throw apiError(404);
             });

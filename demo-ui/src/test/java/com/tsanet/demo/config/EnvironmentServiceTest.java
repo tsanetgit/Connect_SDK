@@ -14,8 +14,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Offline: sessions are built over a temp SQLite dir and never authenticate,
- * so the apiBaseUrl below is never contacted. Sessions expose no close API;
- * as in the library's own session tests, teardown relies on temp-dir deletion.
+ * and nothing listens on the apiBaseUrl below. As in the library's own session
+ * tests, teardown relies on temp-dir deletion, not on closing each session.
  */
 class EnvironmentServiceTest {
 

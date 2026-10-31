@@ -119,15 +119,8 @@ public class ConnectApiAttachmentsV2Gateway implements AttachmentsV2Facade {
     }
 
     ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,
-                                   UploadCoordinator coordinator, Duration completeBackoff) {
-        this(api, sessionStore, coordinator, completeBackoff, Set.of(), caseToken -> Optional.empty());
-    }
-
-    ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,
-                                   UploadCoordinator coordinator, Duration completeBackoff,
-                                   Set<Long> allowedReceiverCompanyIds,
-                                   Function<String, Optional<CaseSide>> receivingCompanyOf) {
-        this(api, sessionStore, () -> coordinator, completeBackoff, allowedReceiverCompanyIds, receivingCompanyOf);
+                                   Supplier<UploadCoordinator> coordinators, Duration completeBackoff) {
+        this(api, sessionStore, coordinators, completeBackoff, Set.of(), caseToken -> Optional.empty());
     }
 
     ConnectApiAttachmentsV2Gateway(AttachmentGrantsApi api, ConnectApiSessionStore sessionStore,

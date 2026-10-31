@@ -436,9 +436,9 @@ Watch the release notes on each release.
   public as `OpenApiRecords` (`tsanetgit/Connect_SDK#146`); the runtime line (Spring Boot 4.1,
   Jackson 3, JDK 21) is unchanged from 4.0.0. It is a major because of three source breaks: an
   exhaustive `switch` over `Verification`, the removed record constructors below, and an
-  implementer of `TsaNetApiSession`. A connector that doesn't use `connect-e2ee`, those
-  constructors or its own `TsaNetApiSession` needs no code change, but check anything that reads
-  the changed records' `toString()`, and close the sessions it drops.
+  implementer of `TsaNetApiSession`. A connector that uses none of those keeps compiling, but
+  check anything that reads the changed records' `toString()`, and add a `close()` call where it
+  drops a session.
   - `Verification` gains a third permitted subtype, `KeysUnavailable`, returned when
     `PartnerKeys` throws `IOException` fetching the sending company's keys (at first, or on the
     refetch for an unknown `kid`). An exhaustive `switch` without the new case stops compiling,
@@ -482,9 +482,12 @@ Watch the release notes on each release.
     JDK `HttpClient`, with its selector thread and pooled connections, from the moment it opens,
     and until 5.0.0 nothing released them. Call `close()` on a session you drop, for example on a
     credential change or after a one-off poll. It doesn't wait: requests already sent run to
-    completion, and a later one fails with a `ConnectApiException`, "cannot reach the Connect API
-    (IOException)". Code that implements `TsaNetApiSession` itself must add `close()`. A V2 upload
-    now runs on a client of its own, stopped when that upload ends.
+    completion, and a later one fails with a `ConnectApiException` of kind `CONNECTIVITY`, "cannot
+    reach the Connect API (IOException)", so a `send` still running can't complete its grant, which
+    stays open until it expires. `AccountScopedTsaNetApiSession` instead goes back to having no
+    session until the next login. Code that implements `TsaNetApiSession` itself must add
+    `close()`. A V2 upload now runs on a client of its own, stopped when that upload ends, so
+    uploads no longer share pooled connections.
   - The deprecated record constructors are gone (`tsanetgit/Connect_SDK#139`): `CaseNoteDto`'s
     14- and 18-argument forms and `CollaborationRequestStatusDto`'s 10-, 11- and 13-argument
     forms. Call the canonical constructor (20 and 16 arguments), passing `null` for a value you
