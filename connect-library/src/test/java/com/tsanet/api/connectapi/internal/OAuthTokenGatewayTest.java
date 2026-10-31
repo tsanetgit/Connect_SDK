@@ -120,7 +120,8 @@ class OAuthTokenGatewayTest {
         "[\"invalid_client\"]",
         // Not JSON at all, and an empty body.
         "<html>MARKER invalid_client</html>",
-        ""
+        "",
+        " \n\t "
     })
     void aRefusalWithoutAKnownErrorCodeKeepsTheStatusOnlyMessage(String body) {
         RestTemplate restTemplate = new RestTemplate();
