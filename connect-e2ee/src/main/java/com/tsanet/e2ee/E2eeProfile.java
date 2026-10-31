@@ -47,8 +47,9 @@ import java.util.UUID;
  * <p>Outbound, {@link #encryptCase} and {@link #encryptNote} check the plaintext, encrypt each
  * protected field for the partner and for this member, and sign a manifest; the results go to
  * connect-library's create overloads unchanged. Inbound, {@link #verifyCase} and {@link #verifyNote}
- * run the six checks of Addendum D §5 in order and return the decrypted content only when every
- * one passes. Nothing here writes to connect-library's cache, which keeps what the platform returned.
+ * run the six checks of Addendum D §5 in order (except that step 3's party checks, which need no
+ * key, run before step 1's key lookup) and return the decrypted content only when every one passes,
+ * or {@link Verification.KeysUnavailable} when the sender's keys can't be had. Nothing here writes to connect-library's cache, which keeps what the platform returned.
  *
  * <p>Protected: {@code problemSummary}, {@code problemDescription}, each custom-field value (an empty
  * string included; a null stays null), and a note's {@code summary} and {@code description}.
