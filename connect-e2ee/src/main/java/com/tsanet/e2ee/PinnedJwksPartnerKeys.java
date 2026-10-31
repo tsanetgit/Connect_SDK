@@ -113,8 +113,9 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
     }
 
     // The one place a lookup reaches the network, so the wait after a failure applies only where a
-    // fetch would happen. Lookups don't share a fetch: one can fail just after another succeeds and
-    // record a failure next to a fresh set, which is harmless, since that set is served first.
+    // fetch would happen. Lookups don't share a fetch: one that started first can fail just after
+    // another succeeds, starting a wait next to a fresh set. That set is still served; once it's a
+    // minute old, a refetch for an unknown kid in that wait reads as KeysUnavailable, which is retryable.
     private JWKSet fetchAndCache(URI url, String companyId, Instant now) throws IOException {
         Instant failedAt = lastFailure.get(companyId);
         if (failedAt != null && failedAt.plus(MIN_REFRESH_INTERVAL).isAfter(now)) {
