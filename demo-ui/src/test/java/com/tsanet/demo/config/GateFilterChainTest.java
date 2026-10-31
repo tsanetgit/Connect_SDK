@@ -19,7 +19,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.FilterChainProxy;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -158,22 +161,30 @@ class GateFilterChainTest {
             .andExpect(status().isForbidden());
     }
 
-    @Test
-    void anUploadIsRefusedWithoutTheHeaderAndPassesWithIt() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"/api/requests/t1/attachments,files", "/api/requests/t1/attachments/v2,file"})
+    void anUploadIsRefusedWithoutTheHeaderAndPassesWithIt(String path, String part) throws Exception {
         String login = basic("shawn", "op");
         Cookie cookie = csrfCookie(login);
-        MockMultipartFile file = new MockMultipartFile("file", "a.txt", "text/plain", new byte[] {1});
-        mvc.perform(multipart("/api/requests/t1/attachments").file(file)
+        MockMultipartFile file = new MockMultipartFile(part, "a.txt", "text/plain", new byte[] {1});
+        mvc.perform(multipart(path).file(file)
                 .header(HttpHeaders.AUTHORIZATION, login)
                 .cookie(cookie))
             .andExpect(status().isForbidden());
-        // Past the check, whatever the handler then makes of this file with no member credentials.
-        int passed = mvc.perform(multipart("/api/requests/t1/attachments").file(file)
+        mvc.perform(multipart(path).file(file)
+                .param("description", "the form's own field on the V1 route")
                 .header(HttpHeaders.AUTHORIZATION, login)
                 .cookie(cookie)
                 .header("X-XSRF-TOKEN", cookie.getValue()))
-            .andReturn().getResponse().getStatus();
-        assertThat(passed).isNotEqualTo(403);
+            .andExpect(status().isPreconditionRequired());
+    }
+
+    @Test
+    void onlyACsrfRefusalAsksForAReload() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        SecurityConfig.refuse(new MockHttpServletRequest(), response, new AccessDeniedException("denied"));
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).isEqualTo(SecurityConfig.FORBIDDEN);
     }
 
     @Test
