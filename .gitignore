@@ -1,6 +1,5 @@
 .idea
 target
-__pycache__/
 .env
 .claude/settings.local.json
 docs/RUNBOOK.local.md
