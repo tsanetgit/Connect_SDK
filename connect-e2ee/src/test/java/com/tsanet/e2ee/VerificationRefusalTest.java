@@ -163,8 +163,38 @@ class VerificationRefusalTest {
                 values.add(valid.replaceFirst("\"" + member + "\":", "\"_was\":").replaceFirst("\"_was\":", "\"" + member + "\":" + shape + ",\"_was\":"));
             }
             values.add(com.nimbusds.jose.util.JSONObjectUtils.toJSONString(jwe).replaceFirst("\"protected\":\"[^\"]*\"", "\"protected\":\"" + jsonB64(shape) + "\""));
+            // Inside a recipient: the parsed JWE is fine, and a typed getter meets the shape later.
+            // A string kid on one entry is just another recipient; the other entry still opens it.
+            if (!shape.startsWith("\"")) {
+                values.add(withRecipientKid(valid, shape, RecipientPick.FIRST));
+                values.add(withRecipientKid(valid, shape, RecipientPick.LAST));
+            }
+            values.add(withRecipientKid(valid, shape, RecipientPick.ALL));
+            values.add(valid.replaceAll("\"alg\":\"[^\"]*\"", "\"alg\":" + java.util.regex.Matcher.quoteReplacement(shape)));
+            values.add(valid.replaceAll("\"encrypted_key\":\"[^\"]*\"", "\"encrypted_key\":" + java.util.regex.Matcher.quoteReplacement(shape)));
         }
         return values;
+    }
+
+    private enum RecipientPick { FIRST, LAST, ALL }
+
+    private static String withRecipientKid(String jwe, String kidJson, RecipientPick pick) {
+        java.util.regex.Matcher kid = java.util.regex.Pattern.compile("\"kid\":\"[^\"]*\"").matcher(jwe);
+        List<int[]> spans = new ArrayList<>();
+        while (kid.find()) {
+            spans.add(new int[] {kid.start(), kid.end()});
+        }
+        assertThat(spans).as("the example has two recipients").hasSize(2);
+        List<int[]> picked = switch (pick) {
+            case FIRST -> spans.subList(0, 1);
+            case LAST -> spans.subList(1, 2);
+            case ALL -> spans;
+        };
+        StringBuilder edited = new StringBuilder(jwe);
+        for (int i = picked.size() - 1; i >= 0; i--) {
+            edited.replace(picked.get(i)[0], picked.get(i)[1], "\"kid\":" + kidJson);
+        }
+        return edited.toString();
     }
 
     /** The whole class at once: whatever a sender puts in the text, the caller gets one of the three outcomes. */
@@ -261,6 +291,53 @@ class VerificationRefusalTest {
             Vectors.noteRecord("null", note.description(), signed, 1042L), original, Receipt.STORED_READ));
         assertThat(onNote.step()).isEqualTo(Step.FIELDS);
         assertThat(onNote.field()).isEqualTo(Profile.PROBLEM_SUMMARY);
+    }
+
+    @Test
+    void aRecipientKidThatIsNotAStringIsRefusedAtFieldsOnACaseAndANote() throws Exception {
+        CaseNoteDto note = v.noteRecord();
+        Map<String, Object> notePayload = v.map("example2_note_create", "manifest_payload");
+        for (String kid : List.of("1", "true", "[]", "{}", "null")) {
+            for (RecipientPick pick : RecipientPick.values()) {
+                String tampered = withRecipientKid(original.summary(), kid, pick);
+                Map<String, String> values = originalValues();
+                values.put(Profile.PROBLEM_SUMMARY, tampered);
+                Refused<?> onCase = refusal(memberB.verifyCase(
+                    withContent(tampered, original.description(), resign(values, Profile.VERSION, v.memberAKeys())), Receipt.STORED_READ));
+                assertThat(onCase.step()).as(kid + " " + pick).isEqualTo(Step.FIELDS);
+                assertThat(onCase.field()).as(kid + " " + pick).isEqualTo(Profile.PROBLEM_SUMMARY);
+
+                List<CaseCustomFieldDto> fields = new ArrayList<>(original.customFields());
+                CaseCustomFieldDto first = fields.get(0);
+                fields.set(0, new CaseCustomFieldDto(first.id(), first.fieldName(), withRecipientKid(first.value(), kid, pick)));
+                assertThat(refusal(memberB.verifyCase(with(original.summary(), original.description(), fields, original.manifest(),
+                    true, 1042L, 2087L, original.submitterCaseNumber()), Receipt.STORED_READ)).step())
+                    .as("custom field " + kid + " " + pick).isEqualTo(Step.FIELDS);
+
+                String tamperedNote = withRecipientKid(note.summary(), kid, pick);
+                String signedNote = Manifest.sign(new Manifest.Claims(Profile.VERSION, (String) notePayload.get("iss"),
+                    (String) notePayload.get("aud"), (String) notePayload.get("ref"), iat, (String) notePayload.get("jti"), List.of(
+                        new Manifest.FieldDigest(Profile.PROBLEM_SUMMARY, Manifest.digest(tamperedNote)),
+                        new Manifest.FieldDigest(Profile.PROBLEM_DESCRIPTION, Manifest.digest(note.description())))),
+                    v.memberAKeys());
+                assertThat(refusal(memberB.verifyNote(Vectors.noteRecord(tamperedNote, note.description(), signedNote, 1042L),
+                    original, Receipt.STORED_READ)).step()).as("note " + kid + " " + pick).isEqualTo(Step.FIELDS);
+            }
+        }
+    }
+
+    /** Refused after step 4, so the jti is used, like any refusal at steps 5 and 6: a retry is a replay, and a stored read names the step. */
+    @Test
+    void aRetriedFirstReceiptWithABadRecipientKidIsARefusedReplay() throws Exception {
+        String tampered = withRecipientKid(original.summary(), "1", RecipientPick.FIRST);
+        Map<String, String> values = originalValues();
+        values.put(Profile.PROBLEM_SUMMARY, tampered);
+        CollaborationRequestStatusDto record =
+            withContent(tampered, original.description(), resign(values, Profile.VERSION, v.memberAKeys()));
+
+        assertThat(refusal(memberB.verifyCase(record, Receipt.FIRST_RECEIPT)).step()).isEqualTo(Step.FIELDS);
+        assertThat(refusal(memberB.verifyCase(record, Receipt.FIRST_RECEIPT)).step()).isEqualTo(Step.FIRST_RECEIPT);
+        assertThat(refusal(memberB.verifyCase(record, Receipt.STORED_READ)).step()).isEqualTo(Step.FIELDS);
     }
 
     /** A raw socket, since the JDK's own server won't send these: its client refuses them with an unchecked exception. */
