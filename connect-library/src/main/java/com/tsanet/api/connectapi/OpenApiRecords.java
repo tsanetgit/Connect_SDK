@@ -12,12 +12,12 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
- * The one mapping from the generated OpenAPI models to the library's records. The library's own
- * gateways map through here, and a caller on the generated client uses it to build the records
- * {@code connect-e2ee} takes, so the two can't drift apart.
+ * The mapping from the generated OpenAPI models to the records {@code connect-e2ee} takes. The
+ * library's own gateways map these records through here, and a caller on the generated client uses
+ * it too, so the two can't drift apart.
  *
  * <p>The parameters are generated types, so a rename in the Connect OpenAPI spec changes these
- * signatures.
+ * signatures. Every argument must be non-null, except {@code caseNote}'s {@code caseToken}.
  */
 public final class OpenApiRecords {
     private OpenApiRecords() {
@@ -105,8 +105,8 @@ public final class OpenApiRecords {
             .toList();
     }
 
-    // Kept here rather than shared with the internal OpenApiMapping, which isn't public; OpenApiRecordsTest
-    // pins what these produce for the three records.
+    // Kept here rather than shared with the internal OpenApiMapping, which isn't public;
+    // internal.OpenApiMappingAgreementTest asserts the two copies agree.
     private static String dateTime(OffsetDateTime value) {
         return value != null ? value.toString() : null;
     }
