@@ -166,6 +166,25 @@ class UploadFileNameTest {
         }
     }
 
+    /** Once the app is shutting down, an upload that reaches the delivery queue is refused and cleaned up. */
+    @org.junit.jupiter.api.Test
+    void aRefusedDeliveryLeavesNoDirectory() throws Exception {
+        TsaNetApiSession session = mock(TsaNetApiSession.class);
+        when(session.attachmentsV2()).thenReturn(attachmentsV2);
+        SessionGuard guard = mock(SessionGuard.class);
+        when(guard.session()).thenReturn(session);
+        AttachmentsController controller = new AttachmentsController(guard);
+        controller.shutdownDeliveries();
+        Set<Path> before = uploadDirectories();
+
+        MockMvcBuilders.standaloneSetup(controller).setControllerAdvice(new ApiErrorHandler()).build()
+            .perform(multipart("/api/requests/tok/attachments/v2")
+                .file(new MockMultipartFile("file", "report.txt", "text/plain", new byte[] {1})))
+            .andExpect(status().isBadGateway());
+
+        assertThat(uploadDirectories()).isSubsetOf(before);
+    }
+
     @org.junit.jupiter.api.Test
     void aFailedWriteLeavesNoDirectoryOnTheV2Route() throws Exception {
         Set<Path> before = uploadDirectories();

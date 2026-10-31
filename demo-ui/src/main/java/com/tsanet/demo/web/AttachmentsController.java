@@ -21,6 +21,7 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Executors;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -99,18 +100,24 @@ public class AttachmentsController {
         String original = temp.getFileName().toString();
         String uploadId = UUID.randomUUID().toString();
         uploads.put(uploadId, new UploadState(uploadId, original, "starting", null, 0, 0, 0, file.getSize(), null, null));
-        deliveries.submit(() -> {
-            try {
-                AttachmentGrant outcome = attachments.send(token, temp,
-                    progress -> uploads.computeIfPresent(uploadId, (k, v) -> v.progressed(progress)));
-                uploads.computeIfPresent(uploadId, (k, v) -> v.finished(outcome));
-            } catch (RuntimeException e) {
-                String failure = e instanceof AttachmentV2Exception v2 ? v2.code() + ": " + e.getMessage() : e.getMessage();
-                uploads.computeIfPresent(uploadId, (k, v) -> v.failed(failure));
-            } finally {
-                removeDirectory(temp.getParent());
-            }
-        });
+        try {
+            deliveries.submit(() -> {
+                try {
+                    AttachmentGrant outcome = attachments.send(token, temp,
+                        progress -> uploads.computeIfPresent(uploadId, (k, v) -> v.progressed(progress)));
+                    uploads.computeIfPresent(uploadId, (k, v) -> v.finished(outcome));
+                } catch (RuntimeException e) {
+                    String failure = e instanceof AttachmentV2Exception v2 ? v2.code() + ": " + e.getMessage() : e.getMessage();
+                    uploads.computeIfPresent(uploadId, (k, v) -> v.failed(failure));
+                } finally {
+                    removeDirectory(temp.getParent());
+                }
+            });
+        } catch (RejectedExecutionException shuttingDown) {
+            uploads.remove(uploadId);
+            removeDirectory(temp.getParent());
+            throw shuttingDown;
+        }
         return Map.of("uploadId", uploadId);
     }
 
