@@ -57,6 +57,8 @@ switch (result) {
 
 Branch on the record's `encrypted` first: a partner without E2EE sends plaintext and no manifest, and verifying that record refuses it at `SIGNATURE`.
 
+A connector that calls the generated client directly builds these records with `connect-library`'s `OpenApiRecords` (`collaborationRequest` and `caseNote`), the same mapping the facades use, rather than its own, and `formField` for the form `encryptCase` checks. Pass `caseNote` the token of the case the note was read under.
+
 Verification runs the six checks of Addendum D §5 in order, except that step 3's party checks, which need no key, run before step 1's key lookup. It returns the content only when all pass. A failure is a `Refused` that names the step (`SENDER_KEY`, `SIGNATURE`, `CLAIMS`, `FIRST_RECEIPT`, `FIELDS`, `DECRYPT`) and the field. There is no partial result and no plaintext fallback.
 
 `KeysUnavailable` means `PartnerKeys` threw fetching the sending company's keys, at first or on the refetch for an unknown `kid`. The record wasn't judged, so retry it rather than refuse it. It comes before the replay check and uses nothing. `PinnedJwksPartnerKeys` also throws for a company with no configured JWKS URL and for a JWKS it rejects (a non-200 answer, too large, unparseable, or holding a private key), and those need fixing before a retry can succeed, so bound the retries and alert when they run out. A record whose parties don't include this member is refused at `CLAIMS` before the key lookup, so it never reads as `KeysUnavailable`. A switch over `Verification` must handle all three outcomes.
