@@ -105,7 +105,9 @@ public class WebhookInboundService {
             }
             return "Stored webhook event without cache sync for eventType=" + payload.eventType();
         } catch (Exception ex) {
-            return "Stored webhook event; cache sync failed: " + ex.getMessage();
+            // The API's own error text can echo the token, for example "Case with token ... not found."
+            return "Stored webhook event; cache sync failed: "
+                + String.valueOf(ex.getMessage()).replace(payload.requestToken(), "<redacted>");
         }
     }
 }

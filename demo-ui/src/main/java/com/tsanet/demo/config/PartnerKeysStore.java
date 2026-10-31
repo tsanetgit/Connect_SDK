@@ -127,7 +127,7 @@ public class PartnerKeysStore {
      * Adds or replaces the URL entry for {@code companyId}.
      *
      * @throws IllegalArgumentException for a URL that is not HTTPS (loopback HTTP is allowed, for a
-     *                                  local key server in tests) or has no usable host, or a company id
+     *                                  local key server in tests) or has no host, or a company id
      *                                  that is not a number
      */
     public synchronized void putUrl(String companyId, URI jwksUrl) {

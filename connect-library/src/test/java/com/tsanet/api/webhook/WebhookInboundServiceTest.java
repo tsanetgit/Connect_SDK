@@ -17,6 +17,7 @@ import java.util.HexFormat;
 import java.util.List;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -40,6 +41,26 @@ class WebhookInboundServiceTest {
 
         assertThat(result.message()).isEqualTo(message);
         verify(events).store(eq(7L), eq(eventType), eq("tok-sync"), any(), any(), eq(true), eq(true), eq(message), eq(body));
+    }
+
+    @Test
+    void aFailedSyncDoesNotRepeatTheRequestTokenFromTheServersMessage() throws Exception {
+        var subscriptions = mock(WebhookSubscriptionStorageService.class);
+        when(subscriptions.findVerificationSecrets()).thenReturn(List.of(new SecretRow(7L, SECRET)));
+        var events = mock(WebhookInboundEventStorageService.class);
+        var collaboration = mock(ConnectApiCollaborationGateway.class);
+        when(collaboration.getCollaborationRequestByToken("tok-sync"))
+            .thenThrow(new IllegalStateException("HTTP 404 (legacy error): Case with token tok-sync not found."));
+        var service = new WebhookInboundService(subscriptions, events, collaboration,
+            mock(ConnectApiNotesGateway.class), () -> { });
+        String body = "{\"eventType\":\"note.created\",\"requestToken\":\"tok-sync\"}";
+
+        var result = service.receive(signature(body), body);
+
+        String message = "Stored webhook event; cache sync failed: "
+            + "HTTP 404 (legacy error): Case with token <redacted> not found.";
+        assertThat(result.message()).isEqualTo(message);
+        verify(events).store(eq(7L), eq("note.created"), eq("tok-sync"), any(), any(), eq(true), eq(false), eq(message), eq(body));
     }
 
     private static String signature(String body) throws Exception {
