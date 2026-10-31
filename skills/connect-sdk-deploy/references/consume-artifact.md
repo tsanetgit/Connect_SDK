@@ -482,9 +482,10 @@ Watch the release notes on each release.
     JDK `HttpClient`, with its selector thread and pooled connections, from the moment it opens,
     and until 5.0.0 nothing released them. Call `close()` on a session you drop, for example on a
     credential change or after a one-off poll. It doesn't wait: requests already sent run to
-    completion, and a later one fails with a `ConnectApiException` of kind `CONNECTIVITY`, "cannot
-    reach the Connect API (IOException)", so a `send` still running can't complete its grant, which
-    stays open until it expires. `AccountScopedTsaNetApiSession` instead goes back to having no
+    completion, and a later one fails the way an unreachable API does: a `ConnectApiException` of
+    kind `CONNECTIVITY`, or `AttachmentV2Exception` `client/connectivity` on the V2 facades. So a
+    `send` still running can't complete its grant, which stays open until it expires. A Spring
+    `@Bean` that returns a session is now closed when its context shuts down. `AccountScopedTsaNetApiSession` instead goes back to having no
     session until the next login, and a login or authenticate as a different account closes the
     previous account's session. Code that implements `TsaNetApiSession` itself must add
     `close()`. A V2 upload now runs on a client of its own, stopped when that upload ends, so

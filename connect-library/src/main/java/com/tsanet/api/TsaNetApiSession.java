@@ -41,8 +41,9 @@ public interface TsaNetApiSession extends AutoCloseable {
      * credential change.
      *
      * <p>This doesn't wait: requests already sent run to completion, and a request made afterward
-     * fails as "cannot reach the Connect API", a {@code ConnectApiException} of kind
-     * {@code CONNECTIVITY}, so a caller's connectivity retries run and fail too. An attachment upload
+     * fails the way an unreachable API does: a {@code ConnectApiException} of kind
+     * {@code CONNECTIVITY}, or {@code AttachmentV2Exception} {@code client/connectivity} on the V2
+     * facades, so a caller's connectivity retries run and fail too. An attachment upload
      * runs on a client of its own, so its {@code PUT}s finish, but the calls around them need this
      * session: a {@code send} still running when the session closes can't complete its grant, which
      * stays open until it expires. The SQLite cache stays on disk, and reads of stored data keep
