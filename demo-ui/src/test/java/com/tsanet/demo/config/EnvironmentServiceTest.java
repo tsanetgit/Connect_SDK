@@ -110,6 +110,18 @@ class EnvironmentServiceTest {
     }
 
     @Test
+    void itClosesCachedSessionsWhenItsContextShutsDown() {
+        var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
+        context.registerBean(EnvironmentService.class, () -> new EnvironmentService(properties));
+        context.refresh();
+        TsaNetApiSession session = context.getBean(EnvironmentService.class).sessionFor("beta", PW_ONE);
+
+        context.close();
+
+        assertThat(loginFailure(session)).hasRootCauseMessage("closed");
+    }
+
+    @Test
     void itClosesCachedSessionsWhenClosed() {
         TsaNetApiSession session = service.sessionFor("beta", PW_ONE);
 

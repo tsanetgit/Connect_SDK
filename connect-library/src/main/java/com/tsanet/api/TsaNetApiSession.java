@@ -44,9 +44,10 @@ public interface TsaNetApiSession extends AutoCloseable {
      * fails the way an unreachable API does: a {@code ConnectApiException} of kind
      * {@code CONNECTIVITY}, or {@code AttachmentV2Exception} {@code client/connectivity} on the V2
      * facades, so a caller's connectivity retries run and fail too. An attachment upload
-     * runs on a client of its own, so its {@code PUT}s finish, but the calls around them need this
-     * session: a {@code send} still running when the session closes can't complete its grant, which
-     * stays open until it expires. The SQLite cache stays on disk, and reads of stored data keep
+     * runs on a client of its own, so {@code PUT}s to links already issued finish, but the calls around
+     * them need this session: a further batch of links or a link refresh fails and stops the upload, and
+     * a {@code send} still running when the session closes can't complete its grant, which stays open
+     * until it expires. The SQLite cache stays on disk, and reads of stored data keep
      * working. Closing twice does nothing more.
      *
      * <p>{@code AccountScopedTsaNetApiSession} closes its active account's session and goes back to

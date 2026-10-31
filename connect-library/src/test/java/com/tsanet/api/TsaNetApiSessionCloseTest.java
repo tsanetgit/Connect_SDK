@@ -131,4 +131,33 @@ class TsaNetApiSessionCloseTest {
         assertThatCode(session::close).doesNotThrowAnyException();
         assertThat(session.collaborationRequests().listStoredRequests()).isEmpty();
     }
+
+    @Test
+    void aSessionThatFailsToOpenStopsItsClient() throws Exception {
+        Path regularFile = java.nio.file.Files.writeString(tmp.resolve("not-a-directory"), "x");
+        Set<Long> before = selectorThreads();
+
+        assertThatThrownBy(() -> TsaNetApi.initialize(new TsaNetApiConfiguration(base,
+            regularFile.resolve("cache.db").toString(), "default", new PasswordAuthConfig("sender@example.test", PASSWORD),
+            Set.of()))).isInstanceOf(IllegalStateException.class);
+
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        Set<Long> started = selectorThreads();
+        started.removeAll(before);
+        while (!started.isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+            started.retainAll(selectorThreads());
+        }
+        assertThat(started).isEmpty();
+    }
+
+    private static Set<Long> selectorThreads() {
+        Set<Long> ids = new java.util.HashSet<>();
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            if (thread.getName().contains("SelectorManager")) {
+                ids.add(thread.threadId());
+            }
+        }
+        return ids;
+    }
 }

@@ -165,61 +165,69 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
 
         @Override
         public boolean isAuthorized() {
-            return delegate != null && delegate.auth().isAuthorized();
+            TsaNetApiSession current = delegate;
+            return current != null && current.auth().isAuthorized();
         }
 
         @Override
         public Optional<String> currentUsername() {
-            if (delegate == null) {
+            TsaNetApiSession current = delegate;
+            if (current == null) {
                 return Optional.empty();
             }
-            return delegate.auth().currentUsername();
+            return current.auth().currentUsername();
         }
 
         @Override
         public Optional<String> currentAccountId() {
-            if (delegate == null) {
+            TsaNetApiSession current = delegate;
+            if (current == null) {
                 return Optional.empty();
             }
-            return delegate.auth().currentAccountId();
+            return current.auth().currentAccountId();
         }
 
         @Override
         public Optional<AuthMode> authMode() {
-            if (delegate == null) {
+            TsaNetApiSession current = delegate;
+            if (current == null) {
                 return Optional.empty();
             }
-            return delegate.auth().authMode();
+            return current.auth().authMode();
         }
 
         @Override
         public Optional<Instant> tokenExpiresAt() {
-            if (delegate == null) {
+            TsaNetApiSession current = delegate;
+            if (current == null) {
                 return Optional.empty();
             }
-            return delegate.auth().tokenExpiresAt();
+            return current.auth().tokenExpiresAt();
         }
 
         @Override
         public Optional<String> currentBearerToken() {
-            if (delegate == null) {
+            TsaNetApiSession current = delegate;
+            if (current == null) {
                 return Optional.empty();
             }
-            return delegate.auth().currentBearerToken();
+            return current.auth().currentBearerToken();
         }
 
         @Override
         public Optional<UserContextDto> currentUserContext() {
-            if (delegate == null) {
+            TsaNetApiSession current = delegate;
+            if (current == null) {
                 return Optional.empty();
             }
-            return delegate.auth().currentUserContext();
+            return current.auth().currentUserContext();
         }
 
         @Override
         public void logout() {
-            if (delegate != null) {
-                delegate.auth().logout();
+            TsaNetApiSession current = delegate;
+            if (current != null) {
+                current.auth().logout();
             }
         }
     }

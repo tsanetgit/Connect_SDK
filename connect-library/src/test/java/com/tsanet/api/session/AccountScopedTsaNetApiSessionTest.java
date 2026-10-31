@@ -107,4 +107,41 @@ class AccountScopedTsaNetApiSessionTest {
         assertThat(session.activeAccountLabel()).isEmpty();
         assertThatThrownBy(session::collaborationRequests).isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void readingAuthStateWhileTheSessionClosesAnswersWithoutFailing() throws Exception {
+        ApplicationUserAccountRegistry registry = ApplicationUserAccountRegistry.of(List.of(
+            ApplicationUserAccount.passwordAccount("alpha", tempDir.resolve("a.db").toString(), "alpha@test.com", "secret")));
+        TsaNetApiSessionFactory factory = org.mockito.Mockito.mock(TsaNetApiSessionFactory.class,
+            org.mockito.Mockito.withSettings().stubOnly());
+        com.tsanet.api.TsaNetApiSession open = org.mockito.Mockito.mock(com.tsanet.api.TsaNetApiSession.class,
+            org.mockito.Mockito.withSettings().stubOnly().defaultAnswer(org.mockito.Mockito.RETURNS_DEEP_STUBS));
+        org.mockito.Mockito.when(factory.openSessionForApplicationUser(org.mockito.ArgumentMatchers.any())).thenReturn(open);
+        AccountScopedTsaNetApiSession session = new AccountScopedTsaNetApiSession(factory, registry);
+        var auth = session.auth();
+        List<Runnable> readers = List.of(auth::isAuthorized, auth::currentUsername, auth::currentAccountId, auth::authMode,
+            auth::tokenExpiresAt, auth::currentBearerToken, auth::currentUserContext, auth::logout);
+        var stop = new java.util.concurrent.atomic.AtomicBoolean();
+        var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        List<Thread> threads = readers.stream().map(reader -> Thread.ofPlatform().start(() -> {
+            while (!stop.get() && failure.get() == null) {
+                try {
+                    reader.run();
+                } catch (Throwable t) {
+                    failure.compareAndSet(null, t);
+                }
+            }
+        })).toList();
+
+        for (int i = 0; i < 20_000 && failure.get() == null; i++) {
+            session.bindAccountForTesting("alpha");
+            session.close();
+        }
+        stop.set(true);
+        for (Thread thread : threads) {
+            thread.join();
+        }
+
+        assertThat(failure.get()).isNull();
+    }
 }
