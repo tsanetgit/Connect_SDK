@@ -37,10 +37,14 @@ mvn -q -pl connect-library -am install -DskipTests
 mvn -q -pl demo-ui -am package -DskipTests
 ```
 
-If the build fails with `cannot find symbol ...`, the sibling spec repo is probably on the wrong branch. Check out the one that matches this repo's branch, `beta` for `main`:
+If the build fails with `cannot find symbol ...`, the sibling spec repo is probably on the wrong branch. Check out the one that matches this repo's branch:
 
 ```bash
+# This repo on main
 cd <REPO_ROOT>/Connect-API-Code && git checkout beta
+
+# This repo on develop
+cd <REPO_ROOT>/Connect-API-Code && git checkout develop
 ```
 
 ## 2. Start the server
@@ -296,3 +300,19 @@ pkill -f ngrok
 ```
 
 Credentials stay on disk for next time unless you clear them in Settings.
+
+## 8. A publish run that failed after the GitHub Release was published
+
+Publishing a GitHub Release creates its tag and starts `publish.yml`, so a failed run can leave a public Release and tag with no complete package behind them. There's no separate test step: `mvn deploy` is the build, and each module deploys as soon as its own build finishes, starting with the parent pom. So any failure in the "Build, test and publish" step, a failing test included, normally leaves at least the parent pom published under that version. Check the repository's Packages page to see what got out.
+
+| Where the run failed | What to do |
+|---|---|
+| "Build, test and publish" | Keep the tag, and say in the Release notes that the version is incomplete. Don't reuse the version. Fix the cause through a PR and cut the next patch version |
+| "Require a commit on main", or "Resolve the version to publish" (`-SNAPSHOT`, or not `x.y.z`) | Nothing was built. Delete the Release and its tag, then cut it again with a correct tag, from a commit on `main`'s first-parent line |
+| Any other step before "Build, test and publish", such as a missing `CONNECT_API_CODE_TOKEN` or a failed checkout | Nothing was built, and the commit is fine. Keep the Release and tag, fix the cause and re-run the failed run |
+
+To delete a Release and its tag:
+
+```bash
+gh release delete <TAG> --repo tsanetgit/Connect_SDK --cleanup-tag
+```

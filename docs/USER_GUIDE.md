@@ -252,7 +252,7 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 | Badge: "Auth failed: Authentication Failed — …" | Wrong BETA credentials (HTTP 401 problem details) |
 | Actions fail with "<title> — <detail>" | Upstream validation: wrong case state, off-domain engineer email. The API's problem-details title and detail are shown; a legacy `{"message"}` body is classified and shown the same way |
 | Case list loads but partner search errors | Partner search requires a valid session — re-check the badge first |
-| Build fails: `cannot find symbol … WebhooksApi` | Sibling `Connect-API-Code` checkout is on the wrong branch — needs `beta` |
+| Build fails: `cannot find symbol … WebhooksApi` | Sibling `Connect-API-Code` checkout is on the wrong branch: use the one that matches this repo's, `beta` for `main`, `develop` for `develop` |
 | Startup fails: "base URL must use https" | An environment's `api-base-url` is plain http. Fix the URL; `tsanet.demo.allow-insecure-http=true` is for a local mock only |
 
 ## 9. What the demo intentionally does not do
@@ -266,6 +266,6 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 
 - Upstream SDK: `tsanetgit/Connect_SDK` (branch `main`)
 - Transport contract: `tsanetgit/Connect-API-Code`
-  `connect-core-api/src/main/resources/openapi.yaml` (branch `beta`)
+  `connect-core-api/src/main/resources/openapi.yaml` (branch `beta` for this repo's `main`, `develop` for `develop`)
 - Business rules (case lifecycle validity): TSANet Connect GitBook /
   Integration Guide — never inferred from the schema

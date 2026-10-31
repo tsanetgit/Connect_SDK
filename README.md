@@ -34,7 +34,10 @@ The working steps, in order:
 ## Branch notes: what builds today
 
 - **`main` and `develop`.** `main` is what works against the released platform: it
-  builds against Connect-API-Code `beta`, and releases are cut from it. `develop` is
+  builds against Connect-API-Code `beta`, and releases are cut from it. `publish.yml`
+  refuses any commit that isn't on `main`'s first-parent line, so a hotfix or `release/*`
+  branch has to merge to `main` first, and the release is cut from the merge commit.
+  `develop` is
   where work that needs unreleased API changes lands first: it builds against
   Connect-API-Code `develop`. Library and console PRs target `develop`, including a
   `demo-ui` change that needs library work; a change only to `demo-ui` and its docs, the
