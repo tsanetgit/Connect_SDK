@@ -129,6 +129,8 @@ Unless noted, remote operations require a prior successful `authenticate()` or `
 
 ### Auth — `session.auth()`
 
+The auth mode and the configured credentials are fixed when the session is built. To change either, build a new session.
+
 | Method | Description |
 |--------|-------------|
 | `authenticate()` | Uses configured auth: Azure AD client-credentials for production accounts, or Connect1 password when configured. Either way the token is renewed before expiry and after a 401. |

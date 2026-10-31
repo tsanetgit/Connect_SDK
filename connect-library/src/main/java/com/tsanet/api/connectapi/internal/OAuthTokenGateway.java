@@ -1,5 +1,6 @@
 package com.tsanet.api.connectapi.internal;
 
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
@@ -8,6 +9,7 @@ import com.tsanet.api.auth.ClientCredentialsAuthConfig;
 import com.tsanet.api.auth.OAuthAccessToken;
 import java.net.http.HttpClient;
 import java.util.List;
+import java.util.Set;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -20,13 +22,23 @@ import org.springframework.web.client.RestTemplate;
 
 public class OAuthTokenGateway {
     private static final ObjectMapper OBJECT_MAPPER = JsonMapper.builder().build();
+    // RFC 6749 §5.2, its two server-side codes of §4.1.2.1, and invalid_resource, which Entra's
+    // error code reference lists for a resource not found or not configured in the tenant. A closed
+    // list, not a shape: a proxy's error member could hold any lowercase word, and only these are
+    // known to name nothing.
+    private static final Set<String> OAUTH_ERROR_CODES = Set.of(
+        "invalid_request", "invalid_client", "invalid_grant", "unauthorized_client",
+        "unsupported_grant_type", "invalid_scope", "invalid_resource", "server_error",
+        "temporarily_unavailable"
+    );
 
     private final RestTemplate restTemplate;
 
     /**
      * The token call rides the session's JDK client but none of the Connect API's error handling:
-     * a refusal stays the status-only {@code IllegalStateException} below, and a transport failure
-     * is {@code ConnectApiException} with no URL or tenant (tsanetgit/Connect_SDK#131).
+     * a refusal stays the {@code IllegalStateException} below, with the status and at most OAuth's
+     * error code, and a transport failure is {@code ConnectApiException} with no URL or tenant
+     * (tsanetgit/Connect_SDK#131).
      */
     public OAuthTokenGateway(HttpClient httpClient) {
         this(new RestTemplate(ConnectApiRestTemplates.transport(httpClient)));
@@ -56,9 +68,11 @@ public class OAuthTokenGateway {
             return parseTokenResponse(response.getBody());
         } catch (RestClientResponseException ex) {
             // No cause: Spring's message names the token URL, which carries the tenant, and quotes
-            // Entra's error body, which names the app (tsanetgit/Connect_SDK#131).
+            // Entra's error body, which names the app (tsanetgit/Connect_SDK#131). That is also why
+            // only the error code is read from the body, never error_description.
             throw new IllegalStateException(
                 "OAuth client-credentials request failed: HTTP " + ex.getStatusCode().value()
+                    + oauthErrorCodeSuffix(ex.getResponseBodyAsString())
             );
         } catch (ResourceAccessException ex) {
             // Spring's message embeds the token URL, and the URL carries the tenant: keep only the
@@ -71,6 +85,19 @@ public class OAuthTokenGateway {
             }
             throw ConnectApiException.tokenEndpointUnreachable(transport);
         }
+    }
+
+    private static String oauthErrorCodeSuffix(String body) {
+        JsonNode error;
+        try {
+            error = OBJECT_MAPPER.readTree(body).get("error");
+        } catch (JacksonException notJson) {
+            return "";
+        }
+        if (error == null || !error.isString() || !OAUTH_ERROR_CODES.contains(error.stringValue())) {
+            return "";
+        }
+        return " (" + error.stringValue() + ")";
     }
 
     private static OAuthAccessToken parseTokenResponse(String body) {

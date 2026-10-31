@@ -432,21 +432,27 @@ Watch the release notes on each release.
     stay on disk (it never sweeps an open case).
 - **5.0.0** reports a sender's keys being unavailable as their own `connect-e2ee` outcome
   (`tsanetgit/Connect_SDK#147`), redacts sensitive values in SDK records' `toString()`
-  (`tsanetgit/Connect_SDK#162`), and makes the mapping from the generated models to the records
-  public as `OpenApiRecords` (`tsanetgit/Connect_SDK#146`); the runtime line (Spring Boot 4.1,
-  Jackson 3, JDK 21) is unchanged from 4.0.0. It is a major because of three source breaks: an
-  exhaustive `switch` over `Verification`, the removed record constructors below, and an
-  implementer of `TsaNetApiSession`. A connector that uses none of those keeps compiling, but
-  check anything that reads the changed records' `toString()`, and add a `close()` call where it
-  drops a session.
+  (`tsanetgit/Connect_SDK#162`), makes the mapping from the generated models to the records
+  public as `OpenApiRecords` (`tsanetgit/Connect_SDK#146`), names OAuth's error code in a refused
+  token call (`tsanetgit/Connect_SDK#45`), waits a minute after a failed JWKS fetch before
+  fetching again (`tsanetgit/Connect_SDK#173`), makes sessions closeable and removes the deprecated
+  record constructors (`tsanetgit/Connect_SDK#139`); the runtime line (Spring Boot 4.1, Jackson 3,
+  JDK 21) is unchanged from 4.0.0. It is a major because of three source breaks: an exhaustive
+  `switch` over `Verification`, the removed record constructors below, and an implementer of
+  `TsaNetApiSession`. A connector that uses none of those keeps compiling, and needs no other code
+  change unless it matches the refused-token message exactly, but check anything that reads the
+  changed records' `toString()`, and add a `close()` call where it drops a session.
   - `Verification` gains a third permitted subtype, `KeysUnavailable`, returned when
     `PartnerKeys` throws `IOException` fetching the sending company's keys (at first, or on the
     refetch for an unknown `kid`). An exhaustive `switch` without the new case stops compiling,
     and a consumer that bumps without recompiling throws `MatchException` at the first
     unavailable-keys read. Retry the record rather than refuse it: it comes before the replay
     check, so no `jti` is used, and a retry, including one as `FIRST_RECEIPT`, is verified
-    afresh. A failed fetch isn't cached, so each retry goes back to the partner's JWKS endpoint:
-    back off, and bound the retries. A timeout or a non-200 answer can clear on its own, but
+    afresh. After a failed fetch, `PinnedJwksPartnerKeys` doesn't fetch that company's keys again
+    for a minute: a retry inside the minute returns `KeysUnavailable` again without contacting the
+    partner, and keys can stay unavailable for up to a minute after the last failed fetch, even
+    once its endpoint has recovered. A set it holds that hasn't expired is still served. So back
+    off, and bound the retries. A timeout or a non-200 answer can clear on its own, but
     `PinnedJwksPartnerKeys` also throws for a company with no configured JWKS URL and for a set
     that is too large, unparseable or holds a private key, which a retry won't fix until the
     configuration or the partner's set changes. Code that matched the 4.0.0 `SENDER_KEY` reason
@@ -470,6 +476,11 @@ Watch the release notes on each release.
     longer carry request tokens; rows that 4.0.0 wrote to `webhook_inbound_event` keep their old
     messages. A `ConnectApiException` message still keeps the API's `detail`, which can repeat a
     token (see "Opening a session" above).
+  - A refused OAuth token call names its error code. The `IllegalStateException` message is
+    `OAuth client-credentials request failed: HTTP <status> (<code>)` when the token endpoint
+    answers with a known OAuth error code, for example `invalid_client`; otherwise it stays
+    `... HTTP <status>`. Entra's `error_description` still isn't included, because it names the
+    app. Code that matched the old message exactly should match its prefix.
   - `connect-library` adds `com.tsanet.api.connectapi.OpenApiRecords`, the mapping the facades
     use from the generated OpenAPI models to `CollaborationRequestStatusDto`, `CaseNoteDto` and
     `FormFieldDto`. A connector that calls the generated client directly and keeps its own copy
