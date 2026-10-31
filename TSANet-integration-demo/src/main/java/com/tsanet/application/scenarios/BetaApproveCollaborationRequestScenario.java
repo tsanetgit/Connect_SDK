@@ -76,7 +76,7 @@ public class BetaApproveCollaborationRequestScenario implements IntegrationScena
             return;
         }
 
-        log.info("Step 3: approve collaboration request token={}", request.token());
+        log.info("Step 3: approve collaboration request id={}", request.id());
         CollaborationRequestStatusDto approved = session.caseResponses().approveRequest(
             request.token(),
             ACME_ACCEPTED_REQUEST_NUMBER,

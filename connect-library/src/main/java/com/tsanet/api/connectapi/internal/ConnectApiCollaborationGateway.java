@@ -46,7 +46,7 @@ public class ConnectApiCollaborationGateway {
 
         CollaborationRequestStatusDTO body = collaborationRequestsApi.getCollaborationRequestByToken(caseToken, false);
         if (body == null) {
-            throw new IllegalStateException("Collaboration request token=" + caseToken + " not found");
+            throw new IllegalStateException("Collaboration request not found");
         }
         CollaborationRequestStatusDto request = toDto(body);
         storageService.storeFetched(List.of(request));

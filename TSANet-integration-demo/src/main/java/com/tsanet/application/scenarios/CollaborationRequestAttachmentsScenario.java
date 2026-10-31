@@ -63,7 +63,7 @@ public class CollaborationRequestAttachmentsScenario implements IntegrationScena
         acmeSession.auth().login(acme.username(), acme.password());
 
         CollaborationRequestStatusDto openRequest = findOpenRequest(acmeSession);
-        log.info("Using request id={} token={} summary={}", openRequest.id(), openRequest.token(), openRequest.summary());
+        log.info("Using request id={} summary={}", openRequest.id(), openRequest.summary());
 
         log.info("Step 2: read attachment configuration as Acme");
         AttachmentConfigDto acmeConfig = acmeSession.attachments().getAttachmentConfig(openRequest.token());

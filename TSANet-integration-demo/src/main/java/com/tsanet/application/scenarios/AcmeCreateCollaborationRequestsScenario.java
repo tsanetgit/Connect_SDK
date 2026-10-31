@@ -128,6 +128,6 @@ public class AcmeCreateCollaborationRequestsScenario implements IntegrationScena
             true
         );
         existing.add(created);
-        log.info("Created id={} status={} token={}", created.id(), created.status(), created.token());
+        log.info("Created id={} status={}", created.id(), created.status());
     }
 }

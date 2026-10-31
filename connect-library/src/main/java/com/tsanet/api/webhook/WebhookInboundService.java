@@ -96,12 +96,12 @@ public class WebhookInboundService {
             ensureAuthenticated.run();
             if (EVENT_COLLABORATION_REQUEST_CREATED.equals(payload.eventType())) {
                 collaborationGateway.getCollaborationRequestByToken(payload.requestToken());
-                return "Synced collaboration request token=" + payload.requestToken();
+                return "Synced collaboration request";
             }
             if (EVENT_NOTE_CREATED.equals(payload.eventType())) {
                 collaborationGateway.getCollaborationRequestByToken(payload.requestToken());
                 notesGateway.getNotes(payload.requestToken());
-                return "Synced notes for request token=" + payload.requestToken();
+                return "Synced notes for request";
             }
             return "Stored webhook event without cache sync for eventType=" + payload.eventType();
         } catch (Exception ex) {
