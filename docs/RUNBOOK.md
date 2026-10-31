@@ -303,7 +303,7 @@ Credentials stay on disk for next time unless you clear them in Settings.
 
 ## 8. A publish run that failed after the GitHub Release was published
 
-Publishing a GitHub Release creates its tag and starts `publish.yml`, so a failed run can leave a public Release and tag with no complete package behind them. There's no separate test step: `mvn deploy` is the build, and each module deploys as soon as its own build finishes, starting with the parent pom. So any failure in the "Build, test and publish" step, a failing test included, normally leaves at least the parent pom published under that version. Check the repository's Packages page to see what got out.
+Publishing a GitHub Release starts `publish.yml`, and creates the tag if the Release was created without an existing one, so a failed run can leave a public Release and tag with no complete package behind them. There's no separate test step: `mvn deploy` is the build, and each module deploys as soon as its own build finishes, starting with the parent pom. So any failure in the "Build, test and publish" step, a failing test included, normally leaves at least the parent pom published under that version. Check the repository's Packages page to see what got out.
 
 | Where the run failed | What to do |
 |---|---|
