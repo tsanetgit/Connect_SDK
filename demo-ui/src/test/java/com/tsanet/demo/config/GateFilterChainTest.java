@@ -147,6 +147,7 @@ class GateFilterChainTest {
         mvc.perform(post("/api/requests/t1/close")
                 .header(HttpHeaders.AUTHORIZATION, login)
                 .cookie(cookie)
+                .content(new byte[0]) // a browser declares a length of 0 on a bodyless POST
                 .header("X-XSRF-TOKEN", cookie.getValue()))
             .andExpect(status().isPreconditionRequired());
     }

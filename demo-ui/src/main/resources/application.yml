@@ -90,7 +90,7 @@ tsanet:
       # place those defaults live.
       username: ${TSANET_DEMO_AUTH_USER:}
       password: ${TSANET_DEMO_AUTH_PASSWORD:}
-      # Optional second login with the same rights, for members using a hosted demo
+      # Optional second login with the same rights and a lower upload limit, for members using a hosted demo
       # (tsanetgit/Connect_SDK#148). Active only when its password is set; a guest
       # password with no operator password, or the same username for both, fails startup.
       guest:

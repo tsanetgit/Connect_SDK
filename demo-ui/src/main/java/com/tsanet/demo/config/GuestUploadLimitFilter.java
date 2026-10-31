@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -14,10 +15,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * A guest login has a lower upload limit than the operator: any body it sends must declare a length no
- * greater than the limit, or it's answered here, after the login is known and before anything reads the
- * body. Tomcat holds a request to its declared length. The page's FormData and JSON bodies always declare
- * one, so only a script that sends chunked is refused for having none.
+ * A guest login has a lower upload limit than the operator: a declared length over the limit, or chunked
+ * framing, on any method, and no declared length on a POST, PUT or PATCH, is answered here, after the login
+ * is known and before anything reads the body. Tomcat holds a request to its declared length. The page's
+ * requests always pass: FormData and JSON bodies declare a length, as Chromium does for a bodyless POST.
  */
 final class GuestUploadLimitFilter extends OncePerRequestFilter {
 
@@ -25,6 +26,9 @@ final class GuestUploadLimitFilter extends OncePerRequestFilter {
     static final String LIMITED_UPLOADS = "LIMITED_UPLOADS";
     static final String OVER_THE_LIMIT = "The request is over this login's upload limit";
     static final String NO_LENGTH = "This login must declare the length of what it sends";
+
+    /** Browsers declare a length of 0 on a bodyless POST or PUT, but none on a bodyless DELETE, so that can't be required. */
+    private static final Set<String> METHODS_WITH_A_BODY = Set.of("POST", "PUT", "PATCH");
 
     private final long limit;
 
@@ -36,7 +40,8 @@ final class GuestUploadLimitFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         if (isLimited(SecurityContextHolder.getContext().getAuthentication())) {
-            if (request.getHeader(HttpHeaders.TRANSFER_ENCODING) != null) {
+            if (request.getHeader(HttpHeaders.TRANSFER_ENCODING) != null
+                || (request.getContentLengthLong() < 0 && METHODS_WITH_A_BODY.contains(request.getMethod()))) {
                 refuse(response, HttpStatus.LENGTH_REQUIRED, NO_LENGTH);
                 return;
             }

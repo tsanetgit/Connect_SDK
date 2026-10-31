@@ -9,6 +9,8 @@ import static org.mockito.Mockito.when;
 import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.api.facade.AttachmentsFacade;
 import com.tsanet.api.facade.AttachmentsV2Facade;
+import com.tsanet.api.facade.CaseResponsesFacade;
+import com.tsanet.api.facade.WebhooksFacade;
 import com.tsanet.demo.web.SessionGuard;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -175,11 +177,15 @@ class GuestUploadLimitTest {
 
     /** Sends only headers and the start of a body, so an answer means the server didn't wait for the rest. */
     private String answerToHeaders(String method, String path, String contentType, String framing) throws IOException {
+        return answerToHeaders("HTTP/1.1", method, path, contentType, framing);
+    }
+
+    private String answerToHeaders(String version, String method, String path, String contentType, String framing) throws IOException {
         try (Socket socket = new Socket("127.0.0.1", port)) {
             socket.setSoTimeout(1500);
             OutputStream out = socket.getOutputStream();
-            out.write((method + " " + path + " HTTP/1.1\r\nHost: localhost\r\nContent-Type: " + contentType + "\r\n"
-                + framing + "\r\nAuthorization: " + basic("visitor", "g") + "\r\n"
+            out.write((method + " " + path + " " + version + "\r\nHost: localhost\r\nContent-Type: " + contentType + "\r\n"
+                + (framing.isEmpty() ? "" : framing + "\r\n") + "Authorization: " + basic("visitor", "g") + "\r\n"
                 + "X-XSRF-TOKEN: " + TOKEN + "\r\nCookie: XSRF-TOKEN=" + TOKEN + "\r\n\r\n")
                 .getBytes(StandardCharsets.US_ASCII));
             out.flush();
@@ -219,6 +225,52 @@ class GuestUploadLimitTest {
 
         assertThat(answer).startsWith("HTTP/1.1 411").contains(GuestUploadLimitFilter.NO_LENGTH);
         assertThat(tempFiles()).isEmpty();
+    }
+
+    /** No length and no chunked framing, on a method that carries a body. */
+    @ParameterizedTest
+    @CsvSource({
+        "POST," + V2 + ",multipart/form-data; boundary=abc",
+        "POST,/api/settings/beta/credentials,application/json",
+        "PUT,/api/settings/beta/e2ee-partners/2087,application/json",
+        "PATCH,/api/settings/beta/credentials,application/json",
+    })
+    void aGuestWithNoLengthOnABodyMethodIsRefused(String method, String path, String contentType) throws Exception {
+        assertThat(answerToHeaders(method, path, contentType, ""))
+            .startsWith("HTTP/1.1 411").contains(GuestUploadLimitFilter.NO_LENGTH);
+    }
+
+    /**
+     * This pins the status only. Tomcat reads such a request's body as empty anyway, so before this rule it
+     * answered 400 with nothing read; the rule makes the answer the same as any other request with no length.
+     */
+    @Test
+    void anHttp10RequestWithNoLengthIsRefused() throws Exception {
+        assertThat(answerToHeaders("HTTP/1.0", "POST", V2, MULTIPART, ""))
+            .startsWith("HTTP/1.1 411").contains(GuestUploadLimitFilter.NO_LENGTH);
+    }
+
+    /** What the page sends: Chromium declares a length of 0 on a bodyless POST or PUT, and none on a DELETE. */
+    @Test
+    void aGuestsBodylessRequestsFromThePageAreNotRefused() throws Exception {
+        TsaNetApiSession session = guard.session();
+        when(session.caseResponses()).thenReturn(mock(CaseResponsesFacade.class));
+        when(session.webhooks()).thenReturn(mock(WebhooksFacade.class));
+
+        assertThat(http.send(upload("/api/requests/t/close", "visitor", "g").POST(BodyPublishers.noBody()).build(),
+            BodyHandlers.ofString()).statusCode()).isEqualTo(200);
+        assertThat(http.send(upload("/api/webhooks/1", "visitor", "g").DELETE().build(),
+            BodyHandlers.ofString()).statusCode()).isEqualTo(204);
+    }
+
+    /** A declared length and chunked framing are checked on every method, including those that may omit a length. */
+    @ParameterizedTest
+    @CsvSource({"GET", "DELETE", "OPTIONS"})
+    void theOtherChecksApplyToEveryMethod(String method) throws Exception {
+        assertThat(answerToHeaders(method, "/api/settings", "application/json", "Content-Length: 1048577"))
+            .startsWith("HTTP/1.1 413");
+        assertThat(answerToHeaders(method, "/api/settings", "application/json", "Transfer-Encoding: chunked"))
+            .startsWith("HTTP/1.1 411");
     }
 
     /** Exactly the limit is allowed: it's the JSON route's own validation that answers here. */
