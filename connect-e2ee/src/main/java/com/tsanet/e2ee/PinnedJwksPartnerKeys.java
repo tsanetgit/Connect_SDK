@@ -74,7 +74,7 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys, AutoCloseable {
 
     private PinnedJwksPartnerKeys(Map<String, URI> jwksUrls, Duration cacheLifetime, HttpClient http, Clock clock,
                                   Duration fetchTimeout, boolean ownsClient) {
-        this.jwksUrls = Map.copyOf(jwksUrls);
+        this.jwksUrls = jwksUrls;
         this.cacheLifetime = cacheLifetime;
         this.http = http;
         this.clock = clock;
@@ -91,7 +91,8 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys, AutoCloseable {
                 throw new IllegalArgumentException("A JWKS URL must be HTTPS");
             }
         }
-        return jwksUrls;
+        // The copy too, since it refuses a null key: everything that can refuse runs before the client starts.
+        return Map.copyOf(jwksUrls);
     }
 
     /**

@@ -171,10 +171,23 @@ class TsaNetApiTokenHeaderSafetyTest {
             Throwable thrown = catchThrowable(() -> session.auth().authenticate());
 
             assertThat(thrown).isExactlyInstanceOf(IllegalStateException.class)
-                .hasMessage("The login request failed: the response isn't usable")
+                .hasMessage("The login request failed: its URL or the response isn't usable")
                 .hasNoCause();
             answer.join(java.time.Duration.ofSeconds(2));
         }
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"http://bad host", "http://[x", "ftp://x"})
+    void aBaseUrlTheClientWontAcceptIsNotReportedAsABadResponseAlone(String apiBaseUrl) {
+        base = apiBaseUrl;
+        TsaNetApiSession session = passwordSession();
+
+        Throwable thrown = catchThrowable(() -> session.auth().authenticate());
+
+        assertThat(thrown).isExactlyInstanceOf(IllegalStateException.class)
+            .hasMessage("The login request failed: its URL or the response isn't usable")
+            .hasNoCause();
     }
 
     @Test

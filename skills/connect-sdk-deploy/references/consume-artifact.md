@@ -440,9 +440,11 @@ Watch the release notes on each release.
   JDK 21) is unchanged from 4.0.0. It is a major because of three source breaks: an exhaustive
   `switch` over `Verification`, the removed record constructors below, and an implementer of
   `TsaNetApiSession`. A connector that uses none of those keeps compiling. One that doesn't use
-  `connect-e2ee` needs no other code change unless it matches the refused-token message exactly;
-  one that does should read the `KeysUnavailable` and `step` notes below. Either way, check anything
-  that reads the changed records' `toString()`, and add a `close()` call where it drops a session.
+  `connect-e2ee` needs no other code change unless it matches the refused-token message exactly
+  or catches the sign-in exception types named below; one that does should read the
+  `KeysUnavailable` and `step` notes below. Either way, check anything that reads the changed
+  records' `toString()`, and add a `close()` call where it drops a session or a
+  `PinnedJwksPartnerKeys`.
   - `Verification` gains a third permitted subtype, `KeysUnavailable`, returned when
     `PartnerKeys` throws `IOException` fetching the sending company's keys (at first, or on the
     refetch for an unknown `kid`). An exhaustive `switch` without the new case stops compiling,
@@ -485,12 +487,16 @@ Watch the release notes on each release.
     app. Code that matched the old message exactly should match its prefix. When an expired session
     can't renew, the same text is in `ConnectApiException.detail()`.
   - A token response whose access token isn't all visible ASCII now fails sign-in with
-    `IllegalStateException`. In 4.0.0 a line break, another control character or a character above
+    `IllegalStateException`. In 4.0.0 a line break, most control characters or a character above
     Latin-1 failed at the first request with the JDK's `IllegalArgumentException`, which quoted
-    the token, and a space or a Latin-1 character was sent. A malformed token response, an unusable
-    token URL and a webhook callback URL that isn't a URI are refused with fixed messages that
-    no longer quote them. Code that read those messages sees the new text. A note with no priority
-    is refused with `A note priority is required`, not `Unexpected value 'null'`.
+    the token, and a space, a tab or a Latin-1 character was sent. A malformed token response, an
+    unusable token URL and a webhook callback URL that isn't a URI are refused with fixed messages
+    that no longer quote them. Code that read those messages sees the new text. Three of them also
+    change type, so a 4.0.0 `catch` stops matching: an unusable token URL, and a token or login
+    response the JDK client can't read, go from `IllegalArgumentException` to
+    `IllegalStateException`, and a malformed login body goes from `RestClientException` to
+    `IllegalStateException`. A webhook callback URL stays `IllegalArgumentException`. A note with
+    no priority is refused with `A note priority is required`, not `Unexpected value 'null'`.
   - Malformed partner input no longer throws. A manifest or protected value that is the JSON
     `null`, or a recipient `kid` that isn't a string, is now a `Refused`. A JWKS endpoint serving
     such a body or a malformed HTTP response is now `KeysUnavailable`. All of these used to escape

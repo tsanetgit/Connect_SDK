@@ -102,6 +102,20 @@ class PinnedJwksCloseTest {
     }
 
     @Test
+    void aMapWithANullKeyStartsNoClient() {
+        Map<String, URI> withNullKey = new java.util.HashMap<>();
+        withNullKey.put(null, url);
+        Set<Long> before = selectorThreads();
+
+        assertThatThrownBy(() -> new PinnedJwksPartnerKeys(withNullKey, Duration.ofMinutes(5)))
+            .isInstanceOf(NullPointerException.class);
+
+        Set<Long> started = selectorThreads();
+        started.removeAll(before);
+        assertThat(started).isEmpty();
+    }
+
+    @Test
     void closeLeavesAClientItWasGivenRunning() throws Exception {
         HttpClient given = HttpClient.newHttpClient();
         try {
