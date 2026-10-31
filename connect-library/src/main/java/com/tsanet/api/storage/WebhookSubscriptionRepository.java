@@ -85,6 +85,10 @@ public class WebhookSubscriptionRepository {
     }
 
     public record SecretRow(long subscriptionId, String secret) {
+        @Override
+        public String toString() {
+            return "SecretRow[subscriptionId=" + subscriptionId + ", secret=<redacted>]";
+        }
     }
 
     private static WebhookSubscriptionDto mapRow(ResultSet rs, int rowNum) throws SQLException {

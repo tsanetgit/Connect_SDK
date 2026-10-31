@@ -14,5 +14,9 @@ public record ConnectApiDatabaseProperties(
     }
 
     public record ConnectDb(String url, String username, String password) {
+        @Override
+        public String toString() {
+            return "ConnectDb[url=<redacted>, username=" + username + ", password=<redacted>]";
+        }
     }
 }

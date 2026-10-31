@@ -13,4 +13,13 @@ public record WebhookInboundEventDto(
     String syncMessage,
     String rawPayload
 ) {
+    @Override
+    public String toString() {
+        // The payload repeats capability tokens, and sync messages may include them too.
+        return "WebhookInboundEventDto[id=" + id + ", subscriptionId=" + subscriptionId
+            + ", eventType=" + eventType + ", requestToken=<redacted>, noteToken=<redacted>"
+            + ", eventTimestamp=" + eventTimestamp + ", receivedAt=" + receivedAt
+            + ", signatureValid=" + signatureValid + ", cacheSynced=" + cacheSynced
+            + ", syncMessage=<redacted>, rawPayload=<redacted>]";
+    }
 }

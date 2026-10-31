@@ -9,5 +9,9 @@ public record TsaNetScenarioProperties(
     CompanyCredentials beta
 ) {
     public record CompanyCredentials(String username, String password) {
+        @Override
+        public String toString() {
+            return "CompanyCredentials[username=" + username + ", password=<redacted>]";
+        }
     }
 }
