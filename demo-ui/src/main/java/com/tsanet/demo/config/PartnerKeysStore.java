@@ -92,7 +92,7 @@ public class PartnerKeysStore {
      */
     public PartnerKeysStore(Path path, String seedJson, String seedName) {
         this.path = Objects.requireNonNull(path);
-        // Snapshot.of runs inside each try: it holds the URL scheme check, so a plain-http URL in a
+        // Snapshot.of runs inside each try: it holds the URL checks, so a plain-http or host-less URL in a
         // seed or a file is reported with the same message as any other unusable entry.
         if (Files.exists(path)) {
             try {

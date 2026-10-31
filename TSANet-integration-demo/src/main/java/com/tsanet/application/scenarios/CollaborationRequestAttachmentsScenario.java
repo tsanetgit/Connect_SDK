@@ -127,20 +127,10 @@ public class CollaborationRequestAttachmentsScenario implements IntegrationScena
 
     private void logAttachmentConfig(String actor, AttachmentConfigDto config) {
         if (config.submitter() != null) {
-            log.info(
-                "{} attachment config submitter companyId={} parameters={}",
-                actor,
-                config.submitter().companyId(),
-                config.submitter().parameters()
-            );
+            log.info("{} attachment config submitter {}", actor, config.submitter());
         }
         if (config.receiver() != null) {
-            log.info(
-                "{} attachment config receiver companyId={} parameters={}",
-                actor,
-                config.receiver().companyId(),
-                config.receiver().parameters()
-            );
+            log.info("{} attachment config receiver {}", actor, config.receiver());
         }
     }
 
