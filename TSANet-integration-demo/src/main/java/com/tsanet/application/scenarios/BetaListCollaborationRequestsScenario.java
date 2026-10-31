@@ -71,12 +71,11 @@ public class BetaListCollaborationRequestsScenario implements IntegrationScenari
         } else {
             for (CollaborationRequestStatusDto request : requests) {
                 System.out.printf(
-                    "id=%s  status=%-12s  from=%s (%s)  token=%s  summary=%s%n",
+                    "id=%s  status=%-12s  from=%s (%s)  summary=%s%n",
                     request.id(),
                     request.status(),
                     request.submitCompanyName(),
                     request.submitCompanyId(),
-                    request.token(),
                     request.summary()
                 );
             }

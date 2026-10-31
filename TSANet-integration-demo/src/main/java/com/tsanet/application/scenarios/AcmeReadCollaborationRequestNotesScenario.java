@@ -89,8 +89,7 @@ public class AcmeReadCollaborationRequestNotesScenario implements IntegrationSce
         } else {
             for (CaseNoteDto note : notes) {
                 System.out.printf(
-                    "caseToken=%s  id=%s  summary=%s  creator=%s  status=%s%n",
-                    note.caseToken(),
+                    "id=%s  summary=%s  creator=%s  status=%s%n",
                     note.id(),
                     note.summary(),
                     note.creatorName(),

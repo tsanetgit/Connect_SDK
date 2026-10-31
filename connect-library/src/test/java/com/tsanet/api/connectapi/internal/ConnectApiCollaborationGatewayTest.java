@@ -66,6 +66,15 @@ class ConnectApiCollaborationGatewayTest {
     }
 
     @Test
+    void aMissingRequestIsReportedWithoutItsToken() {
+        when(collaborationRequestsApi.getCollaborationRequestByToken("tok-missing", false)).thenReturn(null);
+
+        assertThatThrownBy(() -> gateway.getCollaborationRequestByToken("tok-missing"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Collaboration request not found");
+    }
+
+    @Test
     void itFetchesRequestByToken() {
         CollaborationRequestStatusDTO apiDto = GatewayTestSupport.sampleCollaborationRequest("tok-abc");
         when(collaborationRequestsApi.getCollaborationRequestByToken("tok-abc", false)).thenReturn(apiDto);

@@ -2,6 +2,20 @@
 
 Standalone Java client for the TSANet Connect API. The library wraps generated OpenAPI clients behind a small facade API, and persists fetched data to a local SQLite database for offline review.
 
+## Sensitive values in diagnostics
+
+SDK-owned records redact passwords, client/webhook secrets and authentication tokens in
+`toString()` using `<redacted>`. Case, note and request tokens are sensitive capability
+identifiers, not safe logging IDs, and are redacted too (including webhook raw payloads).
+Nested configuration records follow the same policy. Attachment parameters are an opaque
+map, so only their names are printed. Records that carry partner-written text or personal
+details (`CaseNoteDto`, `CaseResponseDto`, `CollaborationRequestStatusDto`,
+`StoredAttachmentForwardResultDto`) omit those fields from `toString()` rather than mask
+them. Constructors and accessors still return the original values for API calls; redaction
+does not sanitize serialization or explicit accessor logging. Do not log those values or
+generated API models. The `TSANet-integration-app` CLI still prints tokens where an operator
+asks for them, because they address requests in later commands.
+
 ## Maven dependency
 
 ```xml
@@ -69,6 +83,8 @@ TsaNetApiSession account = factory.openSessionForAccount("api@appko.com", "secre
 
 Each `sessionLabel` gets its own database file: `data-acme.db`, `data-beta.db` (when the base path ends with `.db`). `openSessionForAccount()` uses `AccountSessionLabel.fromUsername()` so `api@appko.com` maps to `data-api-appko.com.db`.
 
+A session holds an HTTP client from the moment it opens. `TsaNetApiSession` is `AutoCloseable`: close a session you drop, for example when credentials change. `close()` doesn't wait: requests already sent run to completion, and a later request fails the way an unreachable API does (`ConnectApiException` of kind `CONNECTIVITY`, or `AttachmentV2Exception` `client/connectivity` on the V2 facades), so a `send` still running can't complete its grant, which stays open until it expires. The SQLite cache stays on disk. `AccountScopedTsaNetApiSession` differs: `close()` leaves it with no session until the next login, and a login or authenticate as a different account closes the previous account's session.
+
 ## SQLite persistence
 
 On startup the library creates tables if they do not exist (`CREATE TABLE IF NOT EXISTS`). Schema changes are additive and backward-compatible.
@@ -112,6 +128,8 @@ session.attachmentStorage();
 Unless noted, remote operations require a prior successful `authenticate()` or `login()`. Unauthenticated calls throw `IllegalStateException: Not logged in`.
 
 ### Auth — `session.auth()`
+
+The auth mode and the configured credentials are fixed when the session is built. To change either, build a new session.
 
 | Method | Description |
 |--------|-------------|
@@ -251,13 +269,13 @@ answer has no `type`, so `isProblem(...)` is `false` for it. Handle by `kind()`,
 | `createNote(caseToken, summary, description, priority, type)` | The same, with a type code that `listNoteTypes()` returns. The library sends the code as given and doesn't check it: the server matches it ignoring case and refuses any other code, including `system`, with a 400 that reaches the caller as a `ConnectApiException`. A null type creates a note with no type. |
 | `createNote(caseToken, summary, description, priority, type, e2ee)` | The same, plus `E2eeFields(manifest, encrypted)`, sent exactly as given. When `encrypted` is true, the summary and text are expected to be ciphertext: they are sent unstripped and the size limits above don't apply (one encrypted value is over 1,200 characters); the not-empty checks still do. A null `e2ee` sends `"encrypted": false` and `"manifest": null`, as the overloads without it do. |
 
-Each `CaseNoteDto` carries the note's `type`, the lowercase code the API sent (for example `partner`, `public` or `system`), its `typeDisplayName` label, the authoring company's `companyId`, and its `direction`: `OUTBOUND` when the company of the account that fetched it wrote the note, `INBOUND` when another company did. A platform-generated note comes without `companyId` and `direction`. Each is null when the API didn't send it, and the SQLite cache stores all four. Match on `type`, never on the label, and don't treat a null or unrecognized type as public. The 14-argument constructor from before these fields is deprecated.
+Each `CaseNoteDto` carries the note's `type`, the lowercase code the API sent (for example `partner`, `public` or `system`), its `typeDisplayName` label, the authoring company's `companyId`, and its `direction`: `OUTBOUND` when the company of the account that fetched it wrote the note, `INBOUND` when another company did. A platform-generated note comes without `companyId` and `direction`. Each is null when the API didn't send it, and the SQLite cache stores all four. Match on `type`, never on the label, and don't treat a null or unrecognized type as public.
 
 A note whose sender set no type reads back with `type` and `typeDisplayName` null, and so does every note written before note types existed. Notes the platform writes itself come back typed: the API types its own case-event notes `partner`, and the web app's automated notes read `system`. The SDK shows the type the API sends and doesn't infer one.
 
-Each `CollaborationRequestStatusDto` and `CaseNoteDto` also carries `manifest` and `encrypted`, the end-to-end encryption fields, exactly as the API returned them, and the SQLite cache stores both. The library never parses or verifies `manifest` and does no cryptography: encrypting, signing, verifying and decrypting are the caller's job. `encrypted` reads `false` when the API leaves it out (the spec's default) and `null` when it's not known: an explicit null from the API, or a record cached before the field existed. Treat `null` as unknown, never as "not encrypted". The constructors from before these fields are deprecated.
+Each `CollaborationRequestStatusDto` and `CaseNoteDto` also carries `manifest` and `encrypted`, the end-to-end encryption fields, exactly as the API returned them, and the SQLite cache stores both. The library never parses or verifies `manifest` and does no cryptography: encrypting, signing, verifying and decrypting are the caller's job. `encrypted` reads `false` when the API leaves it out (the spec's default) and `null` when it's not known: an explicit null from the API, or a record cached before the field existed. Treat `null` as unknown, never as "not encrypted".
 
-Each `CollaborationRequestStatusDto` also carries the case content the API returns: `submitterCaseNumber` (the submitter's own case number, `internalCaseNumber` on create), `description` (`problemDescription` on create) and `customFields`, one `CaseCustomFieldDto(id, fieldName, value)` per answer in the order the API sent them. The API doesn't promise that order between reads, so match answers by `id` or `fieldName`, never by position. A custom field's `id` is the API's id for that field on the case; the spec doesn't say it equals the form's `fieldId` that a create sends, so don't rely on that. Values are kept exactly as the API returned them, ciphertext included, and an empty-string answer stays apart from a null one. `customFields` is empty when the API sent none or left the field out, and null when it's not known: an explicit null, a record cached before the field existed, or a cached row whose JSON is malformed. The SQLite cache stores all three, so the cache now holds each case's description and custom-field answers as well as its summary: run `CacheRetention.sweep` on your own schedule if closed and rejected cases shouldn't stay on disk. The 13-argument constructor from before these fields is deprecated. The record's `equals` and `hashCode` now cover the three fields too, so a record cached before the upgrade (all three null) doesn't equal a fresh read of the same case.
+Each `CollaborationRequestStatusDto` also carries the case content the API returns: `submitterCaseNumber` (the submitter's own case number, `internalCaseNumber` on create), `description` (`problemDescription` on create) and `customFields`, one `CaseCustomFieldDto(id, fieldName, value)` per answer in the order the API sent them. The API doesn't promise that order between reads, so match answers by `id` or `fieldName`, never by position. A custom field's `id` is the API's id for that field on the case; the spec doesn't say it equals the form's `fieldId` that a create sends, so don't rely on that. Values are kept exactly as the API returned them, ciphertext included, and an empty-string answer stays apart from a null one. `customFields` is empty when the API sent none or left the field out, and null when it's not known: an explicit null, a record cached before the field existed, or a cached row whose JSON is malformed. The SQLite cache stores all three, so the cache now holds each case's description and custom-field answers as well as its summary: run `CacheRetention.sweep` on your own schedule if closed and rejected cases shouldn't stay on disk. The record's `equals` and `hashCode` now cover the three fields too, so a record cached before the upgrade (all three null) doesn't equal a fresh read of the same case.
 
 ### Case responses — `session.caseResponses()`
 
@@ -379,6 +397,21 @@ StorageTestResult result = session.attachmentStorage().test();
 
 Today any API user of a company can change its storage (`tsanetgit/Connect-API-Code#170`
 proposes an admin-scoped path). `register` follows the platform when that lands.
+
+### Records from generated models — `OpenApiRecords`
+
+A connector that calls the generated client (`com.tsanet.api.generated.api`) directly can build the
+library's records with the same mapping the facades use, for example to hand them to
+`connect-e2ee`:
+
+| Method | Returns |
+|--------|---------|
+| `collaborationRequest(CollaborationRequestStatusDTO)` | `CollaborationRequestStatusDto` |
+| `caseNote(CaseNoteDTO, caseToken)` | `CaseNoteDto`. The generated note has no case token, so pass the token of the case the note was read under; `connect-e2ee`'s `verifyNote` compares it with the case's. |
+| `formField(FieldMetadataDTO)` | `FormFieldDto` |
+
+The parameters are generated types, so a rename in the Connect OpenAPI spec changes these
+signatures.
 
 ---
 

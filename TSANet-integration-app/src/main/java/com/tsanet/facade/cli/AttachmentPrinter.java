@@ -89,10 +89,10 @@ public final class AttachmentPrinter {
             return;
         }
         System.out.printf(
-            " %s: companyId=%s parameters=%s%n",
+            " %s: companyId=%s parameterNames=%s%n",
             role,
             company.companyId(),
-            company.parameters() != null ? company.parameters() : "{}"
+            company.parameters() != null ? company.parameters().keySet() : "[]"
         );
     }
 

@@ -38,7 +38,7 @@ class CollaborationRequestRepositoryTest {
                     20L,
                     "tok1",
                     "2026-01-01T00:00:00Z",
-                    "2026-01-02T00:00:00Z"
+                    "2026-01-02T00:00:00Z", null, null, null, null, null, null
                 )
             )
         );
@@ -51,10 +51,10 @@ class CollaborationRequestRepositoryTest {
     @Test
     void itUpdatesExistingRequestsOnConflict() {
         repository.saveAll(
-            List.of(new CollaborationRequestStatusDto(1L, "OPEN", "Old", "Acme", 1L, "Beta", 2L, "tok1", null, null))
+            List.of(new CollaborationRequestStatusDto(1L, "OPEN", "Old", "Acme", 1L, "Beta", 2L, "tok1", null, null, null, null, null, null, null, null))
         );
         repository.saveAll(
-            List.of(new CollaborationRequestStatusDto(1L, "CLOSED", "New", "Acme", 1L, "Beta", 2L, "tok1", null, null))
+            List.of(new CollaborationRequestStatusDto(1L, "CLOSED", "New", "Acme", 1L, "Beta", 2L, "tok1", null, null, null, null, null, null, null, null))
         );
 
         assertThat(repository.findAll())
@@ -67,8 +67,8 @@ class CollaborationRequestRepositoryTest {
     void itRoundTripsTestCaseThroughTheCache() {
         repository.saveAll(
             List.of(
-                new CollaborationRequestStatusDto(1L, "OPEN", "Real", "Acme", 1L, "Beta", 2L, "tok1", null, null, false),
-                new CollaborationRequestStatusDto(2L, "OPEN", "Test", "Acme", 1L, "Beta", 2L, "tok2", null, null, true)
+                new CollaborationRequestStatusDto(1L, "OPEN", "Real", "Acme", 1L, "Beta", 2L, "tok1", null, null, false, null, null, null, null, null),
+                new CollaborationRequestStatusDto(2L, "OPEN", "Test", "Acme", 1L, "Beta", 2L, "tok2", null, null, true, null, null, null, null, null)
             )
         );
 
@@ -86,9 +86,9 @@ class CollaborationRequestRepositoryTest {
         repository.saveAll(
             List.of(
                 new CollaborationRequestStatusDto(1L, "OPEN", "{\"recipients\":[]}", "Acme", 1L, "Beta", 2L, "tok1",
-                    null, null, false, manifest, true),
+                    null, null, false, manifest, true, null, null, null),
                 new CollaborationRequestStatusDto(2L, "OPEN", "Plain", "Acme", 1L, "Beta", 2L, "tok2",
-                    null, null, false, null, false)
+                    null, null, false, null, false, null, null, null)
             )
         );
 
@@ -252,7 +252,7 @@ class CollaborationRequestRepositoryTest {
         DatabaseInitializer.createSchema(jdbcTemplate);
         CollaborationRequestRepository upgraded = new CollaborationRequestRepository(jdbcTemplate);
         upgraded.saveAll(List.of(new CollaborationRequestStatusDto(
-            1L, "OPEN", "Old row", "Acme", 1L, "Beta", 2L, "tok1", null, null, false, "m.a.n", true)));
+            1L, "OPEN", "Old row", "Acme", 1L, "Beta", 2L, "tok1", null, null, false, "m.a.n", true, null, null, null)));
 
         assertThat(upgraded.findAll())
             .extracting(CollaborationRequestStatusDto::id, CollaborationRequestStatusDto::manifest,
@@ -302,7 +302,7 @@ class CollaborationRequestRepositoryTest {
         CollaborationRequestRepository upgraded = new CollaborationRequestRepository(jdbcTemplate);
 
         upgraded.saveAll(
-            List.of(new CollaborationRequestStatusDto(1L, "OPEN", "Old row", "Acme", 1L, "Beta", 2L, "tok1", null, null, true))
+            List.of(new CollaborationRequestStatusDto(1L, "OPEN", "Old row", "Acme", 1L, "Beta", 2L, "tok1", null, null, true, null, null, null, null, null))
         );
 
         assertThat(upgraded.findAll())

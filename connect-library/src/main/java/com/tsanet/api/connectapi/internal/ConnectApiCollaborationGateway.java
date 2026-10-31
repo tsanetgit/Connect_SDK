@@ -1,5 +1,6 @@
 package com.tsanet.api.connectapi.internal;
 
+import com.tsanet.api.connectapi.OpenApiRecords;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
 import com.tsanet.api.generated.api.CollaborationRequestsApi;
 import com.tsanet.api.generated.model.CollaborationRequestStatusDTO;
@@ -46,7 +47,7 @@ public class ConnectApiCollaborationGateway {
 
         CollaborationRequestStatusDTO body = collaborationRequestsApi.getCollaborationRequestByToken(caseToken, false);
         if (body == null) {
-            throw new IllegalStateException("Collaboration request token=" + caseToken + " not found");
+            throw new IllegalStateException("Collaboration request not found");
         }
         CollaborationRequestStatusDto request = toDto(body);
         storageService.storeFetched(List.of(request));
@@ -68,6 +69,6 @@ public class ConnectApiCollaborationGateway {
     }
 
     private CollaborationRequestStatusDto toDto(CollaborationRequestStatusDTO dto) {
-        return OpenApiMapping.collaborationRequest(dto);
+        return OpenApiRecords.collaborationRequest(dto);
     }
 }

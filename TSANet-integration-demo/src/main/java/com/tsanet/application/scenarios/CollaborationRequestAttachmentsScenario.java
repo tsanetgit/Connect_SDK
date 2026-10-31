@@ -63,7 +63,7 @@ public class CollaborationRequestAttachmentsScenario implements IntegrationScena
         acmeSession.auth().login(acme.username(), acme.password());
 
         CollaborationRequestStatusDto openRequest = findOpenRequest(acmeSession);
-        log.info("Using request id={} token={} summary={}", openRequest.id(), openRequest.token(), openRequest.summary());
+        log.info("Using request id={} summary={}", openRequest.id(), openRequest.summary());
 
         log.info("Step 2: read attachment configuration as Acme");
         AttachmentConfigDto acmeConfig = acmeSession.attachments().getAttachmentConfig(openRequest.token());
@@ -127,20 +127,10 @@ public class CollaborationRequestAttachmentsScenario implements IntegrationScena
 
     private void logAttachmentConfig(String actor, AttachmentConfigDto config) {
         if (config.submitter() != null) {
-            log.info(
-                "{} attachment config submitter companyId={} parameters={}",
-                actor,
-                config.submitter().companyId(),
-                config.submitter().parameters()
-            );
+            log.info("{} attachment config submitter {}", actor, config.submitter());
         }
         if (config.receiver() != null) {
-            log.info(
-                "{} attachment config receiver companyId={} parameters={}",
-                actor,
-                config.receiver().companyId(),
-                config.receiver().parameters()
-            );
+            log.info("{} attachment config receiver {}", actor, config.receiver());
         }
     }
 

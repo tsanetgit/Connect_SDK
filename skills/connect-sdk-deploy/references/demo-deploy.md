@@ -134,15 +134,15 @@ What a member gets once it is on:
   company id, never a plaintext send.
 - On the case view, every `encrypted` record verified as a stored read: **Verified (E2EE)** with
   the decrypted fields and the ciphertext behind a disclosure, or **Refused at `<step>`:
-  `<field>`** with no value shown. The dashboard shows a lock chip for encrypted cases.
+  `<field>`** with no value shown, or **Encrypted, cannot verify** when the sending company's
+  public keys can't be fetched or used. The dashboard shows a lock chip for encrypted cases.
 
 Known platform limits while testing with a partner, none of them the demo's (as
 `tsanetgit/Connect_SDK#149` records them): the API rewrites
 `"` as `&#34;` in descriptions and note text (`tsanetgit/Connect-API-Code#214`; the module
-decodes it before checking, a partner's receiver must too), E2EE relationships are not yet
+decodes it before checking, a partner's receiver must too), and E2EE relationships are not yet
 gated by Groups on Beta so an encrypted case travels as a normal case whose content is
-ciphertext, and an unavailable partner key is reported as a `SENDER_KEY` refusal
-(`tsanetgit/Connect_SDK#147`).
+ciphertext.
 
 ## Hosting notes
 

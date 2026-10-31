@@ -41,10 +41,10 @@ class OAuthTokenGatewayTest {
     }
 
     @Test
-    void aRefusedTokenCallOnTheSharedClientStaysStatusOnlyNotAConnectApiException() throws Exception {
+    void aRefusedTokenCallOnTheSharedClientNamesOnlyTheStatusAndCodeNotAConnectApiException() throws Exception {
         // The token call rides the session's JDK client through transport(), not create(): an
-        // Entra refusal must not be classified by the Connect API's error handler, and its body
-        // (which names the app) must not reach the message.
+        // Entra refusal must not be classified by the Connect API's error handler, and nothing of
+        // its body but the error code may reach the message: error_description names the app.
         com.sun.net.httpserver.HttpServer entra =
             com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
         java.util.concurrent.atomic.AtomicReference<String> userAgent = new java.util.concurrent.atomic.AtomicReference<>();
@@ -67,7 +67,7 @@ class OAuthTokenGatewayTest {
                 new ClientCredentialsAuthConfig("tenant", tokenUrl, "client-id", "client-secret", "api://audience", null)));
             assertThat(thrown)
                 .isExactlyInstanceOf(IllegalStateException.class)
-                .hasMessage("OAuth client-credentials request failed: HTTP 401");
+                .hasMessage("OAuth client-credentials request failed: HTTP 401 (invalid_client)");
             // Not only the message: a logged stack trace prints every cause's message, and Spring's
             // response exception names the token URL (the tenant) and quotes Entra's body (the app).
             for (Throwable t = thrown; t != null; t = t.getCause() == t ? null : t.getCause()) {
@@ -80,6 +80,63 @@ class OAuthTokenGatewayTest {
         } finally {
             entra.stop(0);
         }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "invalid_request", "invalid_client", "invalid_grant", "unauthorized_client",
+        "unsupported_grant_type", "invalid_scope", "invalid_resource", "server_error",
+        "temporarily_unavailable"
+    })
+    void aRefusalNamesAKnownErrorCodeAndNotItsDescription(String code) {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo("https://login.microsoftonline.com/tenant/oauth2/v2.0/token"))
+            .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+                .withStatus(org.springframework.http.HttpStatus.BAD_REQUEST)
+                .body("{\"error\":\"" + code + "\",\"error_description\":\"app MARKER\"}"));
+
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> new OAuthTokenGateway(restTemplate)
+            .fetchClientCredentialsToken(new ClientCredentialsAuthConfig("tenant", null, "client-id", "client-secret", "api://audience", null)));
+
+        assertThat(thrown)
+            .isExactlyInstanceOf(IllegalStateException.class)
+            .hasMessage("OAuth client-credentials request failed: HTTP 400 (" + code + ")")
+            .hasNoCause();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        // Well-formed JSON, and an error member that isn't one of the known codes.
+        "{\"error\":\"marker_tenant\"}",
+        "{\"error\":\"INVALID_CLIENT\"}",
+        "{\"error\":\"invalid_client MARKER\"}",
+        "{\"error\":\"invalid_client\\nMARKER\"}",
+        "{\"error\":{\"code\":\"invalid_client\"}}",
+        "{\"error\":[\"invalid_client\"]}",
+        "{\"error\":1}",
+        "{\"error\":null}",
+        "{\"error_description\":\"MARKER\"}",
+        "[\"invalid_client\"]",
+        // Not JSON at all, and an empty body.
+        "<html>MARKER invalid_client</html>",
+        "",
+        " \n\t "
+    })
+    void aRefusalWithoutAKnownErrorCodeKeepsTheStatusOnlyMessage(String body) {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo("https://login.microsoftonline.com/tenant/oauth2/v2.0/token"))
+            .andRespond(org.springframework.test.web.client.response.MockRestResponseCreators
+                .withStatus(org.springframework.http.HttpStatus.BAD_REQUEST).body(body));
+
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> new OAuthTokenGateway(restTemplate)
+            .fetchClientCredentialsToken(new ClientCredentialsAuthConfig("tenant", null, "client-id", "client-secret", "api://audience", null)));
+
+        assertThat(thrown)
+            .isExactlyInstanceOf(IllegalStateException.class)
+            .hasMessage("OAuth client-credentials request failed: HTTP 400")
+            .hasNoCause();
     }
 
     @Test

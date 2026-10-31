@@ -1,12 +1,16 @@
 package com.tsanet.e2ee;
 
 /**
- * The outcome of verifying a received record: the decrypted content, or a refusal that names the
- * step and the field and carries no value. There is no partial result and no plaintext fallback.
+ * The outcome of verifying a received record: the decrypted content, a refusal that names the
+ * step and the field and carries no value, or the sending company's keys being unavailable. There
+ * is no partial result and no plaintext fallback.
  */
-public sealed interface Verification<T> permits Verification.Verified, Verification.Refused {
+public sealed interface Verification<T> permits Verification.Verified, Verification.Refused, Verification.KeysUnavailable {
 
-    /** The steps of Addendum D §5, in the order they run. */
+    /**
+     * The steps of Addendum D §5, in the order they run, except that step 3's party checks, which
+     * need no key, run before step 1's key lookup.
+     */
     enum Step {
         /** 1: the sending company's signing key, looked up by the manifest's {@code kid}. */
         SENDER_KEY,
@@ -35,5 +39,15 @@ public sealed interface Verification<T> permits Verification.Verified, Verificat
      * @param reason a short description of the failure; never a value, ciphertext, manifest or key
      */
     record Refused<T>(Step step, String field, String reason) implements Verification<T> {
+    }
+
+    /**
+     * {@link PartnerKeys} threw {@code IOException} fetching the sending company's keys, at first or
+     * on the refetch for an unknown {@code kid}: a failure on the caller's side, and the record wasn't
+     * judged. It comes before the replay check, so no {@code jti} is used and verifying again later is
+     * checked afresh. A source that throws for a company with no configured JWKS URL, or for a JWKS it
+     * rejects, lands here too, and verifying again won't help until that is fixed.
+     */
+    record KeysUnavailable<T>() implements Verification<T> {
     }
 }

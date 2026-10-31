@@ -11,4 +11,9 @@ public record CaseResponseDto(
     String nextSteps,
     String createdAt
 ) {
+    @Override
+    public String toString() {
+        return "CaseResponseDto[id=" + id + ", caseToken=<redacted>, type=" + type
+            + ", createdAt=" + createdAt + "]";
+    }
 }

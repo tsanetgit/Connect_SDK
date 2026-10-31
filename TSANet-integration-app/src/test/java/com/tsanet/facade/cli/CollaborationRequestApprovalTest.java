@@ -11,7 +11,7 @@ class CollaborationRequestApprovalTest {
     @Test
     void itAllowsOpenRequestWithoutApprovalResponse() {
         var request = new CollaborationRequestStatusDto(
-            1L, "OPEN", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null
+            1L, "OPEN", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null, null, null, null, null, null, null
         );
 
         assertThat(CollaborationRequestApproval.validateForApproval(request, List.of()).approvable()).isTrue();
@@ -20,7 +20,7 @@ class CollaborationRequestApprovalTest {
     @Test
     void itBlocksAlreadyAcceptedRequest() {
         var request = new CollaborationRequestStatusDto(
-            1L, "ACCEPTED", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null
+            1L, "ACCEPTED", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null, null, null, null, null, null, null
         );
 
         var result = CollaborationRequestApproval.validateForApproval(request, List.of());
@@ -32,10 +32,10 @@ class CollaborationRequestApprovalTest {
     @Test
     void itBlocksCanceledAndResolvedRequests() {
         var canceled = new CollaborationRequestStatusDto(
-            1L, "CANCELED", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null
+            1L, "CANCELED", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null, null, null, null, null, null, null
         );
         var resolved = new CollaborationRequestStatusDto(
-            2L, "RESOLVED", "summary", "Acme", 1L, "Beta", 2L, "tok2", null, null
+            2L, "RESOLVED", "summary", "Acme", 1L, "Beta", 2L, "tok2", null, null, null, null, null, null, null, null
         );
 
         assertThat(CollaborationRequestApproval.validateForApproval(canceled, List.of()).message())
@@ -47,7 +47,7 @@ class CollaborationRequestApprovalTest {
     @Test
     void itBlocksWhenApprovalResponseAlreadyExists() {
         var request = new CollaborationRequestStatusDto(
-            1L, "OPEN", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null
+            1L, "OPEN", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null, null, null, null, null, null, null
         );
         var responses = List.of(
             new CaseResponseDto(10L, "tok1", "APPROVAL", "CASE-1", "Eng", null, "e@x.com", "Next", null)
