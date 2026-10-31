@@ -23,6 +23,7 @@ import com.tsanet.e2ee.Records.DecryptedNote;
 import com.tsanet.e2ee.Records.EncryptedCase;
 import com.tsanet.e2ee.Records.EncryptedNote;
 import com.tsanet.e2ee.Records.NotePlaintext;
+import com.tsanet.e2ee.Verification.KeysUnavailable;
 import com.tsanet.e2ee.Verification.Refused;
 import com.tsanet.e2ee.Verification.Step;
 import com.tsanet.e2ee.Verification.Verified;
@@ -254,8 +255,8 @@ public final class E2eeProfile {
         List<CaseCustomFieldDto> customFields = record.customFields() == null ? List.of() : record.customFields();
 
         Checked checked = checkManifest(record.manifest(), record.encrypted(), iss, aud, record.submitterCaseNumber(), receipt);
-        if (checked.refused() != null) {
-            return refused(checked.refused());
+        if (checked.failed() != null) {
+            return refused(checked.failed());
         }
 
         // Step 5. A custom field's read id isn't the form's fieldId, so its manifest name comes from its
@@ -319,8 +320,8 @@ public final class E2eeProfile {
         }
 
         Checked checked = checkManifest(note.manifest(), note.encrypted(), iss, aud, caseRecord.submitterCaseNumber(), receipt);
-        if (checked.refused() != null) {
-            return refused(checked.refused());
+        if (checked.failed() != null) {
+            return refused(checked.failed());
         }
         Opened opened = checkAndOpenFields(wire, checked.claims());
         if (opened.refused() != null) {
@@ -330,15 +331,16 @@ public final class E2eeProfile {
             opened.plaintext().get(Profile.NOTE_SUMMARY), opened.plaintext().get(Profile.NOTE_DESCRIPTION)));
     }
 
-    private record Checked(Manifest.Claims claims, Refused<?> refused) {
+    /** {@code failed} is a {@link Refused} or {@link KeysUnavailable}; null when steps 1 to 4 pass. */
+    private record Checked(Manifest.Claims claims, Verification<?> failed) {
     }
 
     private record Opened(Map<String, String> plaintext, Refused<?> refused) {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> Verification<T> refused(Refused<?> refusal) {
-        return (Verification<T>) refusal;
+    private static <T> Verification<T> refused(Verification<?> failure) {
+        return (Verification<T>) failure;
     }
 
     /** Steps 1 to 4. */
@@ -352,6 +354,14 @@ public final class E2eeProfile {
             jws = Manifest.parse(manifest);
         } catch (ManifestException unusable) {
             return refuse(Step.SIGNATURE, "no manifest, or an unparseable one");
+        }
+        // Step 3 would refuse these whatever the keys say. Refusing them before the key lookup keeps a
+        // record that can never pass from reading as KeysUnavailable when its sender has no keys.
+        if (aud == null) {
+            return refuse(Step.CLAIMS, "iss or aud does not match the record");
+        }
+        if (!ownCompanyId.equals(iss) && !ownCompanyId.equals(aud)) {
+            return refuse(Step.CLAIMS, "this member is neither iss nor aud");
         }
         ECKey senderKey;
         try {
@@ -367,7 +377,7 @@ public final class E2eeProfile {
             }
             senderKey = ec;
         } catch (IOException unavailable) {
-            return refuse(Step.SENDER_KEY, "the sending company's public keys are unavailable");
+            return new Checked(null, new KeysUnavailable<>());
         }
 
         // Step 2.

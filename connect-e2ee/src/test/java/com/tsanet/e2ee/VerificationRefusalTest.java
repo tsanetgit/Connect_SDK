@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.nimbusds.jose.jwk.Curve;
 import com.nimbusds.jose.jwk.ECKey;
+import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
@@ -12,13 +13,16 @@ import com.tsanet.api.connectapi.dto.CaseCustomFieldDto;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
 import com.tsanet.e2ee.E2eeProfile.Receipt;
+import com.tsanet.e2ee.Verification.KeysUnavailable;
 import com.tsanet.e2ee.Verification.Refused;
 import com.tsanet.e2ee.Verification.Step;
 import com.tsanet.e2ee.Verification.Verified;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -120,6 +124,59 @@ class VerificationRefusalTest {
             original.manifest(), true, null, 2087L, original.submitterCaseNumber());
 
         assertThat(refusal(memberB.verifyCase(noSender, Receipt.STORED_READ)).step()).isEqualTo(Step.SENDER_KEY);
+    }
+
+    private E2eeProfile memberBWith(PartnerKeys keys) throws Exception {
+        return new E2eeProfile(Vectors.MEMBER_B, v.memberBKeys(), keys,
+            new InMemoryReplayGuard(java.time.Duration.ofMinutes(10), java.time.Duration.ofMinutes(2), Vectors.clockAt(iat)),
+            Vectors.clockAt(iat));
+    }
+
+    @Test
+    void unavailableKeysUseNoJtiSoTheSameFirstReceiptVerifiesOnceTheyAreBack() throws Exception {
+        AtomicBoolean reachable = new AtomicBoolean(false);
+        E2eeProfile receiver = memberBWith(company -> {
+            if (!reachable.get()) {
+                throw new IOException("key server down");
+            }
+            return v.partnerKeys().publicKeys(company);
+        });
+
+        assertThat(receiver.verifyCase(original, Receipt.FIRST_RECEIPT)).isInstanceOf(KeysUnavailable.class);
+        reachable.set(true);
+        assertThat(receiver.verifyCase(original, Receipt.FIRST_RECEIPT)).isInstanceOf(Verified.class);
+    }
+
+    @Test
+    void aFailedRefetchForAnUnknownKidIsUnavailableNotRefused() throws Exception {
+        JWKSet beforeRotation = new JWKSet(v.rsa("memberA_enc").toPublicJWK());
+        E2eeProfile receiver = memberBWith(new PartnerKeys() {
+            public JWKSet publicKeys(String company) {
+                return beforeRotation;
+            }
+            public JWKSet refreshedPublicKeys(String company) throws IOException {
+                throw new IOException("key server down");
+            }
+        });
+
+        assertThat(receiver.verifyCase(original, Receipt.STORED_READ)).isInstanceOf(KeysUnavailable.class);
+    }
+
+    @Test
+    void aNoteWhoseSenderKeysAreUnavailableIsUnavailable() throws Exception {
+        E2eeProfile receiver = memberBWith(company -> {
+            throw new IOException("key server down");
+        });
+
+        assertThat(receiver.verifyNote(v.noteRecord(), original, Receipt.STORED_READ)).isInstanceOf(KeysUnavailable.class);
+    }
+
+    @Test
+    void aCaseBetweenOtherCompaniesIsRefusedEvenWhenItsSenderHasNoKeys() {
+        CollaborationRequestStatusDto between = with(original.summary(), original.description(), original.customFields(),
+            original.manifest(), true, 4000L, 3000L, original.submitterCaseNumber());
+
+        assertThat(refusal(memberB.verifyCase(between, Receipt.STORED_READ)).step()).isEqualTo(Step.CLAIMS);
     }
 
     // ---- step 2 ----

@@ -51,12 +51,15 @@ Verification<DecryptedCase> result = e2ee.verifyCase(record, Receipt.FIRST_RECEI
 switch (result) {
     case Verified<DecryptedCase> ok -> handle(ok.content());
     case Refused<DecryptedCase> no -> audit(no.step(), no.field(), no.reason());   // never a value
+    case KeysUnavailable<DecryptedCase> later -> retryLater(record);
 }
 ```
 
 Branch on the record's `encrypted` first: a partner without E2EE sends plaintext and no manifest, and verifying that record refuses it at `SIGNATURE`.
 
 Verification runs the six checks of Addendum D §5 in order and returns the content only when all pass. A failure is a `Refused` that names the step (`SENDER_KEY`, `SIGNATURE`, `CLAIMS`, `FIRST_RECEIPT`, `FIELDS`, `DECRYPT`) and the field. There is no partial result and no plaintext fallback.
+
+`KeysUnavailable` means `PartnerKeys` threw fetching the sending company's keys, at first or on the refetch for an unknown `kid`. The record wasn't judged, so retry it rather than refuse it. It comes before the replay check and uses nothing. `PinnedJwksPartnerKeys` also throws for a company with no configured JWKS URL and for a JWKS it rejects (a non-200 answer, too large, unparseable, or holding a private key), and those need fixing before a retry can succeed. A record whose parties don't include this member is refused at `CLAIMS` before the key lookup, so it never reads as `KeysUnavailable`. A switch over `Verification` must handle all three outcomes.
 
 - **`Receipt.FIRST_RECEIPT`:** a webhook delivery, or the response to your own create. Use it on exactly one of those paths per record. Connect returns the stored manifest on every later read, so freshness and replay can only be checked once.
 - **A first receipt refused for a reason on your side at `DECRYPT`** (your key service down, say): the replay check at step 4 has already used the record's `jti`, so a redelivery is refused as a replay, and the sender never learns of the failure. Recover by fetching the case and verifying it as `STORED_READ`. A refusal at steps 1 to 3 (`SENDER_KEY`, `SIGNATURE`, `CLAIMS`) comes before that check and uses nothing, so a redelivery is checked afresh.
