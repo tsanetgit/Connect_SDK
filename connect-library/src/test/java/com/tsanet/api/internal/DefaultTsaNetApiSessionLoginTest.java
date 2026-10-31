@@ -81,7 +81,8 @@ class DefaultTsaNetApiSessionLoginTest {
             mock(WebhookInboundEventStorageService.class),
             mock(PartnerSelectionStorageService.class),
             mock(AttachmentConfigStorageService.class),
-            mock(AttachmentForwardResultStorageService.class)
+            mock(AttachmentForwardResultStorageService.class),
+            mock(java.net.http.HttpClient.class)
         );
     }
 
@@ -148,7 +149,8 @@ class DefaultTsaNetApiSessionLoginTest {
             mock(CaseNoteStorageService.class), mock(CaseResponseStorageService.class),
             mock(UserContextStorageService.class), mock(WebhookSubscriptionStorageService.class),
             mock(WebhookInboundEventStorageService.class), mock(PartnerSelectionStorageService.class),
-            mock(AttachmentConfigStorageService.class), mock(AttachmentForwardResultStorageService.class));
+            mock(AttachmentConfigStorageService.class), mock(AttachmentForwardResultStorageService.class),
+            mock(java.net.http.HttpClient.class));
         when(tokenManager.authenticate()).thenAnswer(inv -> {
             sessionStore.saveOAuth("production", "oauth-token", java.time.Instant.now().plusSeconds(3600));
             return "oauth-token";

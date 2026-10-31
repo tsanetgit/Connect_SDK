@@ -57,8 +57,7 @@ public class ConnectApiPollingCoordinator {
     }
 
     private CommunicationSyncSnapshot pollAccount(ApplicationUserAccount account) {
-        try {
-            TsaNetApiSession session = sessionFactory.openSessionForApplicationUser(account);
+        try (TsaNetApiSession session = sessionFactory.openSessionForApplicationUser(account)) {
             session.auth().authenticate();
             CommunicationSyncSnapshot snapshot = session.collaborationRequests().syncCommunicationContext();
             log.info(

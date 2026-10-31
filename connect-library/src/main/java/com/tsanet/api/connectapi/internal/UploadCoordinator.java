@@ -50,7 +50,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * <p>Nothing here completes or abandons a grant; the caller does. No message names a URL or a
  * header value.
  */
-class UploadCoordinator {
+class UploadCoordinator implements AutoCloseable {
 
     static final Duration LINK_EXPIRY_MARGIN = Duration.ofSeconds(60);
     static final int MAX_LINKS_PER_CALL = 1000;
@@ -81,6 +81,11 @@ class UploadCoordinator {
         this.clock = clock;
         this.margin = margin;
         this.baseBackoff = baseBackoff;
+    }
+
+    @Override
+    public void close() {
+        transport.close();
     }
 
     UploadReceipts upload(AttachmentGrant grant, Path file, LinkSource source, UploadProgressListener listener) {

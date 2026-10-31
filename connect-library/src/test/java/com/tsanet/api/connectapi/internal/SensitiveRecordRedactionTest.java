@@ -101,7 +101,7 @@ class SensitiveRecordRedactionTest {
     @MethodSource("records")
     void redactsSecretsWithoutChangingConstructorsOrAccessors(Class<?> type) throws Exception {
         RecordComponent[] components = type.getRecordComponents();
-        // Exercise compatibility constructors too: they take a prefix of the canonical fields.
+        // Every declared constructor: one beside the canonical form would take a prefix of its fields.
         for (var constructor : type.getDeclaredConstructors()) {
             Object[] arguments = new Object[constructor.getParameterCount()];
             for (int i = 0; i < arguments.length; i++) {

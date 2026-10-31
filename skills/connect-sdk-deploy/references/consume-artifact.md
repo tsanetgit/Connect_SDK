@@ -309,6 +309,9 @@ Watch the release notes on each release.
       `expectedSizeBytes` at 5,000,000,000,000, and create answers a bad request with `400`,
       `attachment/invalid-request`.
   - `send` no longer re-grants when a grant expires before complete.
+  - An upload-link answer with no `expiresAt` (any link), or no `sizeBytes` (an S3 part or Azure
+    block), is refused with `AttachmentV2Exception` `CLIENT_PRECONDITION`, "the answer has no …"
+    (`tsanetgit/Connect_SDK#138`).
   - Receiver allowlist: `ApplicationUserAccount` and `TsaNetApiConfiguration` gain a
     `Set<Long> allowedReceiverCompanyIds` component, the companies the account may deliver
     V2 attachments to. A `null` or empty set means unrestricted; a set containing `null` is
@@ -430,12 +433,16 @@ Watch the release notes on each release.
 - **5.0.0** reports a sender's keys being unavailable as their own `connect-e2ee` outcome
   (`tsanetgit/Connect_SDK#147`), redacts sensitive values in SDK records' `toString()`
   (`tsanetgit/Connect_SDK#162`), makes the mapping from the generated models to the records
-  public as `OpenApiRecords` (`tsanetgit/Connect_SDK#146`), and names OAuth's error code in a
-  refused token call (`tsanetgit/Connect_SDK#45`); the runtime line (Spring Boot 4.1, Jackson 3,
-  JDK 21) is unchanged from 4.0.0. It is a major because of one source break: an exhaustive
-  `switch` over `Verification`. A connector that doesn't use `connect-e2ee` needs no code change
-  unless it matches the refused-token message exactly, but check anything that reads the changed
-  records' `toString()`.
+  public as `OpenApiRecords` (`tsanetgit/Connect_SDK#146`), names OAuth's error code in a refused
+  token call (`tsanetgit/Connect_SDK#45`), waits a minute after a failed JWKS fetch before
+  fetching again (`tsanetgit/Connect_SDK#173`), makes sessions closeable and removes the deprecated
+  record constructors (`tsanetgit/Connect_SDK#139`); the runtime line (Spring Boot 4.1, Jackson 3,
+  JDK 21) is unchanged from 4.0.0. It is a major because of three source breaks: an exhaustive
+  `switch` over `Verification`, the removed record constructors below, and an implementer of
+  `TsaNetApiSession`. A connector that uses none of those keeps compiling. One that doesn't use
+  `connect-e2ee` needs no other code change unless it matches the refused-token message exactly;
+  one that does should read the `KeysUnavailable` and `step` notes below. Either way, check anything
+  that reads the changed records' `toString()`, and add a `close()` call where it drops a session.
   - `Verification` gains a third permitted subtype, `KeysUnavailable`, returned when
     `PartnerKeys` throws `IOException` fetching the sending company's keys (at first, or on the
     refetch for an unknown `kid`). An exhaustive `switch` without the new case stops compiling,
@@ -483,3 +490,20 @@ Watch the release notes on each release.
     token, so pass `caseNote` the token of the case the note was read under. The parameters are
     generated types, so a rename in the Connect OpenAPI spec changes these signatures. Code that
     doesn't call it needs no change.
+  - `TsaNetApiSession` is now `AutoCloseable` (`tsanetgit/Connect_SDK#139`). Each session holds a
+    JDK `HttpClient`, with its selector thread and pooled connections, from the moment it opens,
+    and until 5.0.0 nothing released them. Call `close()` on a session you drop, for example on a
+    credential change or after a one-off poll. It doesn't wait: requests already sent run to
+    completion, and a later one fails the way an unreachable API does: a `ConnectApiException` of
+    kind `CONNECTIVITY`, or `AttachmentV2Exception` `client/connectivity` on the V2 facades. So a
+    `send` still running can't complete its grant, which stays open until it expires. A Spring
+    `@Bean` that returns a session is now closed when its context shuts down.
+    `AccountScopedTsaNetApiSession` instead goes back to having no session until the next login, and
+    a login or authenticate as a different account closes the previous account's session. Code that
+    implements `TsaNetApiSession` itself must add
+    `close()`. A V2 upload now runs on a client of its own, stopped when that upload ends, so
+    uploads no longer share pooled connections.
+  - The deprecated record constructors are gone (`tsanetgit/Connect_SDK#139`): `CaseNoteDto`'s
+    14- and 18-argument forms and `CollaborationRequestStatusDto`'s 10-, 11- and 13-argument
+    forms. Call the canonical constructor (20 and 16 arguments), passing `null` for a value you
+    don't have: a null there means not known, as it did from the removed constructors.

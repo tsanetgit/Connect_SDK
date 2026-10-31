@@ -62,6 +62,7 @@ import com.tsanet.api.storage.WebhookSubscriptionStorageService;
 import com.tsanet.api.webhook.WebhookInboundService;
 import com.tsanet.api.auth.AuthMode;
 import com.tsanet.api.connectapi.internal.TokenManager;
+import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -101,6 +102,7 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
     private final PartnerSelectionStorageService partnerSelectionStorageService;
     private final AttachmentConfigStorageService attachmentConfigStorageService;
     private final AttachmentForwardResultStorageService attachmentForwardResultStorageService;
+    private final HttpClient httpClient;
 
     DefaultTsaNetApiSession(
         TsaNetApiConfiguration configuration,
@@ -126,7 +128,8 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         WebhookInboundEventStorageService webhookInboundEventStorageService,
         PartnerSelectionStorageService partnerSelectionStorageService,
         AttachmentConfigStorageService attachmentConfigStorageService,
-        AttachmentForwardResultStorageService attachmentForwardResultStorageService
+        AttachmentForwardResultStorageService attachmentForwardResultStorageService,
+        HttpClient httpClient
     ) {
         this.configuration = configuration;
         this.sessionStore = sessionStore;
@@ -159,6 +162,13 @@ final class DefaultTsaNetApiSession implements TsaNetApiSession, AuthFacade, Col
         this.partnerSelectionStorageService = partnerSelectionStorageService;
         this.attachmentConfigStorageService = attachmentConfigStorageService;
         this.attachmentForwardResultStorageService = attachmentForwardResultStorageService;
+        this.httpClient = httpClient;
+    }
+
+    // shutdown, not close: close waits for requests in flight, which would stall a credential swap.
+    @Override
+    public void close() {
+        httpClient.shutdown();
     }
 
     @Override

@@ -11,8 +11,8 @@ class CollaborationRequestNotesTimelineTest {
     @Test
     void itSortsNotesChronologically() {
         var notes = List.of(
-            new CaseNoteDto(2L, 1L, "tok", null, null, null, "B", "Later", "d2", null, null, "n2", "2026-01-02T00:00:00Z", null),
-            new CaseNoteDto(1L, 1L, "tok", null, null, null, "A", "Earlier", "d1", null, null, "n1", "2026-01-01T00:00:00Z", null)
+            new CaseNoteDto(2L, 1L, "tok", null, null, null, "B", "Later", "d2", null, null, "n2", "2026-01-02T00:00:00Z", null, null, null, null, null, null, null),
+            new CaseNoteDto(1L, 1L, "tok", null, null, null, "A", "Earlier", "d1", null, null, "n1", "2026-01-01T00:00:00Z", null, null, null, null, null, null, null)
         );
 
         assertThat(CollaborationRequestNotesTimeline.chronological(notes))
@@ -23,10 +23,10 @@ class CollaborationRequestNotesTimelineTest {
     @Test
     void itBlocksCanceledAndRejectedRequests() {
         var canceled = new CollaborationRequestStatusDto(
-            1L, "CANCELED", "s", "A", 1L, "B", 2L, "tok", null, null
+            1L, "CANCELED", "s", "A", 1L, "B", 2L, "tok", null, null, null, null, null, null, null, null
         );
         var rejected = new CollaborationRequestStatusDto(
-            2L, "REJECTED", "s", "A", 1L, "B", 2L, "tok2", null, null
+            2L, "REJECTED", "s", "A", 1L, "B", 2L, "tok2", null, null, null, null, null, null, null, null
         );
 
         assertThat(CollaborationRequestNotesTimeline.validateAccess(canceled).canFetch()).isFalse();
@@ -36,10 +36,10 @@ class CollaborationRequestNotesTimelineTest {
     @Test
     void itPermitsOpenAndAcceptedRequests() {
         var open = new CollaborationRequestStatusDto(
-            1L, "OPEN", "s", "A", 1L, "B", 2L, "tok", null, null
+            1L, "OPEN", "s", "A", 1L, "B", 2L, "tok", null, null, null, null, null, null, null, null
         );
         var accepted = new CollaborationRequestStatusDto(
-            2L, "ACCEPTED", "s", "A", 1L, "B", 2L, "tok2", null, null
+            2L, "ACCEPTED", "s", "A", 1L, "B", 2L, "tok2", null, null, null, null, null, null, null, null
         );
 
         assertThat(CollaborationRequestNotesTimeline.validateAccess(open).canFetch()).isTrue();
@@ -49,7 +49,7 @@ class CollaborationRequestNotesTimelineTest {
     @Test
     void itBuildsContentPreviewAndAuthorFallback() {
         var note = new CaseNoteDto(
-            1L, 1L, "tok", null, "user1", null, null, "Summary", "x".repeat(150), null, null, "n1", null, null
+            1L, 1L, "tok", null, "user1", null, null, "Summary", "x".repeat(150), null, null, "n1", null, null, null, null, null, null, null, null
         );
 
         assertThat(CollaborationRequestNotesTimeline.author(note)).isEqualTo("user1");
