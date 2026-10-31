@@ -465,6 +465,11 @@ Watch the release notes on each release.
     longer carry request tokens; rows that 4.0.0 wrote to `webhook_inbound_event` keep their old
     messages. A `ConnectApiException` message still keeps the API's `detail`, which can repeat a
     token (see "Opening a session" above).
+  - A refused OAuth token call names its error code. The `IllegalStateException` message is
+    `OAuth client-credentials request failed: HTTP <status> (<code>)` when the token endpoint
+    answers with a standard OAuth error code, for example `invalid_client`; otherwise it stays
+    `... HTTP <status>`. Entra's `error_description` still isn't included, because it names the
+    app. Code that matched the old message exactly should match its prefix.
   - `connect-library` adds `com.tsanet.api.connectapi.OpenApiRecords`, the mapping the facades
     use from the generated OpenAPI models to `CollaborationRequestStatusDto`, `CaseNoteDto` and
     `FormFieldDto`. A connector that calls the generated client directly and keeps its own copy
