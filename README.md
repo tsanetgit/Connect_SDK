@@ -86,9 +86,11 @@ The `demo-ui` module (adopted from `shawn-tsanet/connect-sdk-demo` in
 `tsanetgit/Connect_SDK#59`) is documented under [`docs/`](docs/):
 
 - [USER_GUIDE](docs/USER_GUIDE.md): what the demo does and how to drive it
-- [RUNBOOK](docs/RUNBOOK.md): build, start, credentials, tunnel, shutdown
-- [azure-deployment](docs/azure-deployment.md) and
-  [aws-hosting-options](docs/aws-hosting-options.md): hosting
+- [RUNBOOK](docs/RUNBOOK.md): build, start, credentials, tunnel, shutdown, and
+  [hosting on AWS](docs/RUNBOOK.md#6-optional-hosted-on-aws-ecs-express-mode)
+- [azure-deployment](docs/azure-deployment.md): hosting on Azure
+- [aws-hosting-options](docs/aws-hosting-options.md): the July 2026 AWS decision
+  record, kept as history
 - [porting-scope](docs/porting-scope.md): Python/JS/TS follow-on scoping
 
 The root `Dockerfile` builds the demo-ui runtime image; the jar is built outside
