@@ -3,6 +3,9 @@ package com.tsanet.demo.web;
 import com.tsanet.api.ConnectApiException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.apache.tomcat.util.http.fileupload.FileUploadException;
+import org.apache.tomcat.util.http.fileupload.InvalidFileNameException;
+import org.apache.tomcat.util.http.fileupload.MultipartStream;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -13,6 +16,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
@@ -94,6 +98,35 @@ public class ApiErrorHandler extends ResponseEntityExceptionHandler {
                                                                   HttpStatusCode status, WebRequest request) {
         ProblemDetail fixed = ProblemDetail.forStatusAndDetail(status, "The request body is missing or does not match the expected JSON");
         return handleExceptionInternal(e, fixed, headers, status, request);
+    }
+
+    /**
+     * A malformed multipart request is a 400 with a fixed message. A size overrun is a subclass that
+     * {@link ResponseEntityExceptionHandler} answers first, with its 413. Spring gives this type no status
+     * because it also carries a failure on the server's side, such as an unwritable temp directory, so
+     * anything not shown to be the request's own fault stays with the catch-all.
+     */
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<Map<String, String>> handleMultipart(MultipartException e) {
+        if (!malformedRequest(e)) {
+            return handleOther(e);
+        }
+        return ResponseEntity.badRequest().body(Map.of("error", "The request is not a valid multipart upload"));
+    }
+
+    /**
+     * No cause is Spring's "not a multipart request". An {@link IllegalArgumentException} is Spring reading
+     * a part's Content-Disposition, and {@link InvalidFileNameException} is Tomcat refusing its file name.
+     * Otherwise it's Tomcat's parser on the body: its own refusal has no cause or a malformed stream, and any
+     * other cause is an I/O failure. These are Tomcat's and Spring's shapes, not a contract:
+     * {@code MultipartErrorsTest} pins them against the bundled versions.
+     */
+    private static boolean malformedRequest(MultipartException e) {
+        Throwable cause = e.getCause();
+        if (cause instanceof FileUploadException) {
+            return cause.getCause() == null || cause.getCause() instanceof MultipartStream.MalformedStreamException;
+        }
+        return cause == null || cause instanceof IllegalArgumentException || cause instanceof InvalidFileNameException;
     }
 
     /**

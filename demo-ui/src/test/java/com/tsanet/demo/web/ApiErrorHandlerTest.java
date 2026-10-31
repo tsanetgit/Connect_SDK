@@ -126,6 +126,19 @@ class ApiErrorHandlerTest {
         assertUnexpected(handler.handleOther(first));
     }
 
+    /** A failure on the server's side while reading an upload stays the server's, with the fixed message. */
+    @Test
+    void aMultipartFailureOnTheServersSideIsNotTheClientsFault(CapturedOutput output) {
+        assertUnexpected(handler.handleMultipart(new org.springframework.web.multipart.MultipartException(
+            MARKER, new java.io.IOException(MARKER))));
+        assertUnexpected(handler.handleMultipart(new org.springframework.web.multipart.MultipartException(
+            MARKER, new org.apache.tomcat.util.http.fileupload.impl.IOFileUploadException(MARKER, new java.io.IOException(MARKER)))));
+        assertUnexpected(handler.handleMultipart(new org.springframework.web.multipart.MultipartException(
+            MARKER, new org.apache.tomcat.util.http.fileupload.FileUploadException(MARKER, new java.io.IOException(MARKER)))));
+
+        assertThat(output).contains("org.springframework.web.multipart.MultipartException").doesNotContain(MARKER);
+    }
+
     private static final String MARKER = "MARKER-not-for-the-caller";
 
     private static void assertUnexpected(ResponseEntity<Map<String, String>> response) {

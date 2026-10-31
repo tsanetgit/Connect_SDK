@@ -10,11 +10,13 @@ import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,6 +31,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 public class AttachmentsController {
+
+    private static final String DEFAULT_NAME = "attachment";
 
     private final SessionGuard guard;
     /** In-flight and finished V2 deliveries, keyed by upload id; demo-side state only. */
@@ -89,7 +93,7 @@ public class AttachmentsController {
         String original = lastSegmentOrDefault(file.getOriginalFilename());
         Path temp;
         try {
-            temp = Files.createTempDirectory("tsanet-demo-deliver").resolve(original);
+            temp = uploadPath(Files.createTempDirectory("tsanet-demo-deliver"), original);
             file.transferTo(temp);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -121,13 +125,39 @@ public class AttachmentsController {
         deliveries.shutdownNow();
     }
 
-    /** The browser's file name reduced to its last segment; a bare separator or blank becomes a default. */
+    /**
+     * The browser's file name reduced to its last segment, by either separator, whatever this OS uses. The
+     * result stays as sent, whitespace included, if it's a single relative segment on this host. Anything
+     * else gets a default.
+     */
     static String lastSegmentOrDefault(String name) {
-        if (name == null || name.isBlank()) {
-            return "attachment";
+        if (name == null) {
+            return DEFAULT_NAME;
         }
-        Path last = Path.of(name).getFileName();
-        return last == null || last.toString().isBlank() ? "attachment" : last.toString();
+        String last = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1);
+        return isSingleSegment(last) ? last : DEFAULT_NAME;
+    }
+
+    private static boolean isSingleSegment(String name) {
+        if (name.isBlank() || name.chars().allMatch(c -> c == '.')) {
+            return false;
+        }
+        try {
+            Path path = Path.of(name);
+            return path.getRoot() == null && path.getNameCount() == 1;
+        } catch (InvalidPathException refused) {
+            return false;
+        }
+    }
+
+    /** Where an upload goes: directly in {@code directory}, under the default name if {@code name} would land elsewhere. */
+    private static Path uploadPath(Path directory, String name) {
+        return uploadPath(directory, name, directory::resolve);
+    }
+
+    static Path uploadPath(Path directory, String name, Function<String, Path> resolve) {
+        Path resolved = resolve.apply(name).normalize();
+        return directory.normalize().equals(resolved.getParent()) ? resolved : directory.resolve(DEFAULT_NAME);
     }
 
     @GetMapping("/api/uploads/{uploadId}")
@@ -155,8 +185,9 @@ public class AttachmentsController {
         List<Path> tempFiles = new ArrayList<>();
         try {
             for (MultipartFile file : files) {
-                String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "attachment";
-                Path temp = Files.createTempDirectory("tsanet-demo-attach").resolve(original);
+                // As in deliver: the browser's file name is client input.
+                String original = lastSegmentOrDefault(file.getOriginalFilename());
+                Path temp = uploadPath(Files.createTempDirectory("tsanet-demo-attach"), original);
                 file.transferTo(temp);
                 tempFiles.add(temp);
             }
