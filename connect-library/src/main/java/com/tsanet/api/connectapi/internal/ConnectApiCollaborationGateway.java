@@ -1,5 +1,6 @@
 package com.tsanet.api.connectapi.internal;
 
+import com.tsanet.api.connectapi.OpenApiRecords;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
 import com.tsanet.api.generated.api.CollaborationRequestsApi;
 import com.tsanet.api.generated.model.CollaborationRequestStatusDTO;
@@ -68,6 +69,6 @@ public class ConnectApiCollaborationGateway {
     }
 
     private CollaborationRequestStatusDto toDto(CollaborationRequestStatusDTO dto) {
-        return OpenApiMapping.collaborationRequest(dto);
+        return OpenApiRecords.collaborationRequest(dto);
     }
 }

@@ -394,6 +394,21 @@ StorageTestResult result = session.attachmentStorage().test();
 Today any API user of a company can change its storage (`tsanetgit/Connect-API-Code#170`
 proposes an admin-scoped path). `register` follows the platform when that lands.
 
+### Records from generated models — `OpenApiRecords`
+
+A connector that calls the generated client (`com.tsanet.api.generated.api`) directly can build the
+library's records with the same mapping the facades use, for example to hand them to
+`connect-e2ee`:
+
+| Method | Returns |
+|--------|---------|
+| `collaborationRequest(CollaborationRequestStatusDTO)` | `CollaborationRequestStatusDto` |
+| `caseNote(CaseNoteDTO, caseToken)` | `CaseNoteDto`. The generated note has no case token, so pass the token of the case the note was read under; `connect-e2ee`'s `verifyNote` compares it with the case's. |
+| `formField(FieldMetadataDTO)` | `FormFieldDto` |
+
+The parameters are generated types, so a rename in the Connect OpenAPI spec changes these
+signatures.
+
 ---
 
 ## Typical workflows
