@@ -485,7 +485,8 @@ Watch the release notes on each release.
     completion, and a later one fails with a `ConnectApiException` of kind `CONNECTIVITY`, "cannot
     reach the Connect API (IOException)", so a `send` still running can't complete its grant, which
     stays open until it expires. `AccountScopedTsaNetApiSession` instead goes back to having no
-    session until the next login. Code that implements `TsaNetApiSession` itself must add
+    session until the next login, and a login or authenticate as a different account closes the
+    previous account's session. Code that implements `TsaNetApiSession` itself must add
     `close()`. A V2 upload now runs on a client of its own, stopped when that upload ends, so
     uploads no longer share pooled connections.
   - The deprecated record constructors are gone (`tsanetgit/Connect_SDK#139`): `CaseNoteDto`'s

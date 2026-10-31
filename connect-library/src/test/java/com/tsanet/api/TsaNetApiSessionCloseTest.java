@@ -117,8 +117,10 @@ class TsaNetApiSessionCloseTest {
 
         assertThatThrownBy(() -> session.users().getCurrentUser())
             .isInstanceOf(ConnectApiException.class)
-            .hasMessageContaining("cannot reach the Connect API")
-            .hasRootCauseMessage("closed");
+            .hasMessage("cannot reach the Connect API (IOException)")
+            .hasRootCauseMessage("closed")
+            .extracting(failure -> ((ConnectApiException) failure).kind())
+            .isEqualTo(ConnectApiException.Kind.CONNECTIVITY);
         assertThat(meCalls).hasValue(before);
     }
 

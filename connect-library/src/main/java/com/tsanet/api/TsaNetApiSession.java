@@ -49,7 +49,8 @@ public interface TsaNetApiSession extends AutoCloseable {
      * working. Closing twice does nothing more.
      *
      * <p>{@code AccountScopedTsaNetApiSession} closes its active account's session and goes back to
-     * having none: its facades refuse until the next login or authenticate opens a new one.
+     * having none: its facades refuse until the next login or authenticate opens a new one. A login
+     * or authenticate as a different account closes the previous account's session the same way.
      */
     @Override
     void close();
