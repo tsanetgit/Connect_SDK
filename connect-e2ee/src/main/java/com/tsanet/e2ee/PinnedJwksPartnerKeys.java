@@ -21,14 +21,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * minute, whatever the cache lifetime, so an endpoint that is down gets one request a minute per
  * company. A set still within its lifetime is served as usual. Lookups running at the same moment
  * don't share a fetch, so each can fetch until the first failure is recorded. A fetch that was
- * interrupted records no failure, so an endpoint that hangs, with callers that cancel inside the
- * fetch timeout, gets a request from every lookup.
+ * interrupted counts as failed once it has run for two seconds, so an endpoint that hangs is limited
+ * too, even with callers that cancel inside the fetch timeout. Interrupted sooner, it records no
+ * failure, so a hang is limited only for callers whose budget is at least that long.
  */
 public final class PinnedJwksPartnerKeys implements PartnerKeys {
     private static final Duration FETCH_TIMEOUT = Duration.ofSeconds(10);
     private static final int MAX_JWKS_BYTES = 64 * 1024;
     // Both the refetch limit after a success and the wait after a failure.
     private static final Duration MIN_REFRESH_INTERVAL = Duration.ofMinutes(1);
+    // A fetch cancelled after this long counts as failed. Well above a normal fetch of a small JSON
+    // document, so a caller's short budget can't block a healthy endpoint's keys for a minute, and
+    // below the 4 s budget Connect_Gateway's key warm-up cancels at, which must count.
+    static final Duration CANCELLED_FETCH_AGE = Duration.ofSeconds(2);
     // Virtual threads, so a stalled read never holds a pool thread; it ends when the stream is closed.
     private static final java.util.concurrent.ExecutorService READERS =
         java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
@@ -127,10 +132,11 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
         try {
             fetched = fetch(url, companyId);
         } catch (IOException failed) {
-            // An interrupt is this caller's cancellation, not the partner's failure. Timed when the
-            // fetch ended, or a slow failure would use up the wait while it ran.
-            if (!Thread.currentThread().isInterrupted()) {
-                lastFailure.put(companyId, clock.instant());
+            // An early interrupt is this caller's short budget, not the partner's failure. Timed when
+            // the fetch ended, or a slow failure would use up the wait while it ran.
+            Instant ended = clock.instant();
+            if (!Thread.currentThread().isInterrupted() || !ended.isBefore(now.plus(CANCELLED_FETCH_AGE))) {
+                lastFailure.put(companyId, ended);
             }
             throw failed;
         }

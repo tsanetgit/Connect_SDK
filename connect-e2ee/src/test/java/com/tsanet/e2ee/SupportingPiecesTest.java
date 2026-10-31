@@ -181,6 +181,12 @@ class SupportingPiecesTest {
         final AtomicBoolean up = new AtomicBoolean(true);
         final AtomicReference<Instant> now = new AtomicReference<>(Instant.ofEpochSecond(1_800_000_000L));
         final AtomicReference<Duration> failureTakes = new AtomicReference<>(Duration.ZERO);
+        /** While set, a request hangs after this much clock time; {@link #hangsInBody} says at which site. */
+        final AtomicReference<Duration> hangAfter = new AtomicReference<>();
+        final AtomicBoolean hangsInBody = new AtomicBoolean();
+        final java.util.concurrent.Semaphore hanging = new java.util.concurrent.Semaphore(0);
+        final java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        final java.util.concurrent.ExecutorService callers = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
         final HttpServer server;
         final PinnedJwksPartnerKeys keys;
 
@@ -189,7 +195,23 @@ class SupportingPiecesTest {
             byte[] jwks = Jwks.publicJson(new JWKSet(v.ec("memberA_sig"))).getBytes(StandardCharsets.UTF_8);
             server.createContext("/a.json", exchange -> {
                 fetches.incrementAndGet();
-                if (up.get()) {
+                Duration hang = hangAfter.get();
+                if (hang != null) {
+                    if (hangsInBody.get()) {
+                        exchange.sendResponseHeaders(200, 0);
+                        exchange.getResponseBody().write('{');
+                        exchange.getResponseBody().flush();
+                    }
+                    advance(hang);
+                    try {
+                        // Long enough for the client to be past send and in the body read.
+                        Thread.sleep(100);
+                        hanging.release();
+                        release.await();
+                    } catch (InterruptedException stopped) {
+                        Thread.currentThread().interrupt();
+                    }
+                } else if (up.get()) {
                     exchange.sendResponseHeaders(200, jwks.length);
                     exchange.getResponseBody().write(jwks);
                 } else {
@@ -198,6 +220,7 @@ class SupportingPiecesTest {
                 }
                 exchange.close();
             });
+            server.setExecutor(java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
             server.start();
             Clock clock = new Clock() {
                 public java.time.ZoneId getZone() { return ZoneOffset.UTC; }
@@ -213,9 +236,83 @@ class SupportingPiecesTest {
             now.updateAndGet(t -> t.plus(by));
         }
 
+        /** A lookup the way Connect_Gateway's warm-up runs one: submitted, and cancel(true) if a request hangs. */
+        void lookupCancelledIfItHangs() throws Exception {
+            java.util.concurrent.CountDownLatch finished = new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.Future<?> lookup = callers.submit(() -> {
+                try {
+                    keys.publicKeys("1042");
+                } catch (IOException expected) {
+                    // Either the cancelled fetch or the wait; the test reads the request count.
+                } finally {
+                    finished.countDown();
+                }
+            });
+            while (!finished.await(20, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                if (hanging.tryAcquire()) {
+                    lookup.cancel(true);
+                }
+            }
+        }
+
         @Override
         public void close() {
+            release.countDown();
+            callers.shutdownNow();
             server.stop(0);
+        }
+    }
+
+    @Test
+    void aFetchCancelledPastTheAgeStartsTheWaitAtEitherInterruptSite() throws Exception {
+        for (boolean inBody : java.util.List.of(false, true)) {
+            try (FlakyEndpoint endpoint = new FlakyEndpoint()) {
+                endpoint.hangsInBody.set(inBody);
+                endpoint.hangAfter.set(PinnedJwksPartnerKeys.CANCELLED_FETCH_AGE);
+
+                endpoint.lookupCancelledIfItHangs();
+                assertThat(endpoint.fetches).as("in body: " + inBody).hasValue(1);
+
+                assertThatThrownBy(() -> endpoint.keys.publicKeys("1042"))
+                    .as("in body: " + inBody).isInstanceOf(IOException.class).hasMessageContaining("wasn't fetched");
+                assertThat(endpoint.fetches).as("no request in the wait, in body: " + inBody).hasValue(1);
+            }
+        }
+    }
+
+    @Test
+    void aFetchCancelledBeforeTheAgeDoesNotStartTheWaitAtEitherInterruptSite() throws Exception {
+        for (boolean inBody : java.util.List.of(false, true)) {
+            try (FlakyEndpoint endpoint = new FlakyEndpoint()) {
+                endpoint.hangsInBody.set(inBody);
+                endpoint.hangAfter.set(PinnedJwksPartnerKeys.CANCELLED_FETCH_AGE.minusMillis(1));
+
+                endpoint.lookupCancelledIfItHangs();
+                assertThat(endpoint.fetches).as("in body: " + inBody).hasValue(1);
+
+                endpoint.hangAfter.set(null);
+                assertThat(endpoint.keys.publicKeys("1042").getKeyByKeyId(v.ec("memberA_sig").getKeyID()))
+                    .as("a short budget doesn't block keys, in body: " + inBody).isNotNull();
+                assertThat(endpoint.fetches).as("in body: " + inBody).hasValue(2);
+            }
+        }
+    }
+
+    @Test
+    void aHangCancelledRepeatedlyAtAGatewayLikeBudgetMakesOneRequestAMinute() throws Exception {
+        try (FlakyEndpoint endpoint = new FlakyEndpoint()) {
+            endpoint.hangAfter.set(Duration.ofMillis(4000));
+
+            for (int lookup = 0; lookup < 5; lookup++) {
+                endpoint.lookupCancelledIfItHangs();
+            }
+            assertThat(endpoint.fetches).as("five lookups in the first minute").hasValue(1);
+
+            endpoint.advance(Duration.ofMinutes(1));
+            for (int lookup = 0; lookup < 5; lookup++) {
+                endpoint.lookupCancelledIfItHangs();
+            }
+            assertThat(endpoint.fetches).as("five more in the next").hasValue(2);
         }
     }
 
