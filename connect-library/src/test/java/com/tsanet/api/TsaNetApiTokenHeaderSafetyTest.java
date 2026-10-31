@@ -152,6 +152,32 @@ class TsaNetApiTokenHeaderSafetyTest {
     }
 
     @Test
+    void aLoginResponseTheClientCantReadIsAFixedMessage() throws Exception {
+        try (java.net.ServerSocket endpoint = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            Thread answer = Thread.ofVirtual().start(() -> {
+                try (java.net.Socket client = endpoint.accept()) {
+                    client.getInputStream().readNBytes(1);
+                    client.getOutputStream().write(
+                        "HTTP/1.1 200 OK\r\nContent-Length: MARKER\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+                    client.getOutputStream().flush();
+                    Thread.sleep(200);
+                } catch (Exception ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            base = "http://127.0.0.1:" + endpoint.getLocalPort();
+            TsaNetApiSession session = passwordSession();
+
+            Throwable thrown = catchThrowable(() -> session.auth().authenticate());
+
+            assertThat(thrown).isExactlyInstanceOf(IllegalStateException.class)
+                .hasMessage("The login request failed: the response isn't usable")
+                .hasNoCause();
+            answer.join(java.time.Duration.ofSeconds(2));
+        }
+    }
+
+    @Test
     void aRenewalAfterA401RefusesTheNewTokenInsteadOfSendingIt() {
         tokenBody = "{\"accessToken\":\"good\",\"tokenType\":\"Bearer\",\"expiresIn\":3600}";
         TsaNetApiSession session = passwordSession();

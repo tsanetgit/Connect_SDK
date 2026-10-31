@@ -291,8 +291,8 @@ class VerificationRefusalTest {
             Vectors.noteRecord("null", note.description(), signed, 1042L), original, Receipt.STORED_READ));
         assertThat(onNote.step()).isEqualTo(Step.FIELDS);
         assertThat(onNote.field()).isEqualTo(Profile.NOTE_SUMMARY);
-        assertThat(onNote.reason()).as("past the check that the manifest's fields are on the record")
-            .doesNotContain("not on the record");
+        assertThat(onNote.reason()).as("the field check, past the one that the manifest's fields are on the record")
+            .isEqualTo("not a profile JWE");
     }
 
     @Test
@@ -326,8 +326,8 @@ class VerificationRefusalTest {
                     original, Receipt.STORED_READ));
                 assertThat(onNote.step()).as("note " + kid + " " + pick).isEqualTo(Step.FIELDS);
                 assertThat(onNote.field()).as("note " + kid + " " + pick).isEqualTo(Profile.NOTE_SUMMARY);
-                assertThat(onNote.reason()).as("past the check that the manifest's fields are on the record")
-                    .doesNotContain("not on the record");
+                assertThat(onNote.reason()).as("the field check, past the one that the manifest's fields are on the record")
+                    .isEqualTo("not a profile JWE");
             }
         }
     }

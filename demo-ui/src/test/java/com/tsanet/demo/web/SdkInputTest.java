@@ -154,7 +154,7 @@ class SdkInputTest {
         }
     }
 
-    /** What ConnectApiWebhooksGateway.java:59 throws for a mistyped event type on the page's free-text input. */
+    /** What ConnectApiWebhooksGateway throws for a mistyped event type on the page's free-text input. */
     @Test
     void aWebhookTheSdkRefusesIsABadRequest() throws Exception {
         when(webhooks.createSubscription(anyString(), any())).thenThrow(new IllegalArgumentException("Unexpected value 'bogus'"));

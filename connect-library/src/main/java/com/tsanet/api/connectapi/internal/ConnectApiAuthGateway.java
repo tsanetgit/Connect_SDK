@@ -29,6 +29,9 @@ public class ConnectApiAuthGateway {
             }
             // No cause: Jackson's message quotes a token it doesn't recognize, which can be this one.
             throw new IllegalStateException("Failed to parse login response");
+        } catch (IllegalArgumentException unreadable) {
+            // The JDK client throws this on a response it can't read, quoting the header it refused.
+            throw new IllegalStateException("The login request failed: the response isn't usable");
         }
         if (response == null || response.getAccessToken() == null || response.getAccessToken().isBlank()) {
             throw new IllegalStateException("Login succeeded but accessToken is missing");

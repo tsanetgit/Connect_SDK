@@ -169,6 +169,34 @@ class OAuthTokenGatewayTest {
             .hasNoCause();
     }
 
+    /** The other source of the same type: the JDK client on a response it can't read. */
+    @Test
+    void aResponseTheClientCantReadIsTheSameFixedMessage() throws Exception {
+        try (java.net.ServerSocket endpoint = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            Thread answer = Thread.ofVirtual().start(() -> {
+                try (java.net.Socket client = endpoint.accept()) {
+                    client.getInputStream().readNBytes(1);
+                    client.getOutputStream().write(
+                        "HTTP/1.1 400 Bad Request\r\nContent-Length: MARKER\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                    client.getOutputStream().flush();
+                    Thread.sleep(200);
+                } catch (Exception ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            String tokenUrl = "http://127.0.0.1:" + endpoint.getLocalPort() + "/token";
+            OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
+
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> gateway.fetchClientCredentialsToken(
+                new ClientCredentialsAuthConfig("tenant", tokenUrl, "client-id", "client-secret", "api://audience", null)));
+
+            assertThat(thrown).isExactlyInstanceOf(IllegalStateException.class)
+                .hasMessage("The OAuth token request failed: its URL or the response isn't usable")
+                .hasNoCause();
+            answer.join(java.time.Duration.ofSeconds(2));
+        }
+    }
+
     @Test
     void aTokenResponseWithNoAccessTokenKeepsTheFieldAsItsCause() {
         RestTemplate restTemplate = new RestTemplate();
