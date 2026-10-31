@@ -425,3 +425,35 @@ Watch the release notes on each release.
     writes decrypted text to it. It now holds each case's description and custom-field answers
     as well as its summary; run `CacheRetention.sweep` if closed and rejected cases shouldn't
     stay on disk (it never sweeps an open case).
+- **5.0.0** reports a sender's keys being unavailable as their own `connect-e2ee` outcome
+  (`tsanetgit/Connect_SDK#147`) and redacts sensitive values in SDK records' `toString()`
+  (`tsanetgit/Connect_SDK#162`); the runtime line (Spring Boot 4.1, Jackson 3, JDK 21) is
+  unchanged from 4.0.0. It is a major because of one source break: an exhaustive `switch` over
+  `Verification`. A connector that doesn't use `connect-e2ee` needs no code change, but check
+  anything that reads the changed records' `toString()`.
+  - `Verification` gains a third permitted subtype, `KeysUnavailable`, returned when
+    `PartnerKeys` throws `IOException` fetching the sending company's keys (at first, or on the
+    refetch for an unknown `kid`). An exhaustive `switch` without the new case stops compiling,
+    and a consumer that bumps without recompiling throws `MatchException` at the first
+    unavailable-keys read. Retry the record rather than refuse it: it comes before the replay
+    check, so no `jti` is used, and verifying it again, as `FIRST_RECEIPT` too, is checked
+    afresh. Bound the retries: `PinnedJwksPartnerKeys` also throws for a company with no
+    configured JWKS URL and for a JWKS it rejects, which a retry won't fix. Code that matched the
+    4.0.0 `SENDER_KEY` reason "the sending company's public keys are unavailable" should switch on
+    `KeysUnavailable`; that refusal is no longer produced.
+  - Step 3's party checks (no receiving party; this member neither `iss` nor `aud`) now run
+    before the key lookup, so such a record is refused at `CLAIMS` where 4.0.0 could refuse it
+    at `SENDER_KEY` or `SIGNATURE`. Anything that audits or alerts by `step` sees the shift; the
+    reason strings are unchanged.
+  - `PinnedJwksPartnerKeys` throws `IllegalArgumentException` from its constructor for a JWKS
+    URL with no host, for every entry in the map, where 4.0.0 failed only when that company was
+    fetched.
+  - SDK records print `<redacted>` in `toString()` for passwords, client and webhook secrets,
+    authentication tokens, and case, note and request tokens (webhook raw payloads included);
+    attachment parameters print their names only. `CaseNoteDto`, `CaseResponseDto`,
+    `CollaborationRequestStatusDto` and `StoredAttachmentForwardResultDto` leave partner-written
+    text and personal details out, so the 4.0.0 note above about logging a
+    `CollaborationRequestStatusDto` no longer applies to `toString()`; it still applies to JSON
+    serialization and to accessors, which are unchanged. The SDK's own exception and webhook sync
+    messages no longer carry request tokens; rows that 4.0.0 wrote to `webhook_inbound_event`
+    keep their old messages.
