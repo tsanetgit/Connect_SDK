@@ -94,10 +94,12 @@ The `demo-ui` module (adopted from `shawn-tsanet/connect-sdk-demo` in
 The root `Dockerfile` builds the demo-ui runtime image; the jar is built outside
 docker first (see the Dockerfile header). A hosted deploy must set
 `TSANET_DEMO_AUTH_PASSWORD`, or the app runs with no auth gate. An optional
-second login for members, with the same rights, comes from
+second login for members, with the same rights and a lower upload limit, comes from
 `TSANET_DEMO_AUTH_GUEST_USER` (default `guest`) and
 `TSANET_DEMO_AUTH_GUEST_PASSWORD`; it is active only when that password is set
-(`tsanetgit/Connect_SDK#148`). When the operator pre-loads the member credentials,
+(`tsanetgit/Connect_SDK#148`). Any request a guest sends with a body must declare a
+`Content-Length` within the limit, 1 GB by default against the operator's 20 GB
+(`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`), so a guest can't send chunked. When the operator pre-loads the member credentials,
 `TSANET_DEMO_CREDENTIALS_LOCKED=true` turns Settings into a read-only "Signed in as"
 view with the environment switch, and the save and clear endpoints refuse
 (`tsanetgit/Connect_SDK#152`). To pre-load those credentials on an ephemeral host,
