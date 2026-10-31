@@ -62,4 +62,8 @@ It fails without the `tsanet.scenarios` company configuration (`acme` and `beta`
 - [ ] A change members can see is in the docs it affects: the root `README.md`, the module's `README.md`, `docs/USER_GUIDE.md`, `docs/RUNBOOK.md` and `skills/connect-sdk-deploy`
 - [ ] Install instructions point to the latest release, not a version number
 - [ ] The diff has no hostnames, account IDs, real data or credentials
-- [ ] The PR is a draft, into the right base
+- [ ] The PR opens as a draft, into the right base
+
+## After the PR opens
+
+A draft is only the starting point. The person who asked for the change reads it and takes it out of draft (Claude doesn't), Copilot reviews it, QA runs in a new session, and a person approves and merges. A PR should be out of draft when it merges.
