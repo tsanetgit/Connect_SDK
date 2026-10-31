@@ -172,11 +172,14 @@ class VerificationRefusalTest {
     }
 
     @Test
-    void aCaseBetweenOtherCompaniesIsRefusedEvenWhenItsSenderHasNoKeys() {
+    void aCaseBetweenOtherCompaniesIsRefusedEvenWhenItsSenderHasNoKeys() throws Exception {
+        E2eeProfile receiver = memberBWith(company -> {
+            throw new IOException("no JWKS for company " + company);
+        });
         CollaborationRequestStatusDto between = with(original.summary(), original.description(), original.customFields(),
             original.manifest(), true, 4000L, 3000L, original.submitterCaseNumber());
 
-        assertThat(refusal(memberB.verifyCase(between, Receipt.STORED_READ)).step()).isEqualTo(Step.CLAIMS);
+        assertThat(refusal(receiver.verifyCase(between, Receipt.STORED_READ)).step()).isEqualTo(Step.CLAIMS);
     }
 
     // ---- step 2 ----

@@ -355,8 +355,8 @@ public final class E2eeProfile {
         } catch (ManifestException unusable) {
             return refuse(Step.SIGNATURE, "no manifest, or an unparseable one");
         }
-        // Step 3 would refuse these whatever the keys say. Refusing them before the key lookup keeps a
-        // record that can never pass from reading as KeysUnavailable when its sender has no keys.
+        // Step 3's party checks, run before the key lookup: they need no key, and a record that can
+        // never pass mustn't read as KeysUnavailable when its sender has no keys.
         if (aud == null) {
             return refuse(Step.CLAIMS, "iss or aud does not match the record");
         }
@@ -400,11 +400,10 @@ public final class E2eeProfile {
         if (!Profile.VERSION.equals(claims.ver())) {
             return refuse(Step.CLAIMS, "unsupported profile version");
         }
-        if (!iss.equals(claims.iss()) || aud == null || !aud.equals(claims.aud())) {
+        // The record's iss and aud already include this member (checked before step 1), so matching
+        // the claims to them is what makes this member iss or aud of the signed manifest.
+        if (!iss.equals(claims.iss()) || !aud.equals(claims.aud())) {
             return refuse(Step.CLAIMS, "iss or aud does not match the record");
-        }
-        if (!ownCompanyId.equals(claims.iss()) && !ownCompanyId.equals(claims.aud())) {
-            return refuse(Step.CLAIMS, "this member is neither iss nor aud");
         }
         if (ref == null || !ref.equals(claims.ref())) {
             return refuse(Step.CLAIMS, "ref does not match the case number");
