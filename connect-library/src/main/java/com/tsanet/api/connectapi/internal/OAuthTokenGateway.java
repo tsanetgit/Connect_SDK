@@ -67,8 +67,9 @@ public class OAuthTokenGateway {
             );
             return parseTokenResponse(response.getBody());
         } catch (IllegalArgumentException ex) {
-            // Spring's message can quote the URL it couldn't expand, and the URL carries the tenant.
-            throw new IllegalStateException("The OAuth token request can't be built from the configuration");
+            // Spring's message can quote the URL it couldn't expand, and the URL carries the tenant. The
+            // JDK client throws this too on a response it can't read, so the message covers both.
+            throw new IllegalStateException("The OAuth token request failed: its URL or the response isn't usable");
         } catch (RestClientResponseException ex) {
             // No cause: Spring's message names the token URL, which carries the tenant, and quotes
             // Entra's error body, which names the app (tsanetgit/Connect_SDK#131). That is also why
@@ -110,6 +111,9 @@ public class OAuthTokenGateway {
             String accessToken = textValue(root, "access_token");
             long expiresIn = root.path("expires_in").asLong(3600);
             token = new OAuthAccessToken(accessToken, expiresIn);
+        } catch (IllegalStateException missing) {
+            // textValue's own message, which names the field and no value.
+            throw new IllegalStateException("Failed to parse OAuth token response", missing);
         } catch (Exception ex) {
             // No cause: Jackson's message quotes a token it doesn't recognize, which can be this one.
             throw new IllegalStateException("Failed to parse OAuth token response");

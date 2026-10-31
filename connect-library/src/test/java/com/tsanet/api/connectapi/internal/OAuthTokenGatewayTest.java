@@ -159,6 +159,30 @@ class OAuthTokenGatewayTest {
     }
 
     @Test
+    void aTokenUrlSpringCantExpandIsAFixedMessageWithNoCause() {
+        OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
+
+        assertThatThrownBy(() -> gateway.fetchClientCredentialsToken(new ClientCredentialsAuthConfig(
+            "tenant", "http://login.example/{MARKER}/token", "client-id", "client-secret", "api://audience", null)))
+            .isExactlyInstanceOf(IllegalStateException.class)
+            .hasMessage("The OAuth token request failed: its URL or the response isn't usable")
+            .hasNoCause();
+    }
+
+    @Test
+    void aTokenResponseWithNoAccessTokenKeepsTheFieldAsItsCause() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo("https://login.microsoftonline.com/tenant/oauth2/v2.0/token"))
+            .andRespond(withSuccess("{\"expires_in\":3600}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> new OAuthTokenGateway(restTemplate).fetchClientCredentialsToken(
+            new ClientCredentialsAuthConfig("tenant", null, "client-id", "client-secret", "api://audience", null)))
+            .hasMessage("Failed to parse OAuth token response")
+            .hasRootCauseMessage("OAuth token response missing access_token");
+    }
+
+    @Test
     void anUnreachableTokenEndpointIsConnectivityNamingNeitherTheUrlNorTheTenant() throws Exception {
         int closedPort;
         try (java.net.ServerSocket probe = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {

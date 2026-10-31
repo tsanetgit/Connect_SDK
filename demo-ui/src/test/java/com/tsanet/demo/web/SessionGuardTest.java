@@ -40,6 +40,7 @@ class SessionGuardTest {
         private final com.sun.net.httpserver.HttpServer server;
         volatile String loginBody;
         volatile int otherStatus = 200;
+        private EnvironmentService local;
 
         TokenServer() throws java.io.IOException {
             server = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
@@ -61,7 +62,7 @@ class SessionGuardTest {
         }
 
         SessionGuard guard() {
-            EnvironmentService local = new EnvironmentService(new DemoProperties(
+            local = new EnvironmentService(new DemoProperties(
                 Map.of("beta", new DemoProperties.EnvironmentDef("Beta",
                     "http://127.0.0.1:" + server.getAddress().getPort(), null, null)),
                 "beta",
@@ -77,6 +78,9 @@ class SessionGuardTest {
 
         @Override
         public void close() {
+            if (local != null) {
+                local.close();
+            }
             server.stop(0);
         }
     }
