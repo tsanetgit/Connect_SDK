@@ -71,18 +71,18 @@ public class CollaborationRequestsController {
                     ? body.formTemplate().receiverCompanyId() : body.receiverCompanyId();
                 EncryptedCase out = encryptCase(guard.e2ee(session), body, customFieldValues, partner,
                     body.formTemplate().fields());
-                return session.collaborationRequests().createRequest(
+                return SessionGuard.sdkInput(() -> session.collaborationRequests().createRequest(
                     body.formTemplate(), out.caseNumber(), out.summary(), out.description(),
-                    out.customFieldValues(), true, out.e2ee());
+                    out.customFieldValues(), true, out.e2ee()));
             }
-            return session.collaborationRequests().createRequest(
+            return SessionGuard.sdkInput(() -> session.collaborationRequests().createRequest(
                 body.formTemplate(),
                 body.caseNumber(),
                 body.summary(),
                 body.description(),
                 customFieldValues,
                 true
-            );
+            ));
         }
         if (body.receiverCompanyId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -92,16 +92,16 @@ public class CollaborationRequestsController {
             // Simple mode sends no custom fields, so none may be encrypted: a manifest naming fields the
             // record lacks would be refused at FIELDS by the receiver.
             EncryptedCase out = encryptCase(guard.e2ee(session), body, Map.of(), body.receiverCompanyId(), null);
-            return session.collaborationRequests().createRequest(
-                body.receiverCompanyId(), out.caseNumber(), out.summary(), out.description(), true, out.e2ee());
+            return SessionGuard.sdkInput(() -> session.collaborationRequests().createRequest(
+                body.receiverCompanyId(), out.caseNumber(), out.summary(), out.description(), true, out.e2ee()));
         }
-        return session.collaborationRequests().createRequest(
+        return SessionGuard.sdkInput(() -> session.collaborationRequests().createRequest(
             body.receiverCompanyId(),
             body.caseNumber(),
             body.summary(),
             body.description(),
             true
-        );
+        ));
     }
 
     /** The same condition the Settings table answers 403 for: the demo cannot encrypt, so the request is refused. */
@@ -223,9 +223,9 @@ public class CollaborationRequestsController {
             } catch (E2eeException refused) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, refused.getMessage());
             }
-            return session.caseNotes().createNote(token, note.summary(), note.description(), body.priority(), type, note.e2ee());
+            return SessionGuard.sdkInput(() -> session.caseNotes().createNote(token, note.summary(), note.description(), body.priority(), type, note.e2ee()));
         }
-        return session.caseNotes().createNote(token, body.summary(), body.description(), body.priority(), type);
+        return SessionGuard.sdkInput(() -> session.caseNotes().createNote(token, body.summary(), body.description(), body.priority(), type));
     }
 
     @PostMapping("/api/requests/{token}/approve")
@@ -236,19 +236,22 @@ public class CollaborationRequestsController {
 
     @PostMapping("/api/requests/{token}/reject")
     public CollaborationRequestStatusDto reject(@PathVariable String token, @RequestBody EngineerActionBody body) {
-        return guard.session().caseResponses().rejectRequest(
-            token, body.engineerName(), body.engineerEmail(), body.engineerPhone(), body.text());
+        var session = guard.session();
+        return SessionGuard.sdkInput(() -> session.caseResponses().rejectRequest(
+            token, body.engineerName(), body.engineerEmail(), body.engineerPhone(), body.text()));
     }
 
     @PostMapping("/api/requests/{token}/request-info")
     public CollaborationRequestStatusDto requestInfo(@PathVariable String token, @RequestBody EngineerActionBody body) {
-        return guard.session().caseResponses().submitInformationRequest(
-            token, body.engineerName(), body.engineerEmail(), body.engineerPhone(), body.text());
+        var session = guard.session();
+        return SessionGuard.sdkInput(() -> session.caseResponses().submitInformationRequest(
+            token, body.engineerName(), body.engineerEmail(), body.engineerPhone(), body.text()));
     }
 
     @PostMapping("/api/requests/{token}/respond-info")
     public CollaborationRequestStatusDto respondInfo(@PathVariable String token, @RequestBody TextBody body) {
-        return guard.session().caseResponses().submitInformationResponse(token, body.text());
+        var session = guard.session();
+        return SessionGuard.sdkInput(() -> session.caseResponses().submitInformationResponse(token, body.text()));
     }
 
     @PostMapping("/api/requests/{token}/close")

@@ -160,7 +160,7 @@ public class AttachmentsController {
                 file.transferTo(temp);
                 tempFiles.add(temp);
             }
-            return session.attachments().forwardAttachments(token, description, tempFiles);
+            return SessionGuard.sdkInput(() -> session.attachments().forwardAttachments(token, description, tempFiles));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } finally {
