@@ -307,9 +307,9 @@ Publishing a GitHub Release creates its tag and starts `publish.yml`, so a faile
 
 | Where the run failed | What to do |
 |---|---|
-| "Build, test and publish" | Keep the tag, and say in the Release notes that the version is incomplete. Don't reuse the version. Fix the cause through a PR and cut the next patch version |
+| "Build, test and publish" | Keep the tag, say in the Release notes that the version is incomplete, and mark it a pre-release (`gh release edit <TAG> --repo tsanetgit/Connect_SDK --prerelease`) so the latest-release link doesn't point at it. Don't reuse the version. Fix the cause through a PR and cut the next patch version |
 | "Require a commit on main", or "Resolve the version to publish" (`-SNAPSHOT`, or not `x.y.z`) | Nothing was built. Delete the Release and its tag, then cut it again with a correct tag, from a commit on `main`'s first-parent line |
-| Any other step before "Build, test and publish", such as a missing `CONNECT_API_CODE_TOKEN` or a failed checkout | Nothing was built, and the commit is fine. Keep the Release and tag, fix the cause and re-run the failed run |
+| Any other step before "Build, test and publish", such as a missing `CONNECT_API_CODE_TOKEN` or a failed checkout | Nothing was built, and the commit is fine. Keep the Release and tag, fix the cause and re-run the failed run. A re-run uses `publish.yml` from the tagged commit, so if the cause is in that file, delete the Release and tag and cut it again from the fixed commit |
 
 To delete a Release and its tag:
 
