@@ -495,11 +495,11 @@ Watch the release notes on each release.
     that no longer quote them. Code that read those messages sees the new text. These also change
     type, so a 4.0.0 `catch` stops matching: an unusable token URL or API base URL at sign-in, and a
     token or login response the JDK client can't read, were `IllegalArgumentException`; a malformed
-    login body was `RestClientException`; a malformed token response and a 5xx, 408 or 429 from the
-    token endpoint were `IllegalStateException`. Each is now `ConnectApiException` of kind `OTHER`, status 0
+    login body was `RestClientException`; a malformed token response, a 5xx, 408 or 429 from the
+    token endpoint, or a login response with no access token were `IllegalStateException`. Each is now `ConnectApiException` of kind `OTHER`, status 0
     and title `Token request`, because logging in again wouldn't fix it, so an expired session that
     meets one no longer reads as a 401 `Session expired`. A refusal by the token endpoint stays
-    `IllegalStateException`, and a 401 `Session expired` on renewal. A webhook callback URL stays
+    `IllegalStateException`, and a 401 `Session expired` on renewal of an expired token. A webhook callback URL stays
     `IllegalArgumentException`. A note with
     no priority is refused with `A note priority is required`, not `Unexpected value 'null'`.
   - Malformed partner input no longer throws. A manifest or protected value that is the JSON
