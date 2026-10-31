@@ -71,17 +71,11 @@ public class PartnerKeysStore {
             Map<String, URI> urls = new LinkedHashMap<>();
             for (Map.Entry<String, Entry> e : entries.entrySet()) {
                 if (e.getValue().jwksUrl() != null) {
-                    // A URL with no host (https:foo) passes the scheme check but can't be fetched, so it would
-                    // otherwise surface only on a later Encrypt. Here it covers the card, the seed and the file.
-                    // PROVISIONAL(tsanetgit/Connect_SDK#162): the module should refuse this in PinnedJwksPartnerKeys;
-                    // this check goes once the demo picks that up.
-                    if (e.getValue().jwksUrl().getHost() == null) {
-                        throw new IllegalArgumentException("The JWKS URL for company " + e.getKey() + " has no usable host");
-                    }
                     urls.put(e.getKey(), e.getValue().jwksUrl());
                 }
             }
-            // The constructor is also the scheme check: anything but HTTPS (or loopback HTTP) is refused.
+            // The constructor is also the URL check: no host, or anything but HTTPS (or loopback HTTP), is refused.
+            // That covers the card, the seed and the file, rather than failing on a later Encrypt.
             // Insertion order is kept (Map.copyOf would shuffle the listing and the file between runs).
             return new Snapshot(Collections.unmodifiableMap(new LinkedHashMap<>(entries)),
                 new PinnedJwksPartnerKeys(urls, CACHE_LIFETIME));

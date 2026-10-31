@@ -153,7 +153,7 @@ class E2eePartnerSettingsTest {
         mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)
                 .content(json("jwksUrl", "https:keys.partner.example")))
             .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("has no usable host")));
+            .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("must have a host")));
         mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"jwksUrl\":\"https://keys.partner.example/jwks.json\",\"jwks\":\"{}\"}"))
             .andExpect(status().isBadRequest());
