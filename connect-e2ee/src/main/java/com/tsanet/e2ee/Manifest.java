@@ -98,9 +98,11 @@ final class Manifest {
         if (manifest == null) {
             throw new ManifestException("no manifest");
         }
+        // NullPointerException: Nimbus reads the header without a null check, so a header that is the JSON
+        // null throws it. Any sender chooses this text, and it comes before any check of who sent it.
         try {
             return JWSObject.parse(manifest);
-        } catch (ParseException unparseable) {
+        } catch (ParseException | NullPointerException unparseable) {
             throw new ManifestException("unparseable manifest");
         }
     }

@@ -20,7 +20,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>After a failed fetch, a lookup that would fetch that company's set throws instead for the next
  * minute, whatever the cache lifetime, so an endpoint that is down gets one request a minute per
  * company. A set still within its lifetime is served as usual. Lookups running at the same moment
- * don't share a fetch, so each can fetch until the first failure is recorded.
+ * don't share a fetch, so each can fetch until the first failure is recorded. A fetch that was
+ * interrupted records no failure, so an endpoint that hangs, with callers that cancel inside the
+ * fetch timeout, gets a request from every lookup.
  */
 public final class PinnedJwksPartnerKeys implements PartnerKeys {
     private static final Duration FETCH_TIMEOUT = Duration.ofSeconds(10);
@@ -145,6 +147,10 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted fetching the JWKS for company " + companyId);
+        } catch (IllegalArgumentException malformed) {
+            // The JDK client throws this on a response it can't read, such as a Content-Length that isn't
+            // a number. The partner chooses that response, so it's a failed fetch like any other.
+            throw new IOException("The JWKS for company " + companyId + " answered with a malformed HTTP response");
         }
         try (java.io.InputStream body = response.body()) {
             if (response.statusCode() != 200) {

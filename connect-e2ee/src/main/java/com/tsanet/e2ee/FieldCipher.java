@@ -126,6 +126,10 @@ final class FieldCipher {
         } catch (ParseException notJson) {
             throw new FieldCipherException("not a JWE in general JSON serialization");
         }
+        // JSONObjectUtils.parse answers null for the JSON null, without throwing.
+        if (json == null) {
+            throw new FieldCipherException("not a JWE in general JSON serialization");
+        }
         // The binding must come from the authenticated protected header only, so a top-level
         // unprotected header, a flattened per-recipient header or extra AAD is refused.
         if (!json.containsKey("recipients") || json.containsKey("encrypted_key") || json.containsKey("aad")

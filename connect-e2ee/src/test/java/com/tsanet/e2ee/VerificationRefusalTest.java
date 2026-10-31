@@ -107,6 +107,192 @@ class VerificationRefusalTest {
         return jwe.substring(0, at) + (c == 'A' ? 'B' : 'A') + jwe.substring(at + 1);
     }
 
+    // ---- malformed input: a Refused, never an exception ----
+
+    private static String jsonB64(String json) {
+        return com.nimbusds.jose.util.Base64URL.encode(json.getBytes(StandardCharsets.UTF_8)).toString();
+    }
+
+    /** A manifest with this header and payload, really signed by Member A, so it can get past step 2. */
+    private String signedManifest(String headerJson, String payloadJson) throws Exception {
+        String input = jsonB64(headerJson) + "." + jsonB64(payloadJson);
+        byte[] signature = v.memberAKeys().sign(input.getBytes(StandardCharsets.US_ASCII));
+        return input + "." + com.nimbusds.jose.util.Base64URL.encode(signature);
+    }
+
+    private static final List<String> JSON_SHAPES = List.of("null", "true", "1", "\"x\"", "[]", "[null]", "[1]", "{}", "{\"a\":null}");
+
+    private List<String> malformedManifests() throws Exception {
+        String kid = v.memberAKeys().signingKid();
+        String header = "{\"alg\":\"ES256\",\"kid\":\"" + kid + "\",\"typ\":\"" + Profile.MANIFEST_TYPE + "\"}";
+        List<String> manifests = new ArrayList<>(List.of("", " ", ".", "..", "...", "a.b", "a.b.c", "null", "bnVsbA.e30.AAAA"));
+        for (String shape : JSON_SHAPES) {
+            manifests.add(jsonB64(shape) + ".e30.AAAA");
+            manifests.add(signedManifest(header, shape));
+            manifests.add(signedManifest(header, "{\"fields\":" + shape + ",\"iat\":1}"));
+            manifests.add(signedManifest(header, "{\"fields\":[],\"iat\":" + shape + "}"));
+            manifests.add(signedManifest(header, "{\"fields\":[" + shape + "],\"iat\":1}"));
+            for (String member : List.of("ver", "iss", "aud", "ref", "jti")) {
+                manifests.add(signedManifest(header, "{\"fields\":[],\"iat\":1,\"" + member + "\":" + shape + "}"));
+            }
+            for (String member : List.of("alg", "kid", "typ", "crit", "b64", "jwk", "x5c", "cty")) {
+                manifests.add(jsonB64("{\"alg\":\"ES256\",\"kid\":\"" + kid + "\",\"" + member + "\":" + shape + "}") + ".e30.AAAA");
+            }
+        }
+        return manifests;
+    }
+
+    private List<String> malformedFieldValues() {
+        List<String> values = new ArrayList<>(JSON_SHAPES);
+        values.addAll(List.of("", " ", "not json", "a.b.c.d.e"));
+        String valid = original.summary();
+        Map<String, Object> jwe;
+        try {
+            jwe = com.nimbusds.jose.util.JSONObjectUtils.parse(valid);
+        } catch (java.text.ParseException e) {
+            throw new IllegalStateException(e);
+        }
+        for (String shape : JSON_SHAPES) {
+            for (String member : List.of("protected", "recipients", "iv", "ciphertext", "tag")) {
+                Map<String, Object> copy = new java.util.LinkedHashMap<>(jwe);
+                copy.remove(member);
+                String body = com.nimbusds.jose.util.JSONObjectUtils.toJSONString(copy);
+                values.add(body.substring(0, body.length() - 1) + ",\"" + member + "\":" + shape + "}");
+            }
+            for (String member : List.of("encrypted_key", "header")) {
+                values.add(valid.replaceFirst("\"" + member + "\":", "\"_was\":").replaceFirst("\"_was\":", "\"" + member + "\":" + shape + ",\"_was\":"));
+            }
+            values.add(com.nimbusds.jose.util.JSONObjectUtils.toJSONString(jwe).replaceFirst("\"protected\":\"[^\"]*\"", "\"protected\":\"" + jsonB64(shape) + "\""));
+        }
+        return values;
+    }
+
+    /** The whole class at once: whatever a sender puts in the text, the caller gets one of the three outcomes. */
+    @Test
+    void malformedTextOnARecordIsARefusalNeverAnException() throws Exception {
+        List<String> escapes = new ArrayList<>();
+        CaseNoteDto note = v.noteRecord();
+        for (String manifest : malformedManifests()) {
+            refusedOrRecord(escapes, "case manifest " + manifest,
+                () -> memberB.verifyCase(withContent(original.summary(), original.description(), manifest), Receipt.STORED_READ));
+            refusedOrRecord(escapes, "first-receipt manifest " + manifest,
+                () -> memberB.verifyCase(withContent(original.summary(), original.description(), manifest), Receipt.FIRST_RECEIPT));
+            refusedOrRecord(escapes, "note manifest " + manifest,
+                () -> memberB.verifyNote(Vectors.noteRecord(note.summary(), note.description(), manifest, 1042L), original, Receipt.STORED_READ));
+        }
+        for (String value : malformedFieldValues()) {
+            Map<String, String> values = originalValues();
+            values.put(Profile.PROBLEM_SUMMARY, value);
+            String manifest = resign(values, Profile.VERSION, v.memberAKeys());
+            refusedOrRecord(escapes, "signed summary " + value,
+                () -> memberB.verifyCase(withContent(value, original.description(), manifest), Receipt.STORED_READ));
+
+            List<CaseCustomFieldDto> fields = new ArrayList<>(original.customFields());
+            CaseCustomFieldDto first = fields.get(0);
+            fields.set(0, new CaseCustomFieldDto(first.id(), first.fieldName(), value));
+            refusedOrRecord(escapes, "custom field " + value, () -> memberB.verifyCase(
+                with(original.summary(), original.description(), fields, original.manifest(), true, 1042L, 2087L,
+                    original.submitterCaseNumber()), Receipt.STORED_READ));
+        }
+        assertThat(escapes).isEmpty();
+    }
+
+    private interface Verify {
+        Verification<?> run() throws Exception;
+    }
+
+    private void refusedOrRecord(List<String> escapes, String input, Verify verify) {
+        try {
+            Verification<?> result = verify.run();
+            if (!(result instanceof Refused<?> refused)) {
+                escapes.add(result.getClass().getSimpleName() + " on " + input);
+            } else {
+                assertNoValueIn(refused.toString());
+            }
+        } catch (RuntimeException | Error thrown) {
+            if (thrown instanceof AssertionError) {
+                throw (AssertionError) thrown;
+            }
+            escapes.add(thrown.getClass().getSimpleName() + " on " + input);
+        } catch (Exception checked) {
+            throw new IllegalStateException(checked);
+        }
+    }
+
+    @Test
+    void aManifestWhoseHeaderIsTheJsonNullIsRefusedAtSignature() {
+        CaseNoteDto note = v.noteRecord();
+        String manifest = "bnVsbA.e30.AAAA";
+
+        assertThat(refusal(memberB.verifyCase(withContent(original.summary(), original.description(), manifest),
+            Receipt.STORED_READ)).step()).isEqualTo(Step.SIGNATURE);
+        assertThat(refusal(memberB.verifyNote(Vectors.noteRecord(note.summary(), note.description(), manifest, 1042L),
+            original, Receipt.STORED_READ)).step()).isEqualTo(Step.SIGNATURE);
+    }
+
+    @Test
+    void aCustomFieldThatIsTheJsonNullIsRefusedAtFields() {
+        List<CaseCustomFieldDto> fields = new ArrayList<>(original.customFields());
+        CaseCustomFieldDto first = fields.get(0);
+        fields.set(0, new CaseCustomFieldDto(first.id(), first.fieldName(), "null"));
+
+        assertThat(refusal(memberB.verifyCase(with(original.summary(), original.description(), fields, original.manifest(),
+            true, 1042L, 2087L, original.submitterCaseNumber()), Receipt.STORED_READ)).step()).isEqualTo(Step.FIELDS);
+    }
+
+    @Test
+    void aSignedProtectedValueThatIsTheJsonNullIsRefusedAtFieldsOnACaseAndANote() throws Exception {
+        Map<String, String> values = originalValues();
+        values.put(Profile.PROBLEM_SUMMARY, "null");
+        Refused<?> onCase = refusal(memberB.verifyCase(
+            withContent("null", original.description(), resign(values, Profile.VERSION, v.memberAKeys())), Receipt.STORED_READ));
+        assertThat(onCase.step()).isEqualTo(Step.FIELDS);
+        assertThat(onCase.field()).isEqualTo(Profile.PROBLEM_SUMMARY);
+
+        CaseNoteDto note = v.noteRecord();
+        Map<String, Object> payload = v.map("example2_note_create", "manifest_payload");
+        List<Manifest.FieldDigest> digests = List.of(
+            new Manifest.FieldDigest(Profile.PROBLEM_SUMMARY, Manifest.digest("null")),
+            new Manifest.FieldDigest(Profile.PROBLEM_DESCRIPTION, Manifest.digest(note.description())));
+        String signed = Manifest.sign(new Manifest.Claims(Profile.VERSION, (String) payload.get("iss"), (String) payload.get("aud"),
+            (String) payload.get("ref"), iat, (String) payload.get("jti"), digests), v.memberAKeys());
+
+        Refused<?> onNote = refusal(memberB.verifyNote(
+            Vectors.noteRecord("null", note.description(), signed, 1042L), original, Receipt.STORED_READ));
+        assertThat(onNote.step()).isEqualTo(Step.FIELDS);
+        assertThat(onNote.field()).isEqualTo(Profile.PROBLEM_SUMMARY);
+    }
+
+    /** A raw socket, since the JDK's own server won't send these: its client refuses them with an unchecked exception. */
+    @Test
+    void aMalformedHttpResponseFromTheJwksEndpointIsUnavailableKeysAndStartsTheWait() throws Exception {
+        for (String length : List.of("abc", "99999999999999999999")) {
+            java.util.concurrent.atomic.AtomicInteger requests = new java.util.concurrent.atomic.AtomicInteger();
+            try (java.net.ServerSocket socket = new java.net.ServerSocket(0, 5, java.net.InetAddress.getLoopbackAddress())) {
+                Thread.ofVirtual().start(() -> {
+                    while (!socket.isClosed()) {
+                        try (java.net.Socket client = socket.accept()) {
+                            requests.incrementAndGet();
+                            client.getInputStream().read(new byte[4096]);
+                            client.getOutputStream().write(("HTTP/1.1 200 OK\r\nContent-Length: " + length + "\r\n\r\n")
+                                .getBytes(StandardCharsets.US_ASCII));
+                            client.getOutputStream().flush();
+                        } catch (IOException closed) {
+                            return;
+                        }
+                    }
+                });
+                E2eeProfile receiver = memberBWith(new PinnedJwksPartnerKeys(
+                    Map.of(Vectors.MEMBER_A, java.net.URI.create("http://127.0.0.1:" + socket.getLocalPort() + "/keys.json")),
+                    java.time.Duration.ofMinutes(5)));
+
+                assertThat(receiver.verifyCase(original, Receipt.STORED_READ)).as(length).isInstanceOf(KeysUnavailable.class);
+                assertThat(receiver.verifyCase(original, Receipt.STORED_READ)).as(length).isInstanceOf(KeysUnavailable.class);
+                assertThat(requests).as("the second read waited instead of fetching: " + length).hasValue(1);
+            }
+        }
+    }
+
     // ---- step 1 ----
 
     @Test
