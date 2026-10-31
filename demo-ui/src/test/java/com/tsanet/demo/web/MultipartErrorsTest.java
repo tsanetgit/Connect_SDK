@@ -10,6 +10,8 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpResponse.BodyHandlers;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -72,6 +74,19 @@ class MultipartErrorsTest {
     void aMultipartBodyThatEndsEarlyIsABadRequest() throws Exception {
         String partial = "--abc\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a\"\r\n\r\npartial";
         refused(upload("multipart/form-data; boundary=abc", partial.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "filename*=UNKNOWN''a.txt",
+        "filename*=UTF-8''%zz.txt",
+        "filename",
+        "filename=\"=?UNKNOWN?Q?a?=\"",
+        "filename=\"a\u0000b.txt\"",
+    })
+    void aPartHeaderThatCannotBeReadIsABadRequest(String disposition) throws Exception {
+        String body = "--abc\r\nContent-Disposition: form-data; name=\"file\"; " + disposition + "\r\n\r\nx\r\n--abc--\r\n";
+        refused(upload("multipart/form-data; boundary=abc", body.getBytes(StandardCharsets.UTF_8)));
     }
 
     @Test

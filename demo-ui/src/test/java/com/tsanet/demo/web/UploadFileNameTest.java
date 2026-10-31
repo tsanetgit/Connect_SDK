@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -25,7 +27,10 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-/** The V1 route through the real controller, and the helper it shares with the V2 route. */
+/**
+ * The V1 route through the real controller, and the helpers it shares with the V2 route. This suite runs
+ * on Linux in CI, so a host whose paths take a drive prefix is covered only by the stub-resolve test.
+ */
 class UploadFileNameTest {
 
     private final AttachmentsFacade attachments = mock(AttachmentsFacade.class);
@@ -74,12 +79,10 @@ class UploadFileNameTest {
         "dir/report.txt|report.txt",
         "dir\\report.txt|report.txt",
         "C:\\dir\\report.txt|report.txt",
-        "C:report.txt|report.txt",
         "../report.txt|report.txt",
         "..\\report.txt|report.txt",
         "a/b/../../../report.txt|report.txt",
         ".hidden|.hidden",
-        "meeting 10:30.txt|meeting 10:30.txt",
         "..|attachment",
         ".|attachment",
         "...|attachment",
@@ -91,6 +94,42 @@ class UploadFileNameTest {
     })
     void aV1UploadKeepsOnlyTheLastSegmentOfTheFilename(String fileName, String expected) throws Exception {
         assertThat(forwarded(fileName).getFileName().toString()).isEqualTo(expected);
+    }
+
+    /** Whitespace stays as sent. Only the end of the name a host refuses would change it, and then to the default. */
+    @ParameterizedTest
+    @ValueSource(strings = {" lead.txt", "trail.txt ", "my report v2.pdf"})
+    void aV1UploadKeepsWhitespaceAsSent(String fileName) throws Exception {
+        assertThat(forwarded(fileName).getFileName().toString()).isEqualTo(fileName);
+    }
+
+    /** A colon is an ordinary character here. On a host where it starts a path root, the check below applies. */
+    @ParameterizedTest
+    @DisabledOnOs(OS.WINDOWS)
+    @ValueSource(strings = {"Q:notes.txt", "C:report.txt", "C:D:report.txt", " C:report.txt", "meeting 10:30.txt"})
+    void aV1UploadKeepsAColonWhereTheHostAllowsIt(String fileName) throws Exception {
+        assertThat(forwarded(fileName).getFileName().toString()).isEqualTo(fileName);
+    }
+
+    @org.junit.jupiter.api.Test
+    @DisabledOnOs(OS.WINDOWS)
+    void aV1UploadKeepsAColonInTheLastSegmentAfterADirectory() throws Exception {
+        assertThat(forwarded("dir/C:report.txt").getFileName().toString()).isEqualTo("C:report.txt");
+    }
+
+    /** The parent check itself, with a stub resolve, since this suite runs on one OS's path parser. */
+    @org.junit.jupiter.api.Test
+    void aResolvedPathOutsideTheDirectoryGetsTheDefaultName(@TempDir Path directory) {
+        Path elsewhere = directory.resolve("other").resolve("report.txt");
+
+        assertThat(AttachmentsController.uploadPath(directory, "report.txt", name -> elsewhere))
+            .isEqualTo(directory.resolve("attachment"));
+        assertThat(AttachmentsController.uploadPath(directory, "report.txt", name -> directory.getParent()))
+            .isEqualTo(directory.resolve("attachment"));
+        assertThat(AttachmentsController.uploadPath(directory, "report.txt", name -> directory.resolve("a").resolve("..")))
+            .isEqualTo(directory.resolve("attachment"));
+        assertThat(AttachmentsController.uploadPath(directory, "report.txt", directory::resolve))
+            .isEqualTo(directory.resolve("report.txt"));
     }
 
     @ParameterizedTest

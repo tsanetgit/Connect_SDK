@@ -4,6 +4,7 @@ import com.tsanet.api.ConnectApiException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.apache.tomcat.util.http.fileupload.FileUploadException;
+import org.apache.tomcat.util.http.fileupload.InvalidFileNameException;
 import org.apache.tomcat.util.http.fileupload.MultipartStream;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -114,16 +115,18 @@ public class ApiErrorHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
-     * No cause is Spring's "not a multipart request". Otherwise it's Tomcat's parser on the body: its own
-     * refusal has no cause or a malformed stream, and any other cause is an I/O failure. These are Tomcat's
-     * shapes, not a contract: {@code MultipartErrorsTest} pins them against the bundled version.
+     * No cause is Spring's "not a multipart request". An {@link IllegalArgumentException} is Spring reading
+     * a part's Content-Disposition, and {@link InvalidFileNameException} is Tomcat refusing its file name.
+     * Otherwise it's Tomcat's parser on the body: its own refusal has no cause or a malformed stream, and any
+     * other cause is an I/O failure. These are Tomcat's and Spring's shapes, not a contract:
+     * {@code MultipartErrorsTest} pins them against the bundled versions.
      */
     private static boolean malformedRequest(MultipartException e) {
         Throwable cause = e.getCause();
         if (cause instanceof FileUploadException) {
             return cause.getCause() == null || cause.getCause() instanceof MultipartStream.MalformedStreamException;
         }
-        return cause == null;
+        return cause == null || cause instanceof IllegalArgumentException || cause instanceof InvalidFileNameException;
     }
 
     /**
