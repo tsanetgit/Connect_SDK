@@ -53,6 +53,34 @@ class EnvironmentServiceTest {
     }
 
     @Test
+    void closingTheServiceStopsThePartnerKeyFetchers() throws Exception {
+        java.util.Set<Long> before = selectorThreads();
+        service.partnerKeysFor("beta");
+        java.util.Set<Long> started = selectorThreads();
+        started.removeAll(before);
+        assertThat(started).isNotEmpty();
+
+        service.close();
+
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        while (!started.isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+            started.retainAll(selectorThreads());
+        }
+        assertThat(started).isEmpty();
+    }
+
+    private static java.util.Set<Long> selectorThreads() {
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            if (thread.getName().contains("SelectorManager")) {
+                ids.add(thread.threadId());
+            }
+        }
+        return ids;
+    }
+
+    @Test
     void aPlainHttpEnvironmentIsRefusedAtStartupUnlessTheOperatorOptedIn() {
         DemoProperties http = new DemoProperties(
             Map.of("beta", new DemoProperties.EnvironmentDef("Beta", "http://connect.example", null, null)),

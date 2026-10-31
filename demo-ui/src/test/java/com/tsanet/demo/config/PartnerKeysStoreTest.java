@@ -40,6 +40,60 @@ class PartnerKeysStoreTest {
         return dir.resolve("e2ee-partners-test.json");
     }
 
+    private static java.util.Set<Long> selectorThreads() {
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            if (thread.getName().contains("SelectorManager")) {
+                ids.add(thread.threadId());
+            }
+        }
+        return ids;
+    }
+
+    /** The selector threads started since {@code before}, once they've settled at {@code expected}. */
+    private static java.util.Set<Long> startedSince(java.util.Set<Long> before, int expected) throws InterruptedException {
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        java.util.Set<Long> started;
+        do {
+            started = selectorThreads();
+            started.removeAll(before);
+            if (started.size() == expected) {
+                return started;
+            }
+            Thread.sleep(20);
+        } while (System.nanoTime() < deadline);
+        return started;
+    }
+
+    @Test
+    void aRebuildClosesTheFetcherItReplacesAndCloseStopsTheLast() throws Exception {
+        java.util.Set<Long> before = selectorThreads();
+        PartnerKeysStore store = new PartnerKeysStore(file(), null, SEED_VAR);
+        store.putUrl("2087", URI.create("https://keys.partner.example/a.json"));
+        store.putUrl("2088", URI.create("https://keys.partner.example/b.json"));
+        store.remove("2088");
+
+        assertThat(startedSince(before, 1)).as("only the current fetcher's client is left").hasSize(1);
+
+        store.close();
+
+        assertThat(startedSince(before, 0)).isEmpty();
+    }
+
+    @Test
+    void aWriteThatFailsClosesTheFetcherItBuiltAndKeepsTheCurrentOne() throws Exception {
+        java.util.Set<Long> before = selectorThreads();
+        PartnerKeysStore store = new PartnerKeysStore(dir.resolve("gone").resolve("table.json"), null, SEED_VAR);
+        Files.writeString(dir.resolve("gone"), "a file where the directory would go");
+
+        assertThatThrownBy(() -> store.putUrl("2087", URI.create("https://keys.partner.example/a.json")))
+            .isInstanceOf(java.io.UncheckedIOException.class);
+
+        assertThat(startedSince(before, 1)).hasSize(1);
+        assertThat(store.entries()).isEmpty();
+        store.close();
+    }
+
     @Test
     void aPastedPublicSetIsStoredAndReadBack() throws Exception {
         PartnerKeysStore store = new PartnerKeysStore(file(), null, SEED_VAR);
