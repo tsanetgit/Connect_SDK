@@ -89,7 +89,7 @@ class DefaultTsaNetApiSessionCreateRequestTest {
         form.setCustomFields(Collections.emptyList());
         when(formGateway.getFormByDocumentId(anyLong())).thenReturn(form);
         when(collaborationGateway.createCollaborationRequest(any())).thenReturn(
-            new CollaborationRequestStatusDto(1L, "OPEN", "s", "A", 1L, "B", 2L, "tok", null, null)
+            new CollaborationRequestStatusDto(1L, "OPEN", "s", "A", 1L, "B", 2L, "tok", null, null, null, null, null, null, null, null)
         );
     }
 

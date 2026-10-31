@@ -9,7 +9,7 @@ class CollaborationRequestCloseTest {
     @Test
     void itAllowsOpenRequest() {
         var request = new CollaborationRequestStatusDto(
-            1L, "OPEN", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null
+            1L, "OPEN", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null, null, null, null, null, null, null
         );
 
         assertThat(CollaborationRequestClose.validateForClose(request).closable()).isTrue();
@@ -18,7 +18,7 @@ class CollaborationRequestCloseTest {
     @Test
     void itAllowsAcceptedRequest() {
         var request = new CollaborationRequestStatusDto(
-            1L, "ACCEPTED", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null
+            1L, "ACCEPTED", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null, null, null, null, null, null, null
         );
 
         assertThat(CollaborationRequestClose.validateForClose(request).closable()).isTrue();
@@ -27,7 +27,7 @@ class CollaborationRequestCloseTest {
     @Test
     void itBlocksAlreadyClosedRequest() {
         var request = new CollaborationRequestStatusDto(
-            1L, "CLOSED", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null
+            1L, "CLOSED", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null, null, null, null, null, null, null
         );
 
         var result = CollaborationRequestClose.validateForClose(request);
@@ -39,10 +39,10 @@ class CollaborationRequestCloseTest {
     @Test
     void itBlocksCanceledAndRejectedRequests() {
         var canceled = new CollaborationRequestStatusDto(
-            1L, "CANCELED", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null
+            1L, "CANCELED", "summary", "Acme", 1L, "Beta", 2L, "tok1", null, null, null, null, null, null, null, null
         );
         var rejected = new CollaborationRequestStatusDto(
-            2L, "REJECTED", "summary", "Acme", 1L, "Beta", 2L, "tok2", null, null
+            2L, "REJECTED", "summary", "Acme", 1L, "Beta", 2L, "tok2", null, null, null, null, null, null, null, null
         );
 
         assertThat(CollaborationRequestClose.validateForClose(canceled).message()).contains("canceled");

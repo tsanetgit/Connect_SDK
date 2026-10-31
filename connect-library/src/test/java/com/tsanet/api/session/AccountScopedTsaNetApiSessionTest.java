@@ -74,7 +74,7 @@ class AccountScopedTsaNetApiSessionTest {
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
         DatabaseInitializer.createSchema(jdbcTemplate);
         new CollaborationRequestRepository(jdbcTemplate).saveAll(
-            List.of(new CollaborationRequestStatusDto(id, "OPEN", summary, "A", 1L, "B", 2L, "tok" + id, null, null))
+            List.of(new CollaborationRequestStatusDto(id, "OPEN", summary, "A", 1L, "B", 2L, "tok" + id, null, null, null, null, null, null, null, null))
         );
     }
 
