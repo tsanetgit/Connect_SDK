@@ -7,4 +7,10 @@ public record NormalizedHttpsAttachmentConfigDto(
     String httpsPath,
     Integer httpsPort
 ) {
+    @Override
+    public String toString() {
+        return "NormalizedHttpsAttachmentConfigDto[domain=" + domain + ", password=<redacted>, expiration="
+            + expiration + ", httpsPath=" + httpsPath + ", httpsPort=" + httpsPort + "]";
+    }
+
 }

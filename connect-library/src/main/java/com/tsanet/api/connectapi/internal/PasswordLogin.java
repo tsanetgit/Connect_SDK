@@ -6,4 +6,8 @@ package com.tsanet.api.connectapi.internal;
  * 401 path alone.
  */
 public record PasswordLogin(String accessToken, Integer expiresInSeconds) {
+    @Override
+    public String toString() {
+        return "PasswordLogin[accessToken=<redacted>, expiresInSeconds=" + expiresInSeconds + "]";
+    }
 }

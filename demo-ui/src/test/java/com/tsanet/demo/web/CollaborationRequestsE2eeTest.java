@@ -30,6 +30,8 @@ import com.tsanet.api.facade.CaseNotesFacade;
 import com.tsanet.api.facade.CaseResponsesFacade;
 import com.tsanet.api.facade.CollaborationRequestsFacade;
 import com.tsanet.demo.E2eeTestVectors;
+import com.tsanet.demo.config.E2eeKeys;
+import com.tsanet.demo.config.PartnerKeysStore;
 import com.tsanet.e2ee.E2eeProfile;
 import com.tsanet.e2ee.E2eeProfile.Receipt;
 import com.tsanet.e2ee.Records.DecryptedCase;
@@ -426,6 +428,30 @@ class CollaborationRequestsE2eeTest {
         }
         assertThat(customFields).containsExactlyEntriesOf(expected);
         assertThat(customFields).containsEntry("104", "").doesNotContainKey("105");
+    }
+
+    @Test
+    void aStoredCaseAndNoteWhoseSenderHasNoKeyEntryOpenUnverifiedWithTheReason() throws Exception {
+        // Member B with an empty partner table: Member A's keys are unavailable, so verifying returns KeysUnavailable.
+        E2eeKeys keys = E2eeKeys.fromJson(v.memberBPrivateJwks());
+        PartnerKeysStore empty = new PartnerKeysStore(dir.resolve("e2ee-partners-empty.json"), null, "TEST");
+        when(guard.e2eeEnabled()).thenReturn(true);
+        when(guard.e2ee(session)).thenReturn(new E2eeProfile(E2eeTestVectors.MEMBER_B, keys.keyOperations(),
+            empty.view(E2eeTestVectors.MEMBER_B, keys.publicKeySet()), keys.replayGuard(), keys.clock()));
+        platformHolds(v.caseRecord(), v.noteRecord());
+        String unavailable = "the sending company's public keys are unavailable";
+
+        MvcResult result = mvc.perform(get("/api/requests/tok-77"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.e2ee.state").value("unverified"))
+            .andExpect(jsonPath("$.e2ee.reason").value(org.hamcrest.Matchers.startsWith(unavailable)))
+            .andExpect(jsonPath("$.e2ee.step").doesNotExist())
+            .andExpect(jsonPath("$.e2ee.summary").doesNotExist())
+            .andExpect(jsonPath("$.notes[0].e2ee.state").value("unverified"))
+            .andExpect(jsonPath("$.notes[0].e2ee.reason").value(org.hamcrest.Matchers.startsWith(unavailable)))
+            .andReturn();
+        assertThat(result.getResponse().getContentAsString())
+            .doesNotContain((String) v.map("example1_case_create", "plaintext_request").get("problemSummary"));
     }
 
     @Test

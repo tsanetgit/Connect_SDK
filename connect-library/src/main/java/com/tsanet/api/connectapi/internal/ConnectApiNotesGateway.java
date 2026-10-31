@@ -1,9 +1,7 @@
 package com.tsanet.api.connectapi.internal;
 
-import static com.tsanet.api.connectapi.internal.OpenApiMapping.dateTime;
-import static com.tsanet.api.connectapi.internal.OpenApiMapping.enumValue;
-
 import com.tsanet.api.connectapi.CaseNoteValidation;
+import com.tsanet.api.connectapi.OpenApiRecords;
 import com.tsanet.api.connectapi.dto.CaseNoteDto;
 import com.tsanet.api.connectapi.dto.E2eeFields;
 import com.tsanet.api.connectapi.dto.NoteTypeDto;
@@ -113,28 +111,7 @@ public class ConnectApiNotesGateway {
     }
 
     private CaseNoteDto toDto(CaseNoteDTO dto, String caseToken) {
-        return new CaseNoteDto(
-            dto.getId(),
-            dto.getCaseId(),
-            caseToken,
-            dto.getCompanyName(),
-            dto.getCreatorUsername(),
-            dto.getCreatorEmail(),
-            dto.getCreatorName(),
-            dto.getSummary(),
-            dto.getDescription(),
-            enumValue(dto.getPriority()),
-            enumValue(dto.getStatus()),
-            dto.getToken(),
-            dateTime(dto.getCreatedAt()),
-            dateTime(dto.getUpdatedAt()),
-            dto.getType() == null ? null : dto.getType().getCode(),
-            dto.getCompanyId(),
-            enumValue(dto.getDirection()),
-            dto.getType() == null ? null : dto.getType().getDisplayName(),
-            dto.getManifest(),
-            dto.getEncrypted()
-        );
+        return OpenApiRecords.caseNote(dto, caseToken);
     }
 
     private void requireLogin() {

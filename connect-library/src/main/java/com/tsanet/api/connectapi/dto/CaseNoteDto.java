@@ -40,68 +40,9 @@ public record CaseNoteDto(
     String manifest,
     Boolean encrypted
 ) {
-    /**
-     * Compatibility constructor from before {@code manifest} and {@code encrypted} existed;
-     * leaves both null. A null {@code encrypted} means "not known" (an explicit null from the API, or
-     * a row cached before the field existed), never "not encrypted"; a value the API leaves out
-     * reads false, the spec's default.
-     *
-     * @deprecated pass {@code manifest} and {@code encrypted} explicitly; scheduled for removal at
-     *     the next release boundary.
-     */
-    @Deprecated
-    public CaseNoteDto(
-        Long id,
-        Long caseId,
-        String caseToken,
-        String companyName,
-        String creatorUsername,
-        String creatorEmail,
-        String creatorName,
-        String summary,
-        String description,
-        String priority,
-        String status,
-        String token,
-        String createdAt,
-        String updatedAt,
-        String type,
-        Long companyId,
-        String direction,
-        String typeDisplayName
-    ) {
-        this(id, caseId, caseToken, companyName, creatorUsername, creatorEmail, creatorName, summary,
-            description, priority, status, token, createdAt, updatedAt, type, companyId, direction,
-            typeDisplayName, null, null);
-    }
-
-    /**
-     * Compatibility constructor from before {@code type}, {@code companyId},
-     * {@code direction} and {@code typeDisplayName} existed; leaves all four null, which readers
-     * must treat as "not sent", never as a default type or direction.
-     *
-     * @deprecated pass {@code type}, {@code companyId}, {@code direction} and
-     *     {@code typeDisplayName} explicitly;
-     *     scheduled for removal at the next release boundary.
-     */
-    @Deprecated
-    public CaseNoteDto(
-        Long id,
-        Long caseId,
-        String caseToken,
-        String companyName,
-        String creatorUsername,
-        String creatorEmail,
-        String creatorName,
-        String summary,
-        String description,
-        String priority,
-        String status,
-        String token,
-        String createdAt,
-        String updatedAt
-    ) {
-        this(id, caseId, caseToken, companyName, creatorUsername, creatorEmail, creatorName, summary,
-            description, priority, status, token, createdAt, updatedAt, null, null, null, null, null, null);
+    @Override
+    public String toString() {
+        return "CaseNoteDto[id=" + id + ", caseId=" + caseId
+            + ", caseToken=<redacted>, token=<redacted>, type=" + type + ", encrypted=" + encrypted + "]";
     }
 }

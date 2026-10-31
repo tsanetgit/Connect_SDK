@@ -74,8 +74,8 @@ public class BetaAddNotesToCollaborationRequestsScenario implements IntegrationS
                 continue;
             }
 
-            String description = "Beta added this note during integration scenario for request token " + request.token();
-            log.info("Creating note on request id={} token={} summary={}", request.id(), request.token(), noteSummary);
+            String description = "Beta added this note during integration scenario for request id " + request.id();
+            log.info("Creating note on request id={} summary={}", request.id(), noteSummary);
             CaseNoteDto created = session.caseNotes().createNote(
                 request.token(),
                 noteSummary,

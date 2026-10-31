@@ -6,6 +6,7 @@ import static com.tsanet.api.connectapi.internal.OpenApiMapping.enumValue;
 import com.tsanet.api.connectapi.CaseInformationRequestValidation;
 import com.tsanet.api.connectapi.CaseInformationResponseValidation;
 import com.tsanet.api.connectapi.CaseRejectionValidation;
+import com.tsanet.api.connectapi.OpenApiRecords;
 import com.tsanet.api.connectapi.dto.CaseResponseDto;
 import com.tsanet.api.connectapi.dto.CollaborationRequestStatusDto;
 import com.tsanet.api.generated.api.CaseResponsesApi;
@@ -206,7 +207,7 @@ public class ConnectApiResponsesGateway {
     }
 
     private CollaborationRequestStatusDto toCollaborationRequestDto(CollaborationRequestStatusDTO dto) {
-        return OpenApiMapping.collaborationRequest(dto);
+        return OpenApiRecords.collaborationRequest(dto);
     }
 
     private void requireLogin() {

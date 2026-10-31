@@ -96,16 +96,18 @@ public class WebhookInboundService {
             ensureAuthenticated.run();
             if (EVENT_COLLABORATION_REQUEST_CREATED.equals(payload.eventType())) {
                 collaborationGateway.getCollaborationRequestByToken(payload.requestToken());
-                return "Synced collaboration request token=" + payload.requestToken();
+                return "Synced collaboration request";
             }
             if (EVENT_NOTE_CREATED.equals(payload.eventType())) {
                 collaborationGateway.getCollaborationRequestByToken(payload.requestToken());
                 notesGateway.getNotes(payload.requestToken());
-                return "Synced notes for request token=" + payload.requestToken();
+                return "Synced notes for request";
             }
             return "Stored webhook event without cache sync for eventType=" + payload.eventType();
         } catch (Exception ex) {
-            return "Stored webhook event; cache sync failed: " + ex.getMessage();
+            // The API's own error text can echo the token, for example "Case with token ... not found."
+            return "Stored webhook event; cache sync failed: "
+                + String.valueOf(ex.getMessage()).replace(payload.requestToken(), "<redacted>");
         }
     }
 }

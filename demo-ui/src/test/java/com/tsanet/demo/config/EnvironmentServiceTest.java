@@ -8,14 +8,14 @@ import com.tsanet.api.TsaNetApiSession;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Offline: sessions are built over a temp SQLite dir and never authenticate,
- * so the apiBaseUrl below is never contacted. Sessions expose no close API;
- * as in the library's own session tests, teardown relies on temp-dir deletion.
+ * and nothing listens on the apiBaseUrl below.
  */
 class EnvironmentServiceTest {
 
@@ -39,12 +39,17 @@ class EnvironmentServiceTest {
             ),
             "beta",
             dataDir.toString(),
-            true,  // the tests point at a local http mock that is never contacted
+            true,  // the tests point at a local URL where nothing listens
             null,
             null,  // credentials not locked
             null  // no seeds
         );
         service = new EnvironmentService(properties);
+    }
+
+    @AfterEach
+    void tearDown() {
+        service.close();
     }
 
     @Test
@@ -83,14 +88,59 @@ class EnvironmentServiceTest {
     @Test
     void itRebuildsTheSessionWhenCredentialsChange() {
         TsaNetApiSession first = service.sessionFor("beta", PW_ONE);
-        assertThat(service.sessionFor("beta", PW_TWO)).isNotSameAs(first);
+        TsaNetApiSession second = service.sessionFor("beta", PW_TWO);
+        assertThat(second).isNotSameAs(first);
+        assertThat(loginFailure(first)).hasRootCauseMessage("closed");
+        assertThat(rootCauseMessage(loginFailure(second))).isNotEqualTo("closed");
     }
 
     @Test
     void itRebuildsAfterInvalidate() {
         TsaNetApiSession first = service.sessionFor("beta", PW_ONE);
         service.invalidate("beta");
+        assertThat(loginFailure(first)).hasRootCauseMessage("closed");
         assertThat(service.sessionFor("beta", PW_ONE)).isNotSameAs(first);
+    }
+
+    @Test
+    void itKeepsTheSessionOpenWhileCredentialsAreUnchanged() {
+        TsaNetApiSession first = service.sessionFor("beta", PW_ONE);
+        service.sessionFor("beta", PW_ONE);
+        assertThat(rootCauseMessage(loginFailure(first))).isNotEqualTo("closed");
+    }
+
+    @Test
+    void itClosesCachedSessionsWhenItsContextShutsDown() {
+        var context = new org.springframework.context.annotation.AnnotationConfigApplicationContext();
+        context.registerBean(EnvironmentService.class, () -> new EnvironmentService(properties));
+        context.refresh();
+        TsaNetApiSession session = context.getBean(EnvironmentService.class).sessionFor("beta", PW_ONE);
+
+        context.close();
+
+        assertThat(loginFailure(session)).hasRootCauseMessage("closed");
+    }
+
+    @Test
+    void itClosesCachedSessionsWhenClosed() {
+        TsaNetApiSession session = service.sessionFor("beta", PW_ONE);
+
+        service.close();
+
+        assertThat(loginFailure(session)).hasRootCauseMessage("closed");
+    }
+
+    // Nothing listens on the test URL: an open client is refused there, and a closed one says closed.
+    private static Throwable loginFailure(TsaNetApiSession session) {
+        return org.assertj.core.api.Assertions.catchThrowable(() -> session.auth().login("user", "password"));
+    }
+
+    private static String rootCauseMessage(Throwable failure) {
+        Throwable root = failure;
+        while (root.getCause() != null) {
+            root = root.getCause();
+        }
+        return root.getMessage();
     }
 
     @Test

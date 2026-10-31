@@ -5,6 +5,7 @@ import com.nimbusds.jose.JOSEException;
 import com.nimbusds.jose.JWECryptoParts;
 import com.nimbusds.jose.JWEHeader;
 import com.nimbusds.jose.JWEObjectJSON;
+import com.nimbusds.jose.UnprotectedHeader;
 import com.nimbusds.jose.crypto.impl.ContentCryptoProvider;
 import com.nimbusds.jose.jca.JWEJCAContext;
 import com.nimbusds.jose.jwk.RSAKey;
@@ -126,6 +127,10 @@ final class FieldCipher {
         } catch (ParseException notJson) {
             throw new FieldCipherException("not a JWE in general JSON serialization");
         }
+        // JSONObjectUtils.parse answers null for the JSON null, without throwing.
+        if (json == null) {
+            throw new FieldCipherException("not a JWE in general JSON serialization");
+        }
         // The binding must come from the authenticated protected header only, so a top-level
         // unprotected header, a flattened per-recipient header or extra AAD is refused.
         if (!json.containsKey("recipients") || json.containsKey("encrypted_key") || json.containsKey("aad")
@@ -137,6 +142,15 @@ final class FieldCipher {
             jwe = JWEObjectJSON.parse(json);
         } catch (ParseException | RuntimeException unparseable) {
             throw new FieldCipherException("unparseable JWE");
+        }
+        // UnprotectedHeader.getKeyID casts to String, and open calls it on each entry. Refused for every
+        // entry, not just this member's, so the shape can't depend on which one is matched first.
+        for (JWEObjectJSON.Recipient recipient : jwe.getRecipients()) {
+            UnprotectedHeader unprotected = recipient.getUnprotectedHeader();
+            if (unprotected != null && unprotected.getIncludedParams().contains("kid")
+                && !(unprotected.getParam("kid") instanceof String)) {
+                throw new FieldCipherException("a recipient's kid is not a string");
+            }
         }
         JWEHeader header = jwe.getHeader();
         if (header == null || header.getParsedBase64URL() == null) {

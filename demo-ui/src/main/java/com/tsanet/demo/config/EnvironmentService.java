@@ -8,6 +8,7 @@ import com.tsanet.api.auth.AccountAuthConfig;
 import com.tsanet.api.auth.ClientCredentialsAuthConfig;
 import com.tsanet.api.auth.PasswordAuthConfig;
 import com.tsanet.e2ee.E2eeProfile;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -173,7 +174,9 @@ public class EnvironmentService {
 
     /**
      * Session for {@code key} built from {@code credentials}, reusing the cached
-     * one when the credentials are unchanged and rebuilding when they are not.
+     * one when the credentials are unchanged and rebuilding when they are not. A
+     * replaced session is closed once its replacement exists; a caller still
+     * holding it sees the requests it already sent finish and any later one fail.
      */
     public TsaNetApiSession sessionFor(String key, CredentialsStore.Credentials credentials) {
         DemoProperties.EnvironmentDef def = properties.require(key);
@@ -183,11 +186,16 @@ public class EnvironmentService {
         // guarantees one session per key even though create() is the expensive
         // side (directory creation, SQLite open, schema init).
         String fingerprint = fingerprint(credentials);
-        return sessions.compute(key, (k, existing) ->
-            existing != null && existing.fingerprint().equals(fingerprint)
-                ? existing
-                : new SessionHolder(create(def, k, credentials), fingerprint)
-        ).session();
+        return sessions.compute(key, (k, existing) -> {
+            if (existing != null && existing.fingerprint().equals(fingerprint)) {
+                return existing;
+            }
+            SessionHolder replacement = new SessionHolder(create(def, k, credentials), fingerprint);
+            if (existing != null) {
+                existing.session().close();
+            }
+            return replacement;
+        }).session();
     }
 
     /**
@@ -198,7 +206,16 @@ public class EnvironmentService {
      */
     public void invalidate(String key) {
         properties.require(key);
-        sessions.remove(key);
+        SessionHolder removed = sessions.remove(key);
+        if (removed != null) {
+            removed.session().close();
+        }
+    }
+
+    @PreDestroy
+    public void close() {
+        sessions.values().forEach(holder -> holder.session().close());
+        sessions.clear();
     }
 
     private TsaNetApiSession create(

@@ -25,6 +25,12 @@ public class ConnectApiSessionStore {
     ) {
         static final Snapshot EMPTY = new Snapshot(null, null, null, null, null, null);
 
+        @Override
+        public String toString() {
+            return "Snapshot[bearerToken=<redacted>, username=" + username + ", accountId=" + accountId
+                + ", authMode=" + authMode + ", expiresAt=" + expiresAt + ", userContext=" + userContext + "]";
+        }
+
         boolean isExpired(Instant now) {
             if (expiresAt == null) {
                 return false;

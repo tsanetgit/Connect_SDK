@@ -93,12 +93,11 @@ public class AcmeCreateCollaborationRequestsScenario implements IntegrationScena
         log.info("Acme sees {} collaboration request(s)", finalList.size());
         for (CollaborationRequestStatusDto request : finalList) {
             log.info(
-                "  id={} status={} receive={}({}) token={} summary={}",
+                "  id={} status={} receive={}({}) summary={}",
                 request.id(),
                 request.status(),
                 request.receiveCompanyName(),
                 request.receiveCompanyId(),
-                request.token(),
                 request.summary()
             );
         }
@@ -128,6 +127,6 @@ public class AcmeCreateCollaborationRequestsScenario implements IntegrationScena
             true
         );
         existing.add(created);
-        log.info("Created id={} status={} token={}", created.id(), created.status(), created.token());
+        log.info("Created id={} status={}", created.id(), created.status());
     }
 }

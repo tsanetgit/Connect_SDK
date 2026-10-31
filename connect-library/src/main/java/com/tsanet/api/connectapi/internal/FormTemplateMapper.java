@@ -1,7 +1,6 @@
 package com.tsanet.api.connectapi.internal;
 
-import static com.tsanet.api.connectapi.internal.OpenApiMapping.enumValue;
-
+import com.tsanet.api.connectapi.OpenApiRecords;
 import com.tsanet.api.connectapi.dto.CollaborationRequestFormTemplateDto;
 import com.tsanet.api.connectapi.dto.FormFieldDto;
 import com.tsanet.api.generated.model.CollaborationRequestDTO;
@@ -23,7 +22,7 @@ public final class FormTemplateMapper {
         }
         List<FormFieldDto> fields = form.getCustomFields() == null
             ? List.of()
-            : form.getCustomFields().stream().map(FormTemplateMapper::toFieldDto).toList();
+            : form.getCustomFields().stream().map(OpenApiRecords::formField).toList();
         return new CollaborationRequestFormTemplateDto(
             form.getDocumentId(),
             receiverCompanyId,
@@ -63,20 +62,6 @@ public final class FormTemplateMapper {
         if (fields == null) {
             return Collections.emptyList();
         }
-        return fields.stream().map(FormTemplateMapper::toFieldDto).toList();
-    }
-
-    private static FormFieldDto toFieldDto(FieldMetadataDTO field) {
-        return new FormFieldDto(
-            field.getFieldId(),
-            enumValue(field.getSection()),
-            field.getLabel(),
-            enumValue(field.getType()),
-            field.getDisplayOrder(),
-            Boolean.TRUE.equals(field.getRequired()),
-            field.getOptions(),
-            field.getValidationRules(),
-            field.getValue()
-        );
+        return fields.stream().map(OpenApiRecords::formField).toList();
     }
 }

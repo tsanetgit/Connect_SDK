@@ -31,9 +31,11 @@ public final class Jwks {
      */
     public static JWKSet parsePublic(String json) throws IOException {
         JWKSet set;
+        // NullPointerException: JWKSet.parse has no null check on what its JSON parser hands it, so the
+        // bodies null and {"keys":[null]} throw it. A partner chooses this text, and callers catch IOException.
         try {
             set = JWKSet.parse(json);
-        } catch (ParseException unparseable) {
+        } catch (ParseException | NullPointerException unparseable) {
             throw new IOException("Not a JWKS");
         }
         for (JWK key : set.getKeys()) {

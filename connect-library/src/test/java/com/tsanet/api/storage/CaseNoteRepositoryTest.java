@@ -19,7 +19,7 @@ class CaseNoteRepositoryTest {
     private static CaseNoteDto note(long id, String token, String type, String typeDisplayName, Long companyId,
                                     String direction) {
         return new CaseNoteDto(id, 1L, "tok1", "Acme", "api@acme.com", "api@acme.com", "API", "Summary",
-            "Body", "LOW", "ACTIVE", token, null, null, type, companyId, direction, typeDisplayName);
+            "Body", "LOW", "ACTIVE", token, null, null, type, companyId, direction, typeDisplayName, null, null);
     }
 
     @Test
