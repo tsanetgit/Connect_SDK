@@ -23,6 +23,7 @@ import com.tsanet.e2ee.Records.DecryptedNote;
 import com.tsanet.e2ee.Records.EncryptedCase;
 import com.tsanet.e2ee.Records.EncryptedNote;
 import com.tsanet.e2ee.Records.NotePlaintext;
+import com.tsanet.e2ee.Verification.KeysUnavailable;
 import com.tsanet.e2ee.Verification.Refused;
 import com.tsanet.e2ee.Verification.Step;
 import com.tsanet.e2ee.Verification.Verified;
@@ -46,8 +47,9 @@ import java.util.UUID;
  * <p>Outbound, {@link #encryptCase} and {@link #encryptNote} check the plaintext, encrypt each
  * protected field for the partner and for this member, and sign a manifest; the results go to
  * connect-library's create overloads unchanged. Inbound, {@link #verifyCase} and {@link #verifyNote}
- * run the six checks of Addendum D §5 in order and return the decrypted content only when every
- * one passes. Nothing here writes to connect-library's cache, which keeps what the platform returned.
+ * run the six checks of Addendum D §5 in order (except that step 3's party checks, which need no
+ * key, run before step 1's key lookup) and return the decrypted content only when every one passes,
+ * or {@link Verification.KeysUnavailable} when the sender's keys can't be had. Nothing here writes to connect-library's cache, which keeps what the platform returned.
  *
  * <p>Protected: {@code problemSummary}, {@code problemDescription}, each custom-field value (an empty
  * string included; a null stays null), and a note's {@code summary} and {@code description}.
@@ -254,8 +256,8 @@ public final class E2eeProfile {
         List<CaseCustomFieldDto> customFields = record.customFields() == null ? List.of() : record.customFields();
 
         Checked checked = checkManifest(record.manifest(), record.encrypted(), iss, aud, record.submitterCaseNumber(), receipt);
-        if (checked.refused() != null) {
-            return refused(checked.refused());
+        if (checked.failed() != null) {
+            return refused(checked.failed());
         }
 
         // Step 5. A custom field's read id isn't the form's fieldId, so its manifest name comes from its
@@ -319,8 +321,8 @@ public final class E2eeProfile {
         }
 
         Checked checked = checkManifest(note.manifest(), note.encrypted(), iss, aud, caseRecord.submitterCaseNumber(), receipt);
-        if (checked.refused() != null) {
-            return refused(checked.refused());
+        if (checked.failed() != null) {
+            return refused(checked.failed());
         }
         Opened opened = checkAndOpenFields(wire, checked.claims());
         if (opened.refused() != null) {
@@ -330,15 +332,16 @@ public final class E2eeProfile {
             opened.plaintext().get(Profile.NOTE_SUMMARY), opened.plaintext().get(Profile.NOTE_DESCRIPTION)));
     }
 
-    private record Checked(Manifest.Claims claims, Refused<?> refused) {
+    /** {@code failed} is a {@link Refused} or {@link KeysUnavailable}; null when steps 1 to 4 pass. */
+    private record Checked(Manifest.Claims claims, Verification<?> failed) {
     }
 
     private record Opened(Map<String, String> plaintext, Refused<?> refused) {
     }
 
     @SuppressWarnings("unchecked")
-    private static <T> Verification<T> refused(Refused<?> refusal) {
-        return (Verification<T>) refusal;
+    private static <T> Verification<T> refused(Verification<?> failure) {
+        return (Verification<T>) failure;
     }
 
     /** Steps 1 to 4. */
@@ -352,6 +355,14 @@ public final class E2eeProfile {
             jws = Manifest.parse(manifest);
         } catch (ManifestException unusable) {
             return refuse(Step.SIGNATURE, "no manifest, or an unparseable one");
+        }
+        // Step 3's party checks, run before the key lookup: they need no key, and a record that can
+        // never pass mustn't read as KeysUnavailable when its sender has no keys.
+        if (aud == null) {
+            return refuse(Step.CLAIMS, "iss or aud does not match the record");
+        }
+        if (!ownCompanyId.equals(iss) && !ownCompanyId.equals(aud)) {
+            return refuse(Step.CLAIMS, "this member is neither iss nor aud");
         }
         ECKey senderKey;
         try {
@@ -367,7 +378,7 @@ public final class E2eeProfile {
             }
             senderKey = ec;
         } catch (IOException unavailable) {
-            return refuse(Step.SENDER_KEY, "the sending company's public keys are unavailable");
+            return new Checked(null, new KeysUnavailable<>());
         }
 
         // Step 2.
@@ -390,11 +401,10 @@ public final class E2eeProfile {
         if (!Profile.VERSION.equals(claims.ver())) {
             return refuse(Step.CLAIMS, "unsupported profile version");
         }
-        if (!iss.equals(claims.iss()) || aud == null || !aud.equals(claims.aud())) {
+        // The record's iss and aud already include this member (checked before step 1), so matching
+        // the claims to them is what makes this member iss or aud of the signed manifest.
+        if (!iss.equals(claims.iss()) || !aud.equals(claims.aud())) {
             return refuse(Step.CLAIMS, "iss or aud does not match the record");
-        }
-        if (!ownCompanyId.equals(claims.iss()) && !ownCompanyId.equals(claims.aud())) {
-            return refuse(Step.CLAIMS, "this member is neither iss nor aud");
         }
         if (ref == null || !ref.equals(claims.ref())) {
             return refuse(Step.CLAIMS, "ref does not match the case number");

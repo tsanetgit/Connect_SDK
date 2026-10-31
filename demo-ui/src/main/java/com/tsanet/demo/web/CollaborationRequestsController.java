@@ -21,6 +21,7 @@ import com.tsanet.e2ee.Records.EncryptedCase;
 import com.tsanet.e2ee.Records.EncryptedNote;
 import com.tsanet.e2ee.Records.NotePlaintext;
 import com.tsanet.e2ee.Verification;
+import com.tsanet.e2ee.Verification.KeysUnavailable;
 import com.tsanet.e2ee.Verification.Refused;
 import com.tsanet.e2ee.Verification.Verified;
 import java.util.LinkedHashMap;
@@ -176,6 +177,10 @@ public class CollaborationRequestsController {
         return Boolean.TRUE.equals(encrypted) ? E2eeView.unverified(reason) : E2eeView.PLAINTEXT;
     }
 
+    // Also the outcome for a sender with no key entry, which a reload won't fix (Verification.KeysUnavailable).
+    private static final String KEYS_UNAVAILABLE =
+        "the sending company's public keys are unavailable: its JWKS couldn't be fetched or used, or it has no key entry";
+
     // A record whose encrypted isn't true is plaintext and isn't verified (connect-e2ee README).
     private static E2eeView caseView(E2eeProfile e2ee, CollaborationRequestStatusDto status) {
         if (!Boolean.TRUE.equals(status.encrypted())) {
@@ -184,6 +189,7 @@ public class CollaborationRequestsController {
         return switch (e2ee.verifyCase(status, Receipt.STORED_READ)) {
             case Verified<DecryptedCase> ok -> E2eeView.verifiedCase(ok.content(), status.customFields());
             case Refused<DecryptedCase> no -> E2eeView.refused(no);
+            case KeysUnavailable<DecryptedCase> later -> E2eeView.unverified(KEYS_UNAVAILABLE);
         };
     }
 
@@ -194,6 +200,7 @@ public class CollaborationRequestsController {
         return switch (e2ee.verifyNote(note, status, Receipt.STORED_READ)) {
             case Verified<DecryptedNote> ok -> E2eeView.verifiedNote(ok.content());
             case Refused<DecryptedNote> no -> E2eeView.refused(no);
+            case KeysUnavailable<DecryptedNote> later -> E2eeView.unverified(KEYS_UNAVAILABLE);
         };
     }
 
@@ -299,7 +306,8 @@ public class CollaborationRequestsController {
      * field's name from the stored record under the same key, so the page can label it),
      * {@code refused} (with the step, the field when the failure is about one, and the module's
      * reason; never a value) or {@code unverified} (encrypted, but the demo had no profile to verify
-     * it with; the reason says why). Nulls are left out, so a plaintext record shows only its state.
+     * it with, or the sender's public keys were unavailable; the reason says why). Nulls are left
+     * out, so a plaintext record shows only its state.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public record E2eeView(
