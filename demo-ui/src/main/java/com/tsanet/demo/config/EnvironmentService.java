@@ -8,6 +8,7 @@ import com.tsanet.api.auth.AccountAuthConfig;
 import com.tsanet.api.auth.ClientCredentialsAuthConfig;
 import com.tsanet.api.auth.PasswordAuthConfig;
 import com.tsanet.e2ee.E2eeProfile;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -209,6 +210,12 @@ public class EnvironmentService {
         if (removed != null) {
             removed.session().close();
         }
+    }
+
+    @PreDestroy
+    public void close() {
+        sessions.values().forEach(holder -> holder.session().close());
+        sessions.clear();
     }
 
     private TsaNetApiSession create(

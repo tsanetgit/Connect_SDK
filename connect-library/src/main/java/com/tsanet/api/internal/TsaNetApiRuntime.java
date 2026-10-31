@@ -70,6 +70,23 @@ public final class TsaNetApiRuntime {
         // One JDK client per session under all three templates (tsanetgit/Connect_SDK#131).
         HttpClient httpClient = ConnectApiRestTemplates.newHttpClient();
 
+        try {
+            return createSession(configuration, sessionStore, httpClient);
+        } catch (RuntimeException | Error failure) {
+            try {
+                httpClient.shutdown();
+            } catch (RuntimeException | Error shutdownFailure) {
+                failure.addSuppressed(shutdownFailure);
+            }
+            throw failure;
+        }
+    }
+
+    private static TsaNetApiSession createSession(
+        TsaNetApiConfiguration configuration,
+        ConnectApiSessionStore sessionStore,
+        HttpClient httpClient
+    ) {
         // Login rides an unauthenticated client of its own: no bearer supplier, no 401 retry.
         // On the session client a re-login would recurse into itself through both.
         ApiClient loginApiClient = new ApiClient(ConnectApiRestTemplates.create(httpClient));

@@ -8,14 +8,14 @@ import com.tsanet.api.TsaNetApiSession;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Offline: sessions are built over a temp SQLite dir and never authenticate,
- * and nothing listens on the apiBaseUrl below. As in the library's own session
- * tests, teardown relies on temp-dir deletion, not on closing each session.
+ * and nothing listens on the apiBaseUrl below.
  */
 class EnvironmentServiceTest {
 
@@ -45,6 +45,11 @@ class EnvironmentServiceTest {
             null  // no seeds
         );
         service = new EnvironmentService(properties);
+    }
+
+    @AfterEach
+    void tearDown() {
+        service.close();
     }
 
     @Test
@@ -102,6 +107,15 @@ class EnvironmentServiceTest {
         TsaNetApiSession first = service.sessionFor("beta", PW_ONE);
         service.sessionFor("beta", PW_ONE);
         assertThat(rootCauseMessage(loginFailure(first))).isNotEqualTo("closed");
+    }
+
+    @Test
+    void itClosesCachedSessionsWhenClosed() {
+        TsaNetApiSession session = service.sessionFor("beta", PW_ONE);
+
+        service.close();
+
+        assertThat(loginFailure(session)).hasRootCauseMessage("closed");
     }
 
     // Nothing listens on the test URL: an open client is refused there, and a closed one says closed.

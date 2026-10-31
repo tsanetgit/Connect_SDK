@@ -110,6 +110,11 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
         }
     }
 
+    private synchronized AuthFacade activateAccountAuth(ApplicationUserAccount account) {
+        activateAccount(account);
+        return requireDelegate().auth();
+    }
+
     /** Closes the active account's session; the next login or authenticate opens a new one. */
     @Override
     public synchronized void close() {
@@ -139,8 +144,7 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
             ApplicationUserAccount account = accountRegistry.defaultAccount().orElseThrow(
                 () -> new IllegalStateException("No application users configured under tsanet.accounts")
             );
-            activateAccount(account);
-            return requireDelegate().auth().authenticate();
+            return activateAccountAuth(account).authenticate();
         }
 
         @Override
@@ -151,8 +155,7 @@ public final class AccountScopedTsaNetApiSession implements TsaNetApiSession, Ac
                     "Account '" + account.id() + "' uses client-credentials auth. Use authenticate()."
                 );
             }
-            activateAccount(account);
-            return requireDelegate().auth().login(username, password);
+            return activateAccountAuth(account).login(username, password);
         }
 
         @Override
