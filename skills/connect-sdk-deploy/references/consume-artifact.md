@@ -452,8 +452,9 @@ Watch the release notes on each release.
     afresh. After a failed fetch, `PinnedJwksPartnerKeys` doesn't fetch that company's keys again
     for a minute: a retry inside the minute returns `KeysUnavailable` again without contacting the
     partner, and keys can stay unavailable for up to a minute after the last failed fetch, even
-    once its endpoint has recovered. A set it holds that hasn't expired is still served. So back
-    off, and bound the retries. A timeout or a non-200 answer can clear on its own, but
+    once its endpoint has recovered. A set it holds that hasn't expired still answers for a `kid`
+    in that set; a `kid` that isn't there needs a refetch, so it reads as `KeysUnavailable` during
+    the wait. So back off, and bound the retries. A timeout or a non-200 answer can clear on its own, but
     `PinnedJwksPartnerKeys` also throws for a company with no configured JWKS URL and for a set
     that is too large, unparseable or holds a private key, which a retry won't fix until the
     configuration or the partner's set changes. Code that matched the 4.0.0 `SENDER_KEY` reason
@@ -481,7 +482,29 @@ Watch the release notes on each release.
     `OAuth client-credentials request failed: HTTP <status> (<code>)` when the token endpoint
     answers with a known OAuth error code, for example `invalid_client`; otherwise it stays
     `... HTTP <status>`. Entra's `error_description` still isn't included, because it names the
-    app. Code that matched the old message exactly should match its prefix.
+    app. Code that matched the old message exactly should match its prefix. When an expired session
+    can't renew, the same text is in `ConnectApiException.detail()`.
+  - A token response whose access token isn't all visible ASCII now fails sign-in with
+    `IllegalStateException`. In 4.0.0 a line break, another control character or a character above
+    Latin-1 failed at the first request with the JDK's `IllegalArgumentException`, which quoted
+    the token, and a space or a Latin-1 character was sent. A malformed token response, an unusable
+    token URL and a webhook callback URL that isn't a URI are refused with fixed messages that
+    no longer quote them. Code that read those messages sees the new text. A note with no priority
+    is refused with `A note priority is required`, not `Unexpected value 'null'`.
+  - Malformed partner input no longer throws. A manifest or protected value that is the JSON
+    `null`, or a recipient `kid` that isn't a string, is now a `Refused`. A JWKS endpoint serving
+    such a body or a malformed HTTP response is now `KeysUnavailable`. All of these used to escape
+    `verifyCase` and `verifyNote` as unchecked exceptions.
+  - `PinnedJwksPartnerKeys` is now `AutoCloseable`, and holds a JDK `HttpClient` until it's closed,
+    so close an instance you drop. It doesn't wait: a fetch already sent finishes, a set it holds
+    still answers, and a lookup that would fetch reads as `KeysUnavailable`. `PartnerKeys` is
+    unchanged.
+  - Known limits. Within a minute of a successful fetch, a manifest naming a new `kid` sees the
+    cached set and is refused at `SENDER_KEY`. A fetch interrupted before it has run for 2 seconds doesn't start
+    the minute's wait, so a caller with a budget under 2 seconds on an endpoint that hangs makes a
+    request on each lookup. An endpoint slower than 2 seconds, cancelled past that age, counts as
+    failed, so that company's keys are unavailable to every caller of the instance for up to a
+    minute.
   - `connect-library` adds `com.tsanet.api.connectapi.OpenApiRecords`, the mapping the facades
     use from the generated OpenAPI models to `CollaborationRequestStatusDto`, `CaseNoteDto` and
     `FormFieldDto`. A connector that calls the generated client directly and keeps its own copy
@@ -496,6 +519,7 @@ Watch the release notes on each release.
     credential change or after a one-off poll. It doesn't wait: requests already sent run to
     completion, and a later one fails the way an unreachable API does: a `ConnectApiException` of
     kind `CONNECTIVITY`, or `AttachmentV2Exception` `client/connectivity` on the V2 facades. So a
+    further batch of links or a link refresh fails and stops an upload already running, and a
     `send` still running can't complete its grant, which stays open until it expires. A Spring
     `@Bean` that returns a session is now closed when its context shuts down.
     `AccountScopedTsaNetApiSession` instead goes back to having no session until the next login, and
