@@ -84,7 +84,13 @@ Save replaces it.
 When the app is deployed with the Basic-auth gate enabled
 (`TSANET_DEMO_AUTH_PASSWORD` set), the browser prompts for the gate
 credentials before the page loads — that gate protects the demo itself and is
-unrelated to the BETA member credentials entered inside it. The operator can
+unrelated to the BETA member credentials entered inside it. The demo is protected
+against cross-site requests whether or not the gate is on: every mutating call must
+carry a token from the `XSRF-TOKEN` cookie as an `X-XSRF-TOKEN` header, which the page
+does for you, so another site can't act through a browser holding the login. A refused
+call shows a message asking you to reload the page. A script that drives the demo's API
+has to do the same: read the cookie from any `GET`, then send it back with the header. Without
+them, its mutating call answers `403` before the gate is checked, even with no login. The operator can
 also configure a second gate login for guests (`TSANET_DEMO_AUTH_GUEST_USER` and
 `TSANET_DEMO_AUTH_GUEST_PASSWORD`); it opens the same demo with the same rights,
 so a guest sees whatever member credentials are currently stored and, unless the

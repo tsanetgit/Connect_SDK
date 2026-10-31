@@ -6,8 +6,20 @@ function esc(value) {
     return div.innerHTML;
 }
 
+// SecurityConfig's CSRF check: every mutating call carries the cookie's token as a header, which
+// another site's form or script can't set. Read per call, since the server can issue a new cookie.
+function withCsrfToken(options) {
+    const method = (options?.method ?? 'GET').toUpperCase();
+    if (['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) return options;
+    const cookie = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+    if (!cookie) return options;
+    const headers = new Headers(options.headers);
+    headers.set('X-XSRF-TOKEN', decodeURIComponent(cookie[1]));
+    return {...options, headers};
+}
+
 async function fetchJson(url, options) {
-    const res = await fetch(url, options);
+    const res = await fetch(url, withCsrfToken(options));
     if (!res.ok) {
         let message = `HTTP ${res.status}`;
         try {

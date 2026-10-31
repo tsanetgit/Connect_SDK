@@ -1,16 +1,28 @@
 package com.tsanet.demo.config;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
 import org.junit.jupiter.api.BeforeEach;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.web.FilterChainProxy;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -97,5 +109,90 @@ class GateFilterChainTest {
     void wrongGuestPasswordIsRefused() throws Exception {
         mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("oracle", "wrong")))
             .andExpect(status().isUnauthorized());
+    }
+
+    private Cookie csrfCookie(String authorization) throws Exception {
+        Cookie cookie = mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, authorization))
+            .andReturn().getResponse().getCookie("XSRF-TOKEN");
+        assertThat(cookie).isNotNull();
+        return cookie;
+    }
+
+    @Test
+    void theFirstResponseSetsACookieThePageCanRead() throws Exception {
+        Cookie cookie = mvc.perform(get("/healthz")).andReturn().getResponse().getCookie("XSRF-TOKEN");
+        assertThat(cookie).isNotNull();
+        assertThat(cookie.isHttpOnly()).isFalse();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"shawn,op", "oracle,g"})
+    void aCrossSiteFormIsRefusedEvenWithTheBrowsersCachedLogin(String user, String password) throws Exception {
+        // What another site's form sends: the login and the cookie, which the browser adds, and no header.
+        String login = basic(user, password);
+        mvc.perform(post("/api/requests/t1/close")
+                .header(HttpHeaders.AUTHORIZATION, login)
+                .cookie(csrfCookie(login))
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED))
+            .andExpect(status().isForbidden())
+            .andExpect(content().json(SecurityConfig.CSRF_REFUSED));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"shawn,op", "oracle,g"})
+    void theSpasOwnCallPassesTheCheck(String user, String password) throws Exception {
+        // 428: past the CSRF check and in the controller, which has no member credentials here.
+        String login = basic(user, password);
+        Cookie cookie = csrfCookie(login);
+        mvc.perform(post("/api/requests/t1/close")
+                .header(HttpHeaders.AUTHORIZATION, login)
+                .cookie(cookie)
+                .header("X-XSRF-TOKEN", cookie.getValue()))
+            .andExpect(status().isPreconditionRequired());
+    }
+
+    @Test
+    void aHeaderThatDoesNotMatchTheCookieIsRefused() throws Exception {
+        String login = basic("shawn", "op");
+        mvc.perform(post("/api/requests/t1/close")
+                .header(HttpHeaders.AUTHORIZATION, login)
+                .cookie(csrfCookie(login))
+                .header("X-XSRF-TOKEN", "not-the-cookies-token"))
+            .andExpect(status().isForbidden());
+    }
+
+    @ParameterizedTest
+    @CsvSource({"/api/requests/t1/attachments,files", "/api/requests/t1/attachments/v2,file"})
+    void anUploadIsRefusedWithoutTheHeaderAndPassesWithIt(String path, String part) throws Exception {
+        String login = basic("shawn", "op");
+        Cookie cookie = csrfCookie(login);
+        MockMultipartFile file = new MockMultipartFile(part, "a.txt", "text/plain", new byte[] {1});
+        mvc.perform(multipart(path).file(file)
+                .header(HttpHeaders.AUTHORIZATION, login)
+                .cookie(cookie))
+            .andExpect(status().isForbidden());
+        mvc.perform(multipart(path).file(file)
+                .param("description", "the form's own field on the V1 route")
+                .header(HttpHeaders.AUTHORIZATION, login)
+                .cookie(cookie)
+                .header("X-XSRF-TOKEN", cookie.getValue()))
+            .andExpect(status().isPreconditionRequired());
+    }
+
+    @Test
+    void onlyACsrfRefusalAsksForAReload() throws Exception {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        SecurityConfig.refuse(new MockHttpServletRequest(), response, new AccessDeniedException("denied"));
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentAsString()).isEqualTo(SecurityConfig.FORBIDDEN);
+    }
+
+    @Test
+    void theStorageTestIsRefusedWithoutTheHeader() throws Exception {
+        String login = basic("shawn", "op");
+        mvc.perform(post("/api/settings/beta/receiver-storage/test")
+                .header(HttpHeaders.AUTHORIZATION, login)
+                .cookie(csrfCookie(login)))
+            .andExpect(status().isForbidden());
     }
 }
