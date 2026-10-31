@@ -128,9 +128,8 @@ public class BetaApproveCollaborationRequestScenario implements IntegrationScena
         System.out.println();
         System.out.println("=== Beta collaboration request approval ===");
         System.out.printf(
-            "requestId=%s  token=%s  summary=%s  status=%s  skipped=%s%n",
+            "requestId=%s  summary=%s  status=%s  skipped=%s%n",
             request.id(),
-            request.token(),
             request.summary(),
             request.status(),
             skipped
