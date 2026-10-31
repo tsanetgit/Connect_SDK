@@ -112,7 +112,7 @@ class TsaNetApiTokenHeaderSafetyTest {
 
         Throwable thrown = catchThrowable(() -> session.auth().authenticate());
 
-        assertThat(thrown).isExactlyInstanceOf(IllegalStateException.class).hasMessage(REFUSAL).hasNoCause();
+        assertThat(thrown).isExactlyInstanceOf(ConnectApiException.class).hasMessage(REFUSAL).hasNoCause();
         assertNoMarkerInTheChain(thrown);
         assertThat(meCalls).as("nothing was sent with it").hasValue(0);
         assertThat(session.auth().isAuthorized()).isFalse();
@@ -129,7 +129,7 @@ class TsaNetApiTokenHeaderSafetyTest {
 
         Throwable thrown = catchThrowable(() -> session.auth().authenticate());
 
-        assertThat(thrown).isExactlyInstanceOf(IllegalStateException.class).hasMessage(REFUSAL).hasNoCause();
+        assertThat(thrown).isExactlyInstanceOf(ConnectApiException.class).hasMessage(REFUSAL).hasNoCause();
         assertNoMarkerInTheChain(thrown);
         assertThat(meCalls).as("nothing was sent with it").hasValue(0);
         assertThat(session.auth().isAuthorized()).isFalse();
@@ -170,7 +170,7 @@ class TsaNetApiTokenHeaderSafetyTest {
 
             Throwable thrown = catchThrowable(() -> session.auth().authenticate());
 
-            assertThat(thrown).isExactlyInstanceOf(IllegalStateException.class)
+            assertThat(thrown).isExactlyInstanceOf(ConnectApiException.class)
                 .hasMessage("The login request failed: its URL or the response isn't usable")
                 .hasNoCause();
             answer.join(java.time.Duration.ofSeconds(2));
@@ -185,7 +185,7 @@ class TsaNetApiTokenHeaderSafetyTest {
 
         Throwable thrown = catchThrowable(() -> session.auth().authenticate());
 
-        assertThat(thrown).isExactlyInstanceOf(IllegalStateException.class)
+        assertThat(thrown).isExactlyInstanceOf(ConnectApiException.class)
             .hasMessage("The login request failed: its URL or the response isn't usable")
             .hasNoCause();
     }

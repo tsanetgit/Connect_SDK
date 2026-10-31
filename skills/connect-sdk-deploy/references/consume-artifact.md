@@ -485,17 +485,22 @@ Watch the release notes on each release.
     answers with a known OAuth error code, for example `invalid_client`; otherwise it stays
     `... HTTP <status>`. Entra's `error_description` still isn't included, because it names the
     app. Code that matched the old message exactly should match its prefix. When an expired session
-    can't renew, the same text is in `ConnectApiException.detail()`.
+    can't renew, the same text is in `ConnectApiException.detail()`. A 5xx from the token endpoint
+    isn't a refusal, so it carries that text in a `ConnectApiException` instead (see below).
   - A token response whose access token isn't all visible ASCII now fails sign-in with
-    `IllegalStateException`. In 4.0.0 a line break, most control characters or a character above
+    `ConnectApiException`. In 4.0.0 a line break, most control characters or a character above
     Latin-1 failed at the first request with the JDK's `IllegalArgumentException`, which quoted
     the token, and a space, a tab or a Latin-1 character was sent. A malformed token response, an
     unusable token URL and a webhook callback URL that isn't a URI are refused with fixed messages
-    that no longer quote them. Code that read those messages sees the new text. Three of them also
-    change type, so a 4.0.0 `catch` stops matching: an unusable token URL or API base URL at
-    sign-in, and a token or login response the JDK client can't read, go from
-    `IllegalArgumentException` to `IllegalStateException`, and a malformed login body goes from
-    `RestClientException` to `IllegalStateException`. A webhook callback URL stays `IllegalArgumentException`. A note with
+    that no longer quote them. Code that read those messages sees the new text. These also change
+    type, so a 4.0.0 `catch` stops matching: an unusable token URL or API base URL at sign-in, and a
+    token or login response the JDK client can't read, were `IllegalArgumentException`; a malformed
+    login body was `RestClientException`; a malformed token response and a 5xx from the token
+    endpoint were `IllegalStateException`. Each is now `ConnectApiException` of kind `OTHER`, status 0
+    and title `Token request`, because logging in again wouldn't fix it, so an expired session that
+    meets one no longer reads as a 401 `Session expired`. A refusal by the token endpoint stays
+    `IllegalStateException`, and a 401 `Session expired` on renewal. A webhook callback URL stays
+    `IllegalArgumentException`. A note with
     no priority is refused with `A note priority is required`, not `Unexpected value 'null'`.
   - Malformed partner input no longer throws. A manifest or protected value that is the JSON
     `null`, or a recipient `kid` that isn't a string, is now a `Refused`. A JWKS endpoint serving

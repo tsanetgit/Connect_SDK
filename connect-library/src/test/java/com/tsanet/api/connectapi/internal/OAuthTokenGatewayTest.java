@@ -164,7 +164,7 @@ class OAuthTokenGatewayTest {
 
         assertThatThrownBy(() -> gateway.fetchClientCredentialsToken(new ClientCredentialsAuthConfig(
             "tenant", "http://login.example/{MARKER}/token", "client-id", "client-secret", "api://audience", null)))
-            .isExactlyInstanceOf(IllegalStateException.class)
+            .isExactlyInstanceOf(com.tsanet.api.ConnectApiException.class)
             .hasMessage("The OAuth token request failed: its URL or the response isn't usable")
             .hasNoCause();
     }
@@ -190,7 +190,7 @@ class OAuthTokenGatewayTest {
             Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> gateway.fetchClientCredentialsToken(
                 new ClientCredentialsAuthConfig("tenant", tokenUrl, "client-id", "client-secret", "api://audience", null)));
 
-            assertThat(thrown).isExactlyInstanceOf(IllegalStateException.class)
+            assertThat(thrown).isExactlyInstanceOf(com.tsanet.api.ConnectApiException.class)
                 .hasMessage("The OAuth token request failed: its URL or the response isn't usable")
                 .hasNoCause();
             answer.join(java.time.Duration.ofSeconds(2));
@@ -198,7 +198,7 @@ class OAuthTokenGatewayTest {
     }
 
     @Test
-    void aTokenResponseWithNoAccessTokenKeepsTheFieldAsItsCause() {
+    void aTokenResponseWithNoAccessTokenNamesTheField() {
         RestTemplate restTemplate = new RestTemplate();
         MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
         server.expect(requestTo("https://login.microsoftonline.com/tenant/oauth2/v2.0/token"))
@@ -206,8 +206,9 @@ class OAuthTokenGatewayTest {
 
         assertThatThrownBy(() -> new OAuthTokenGateway(restTemplate).fetchClientCredentialsToken(
             new ClientCredentialsAuthConfig("tenant", null, "client-id", "client-secret", "api://audience", null)))
-            .hasMessage("Failed to parse OAuth token response")
-            .hasRootCauseMessage("OAuth token response missing access_token");
+            .isExactlyInstanceOf(com.tsanet.api.ConnectApiException.class)
+            .hasMessage("OAuth token response missing access_token")
+            .hasNoCause();
     }
 
     @Test

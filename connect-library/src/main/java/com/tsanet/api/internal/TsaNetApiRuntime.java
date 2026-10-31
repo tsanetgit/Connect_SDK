@@ -245,7 +245,8 @@ public final class TsaNetApiRuntime {
         } catch (IllegalStateException expired) {
             // The supplier runs outside the interceptor chain, so this is the one place an
             // expired session that cannot be renewed gets the same classified shape as every
-            // other failure; both the console and the demo already render that shape.
+            // other failure; both the console and the demo already render that shape. Only a
+            // refusal lands here: a fault in the token request is already a ConnectApiException.
             throw new ConnectApiException(ConnectApiException.Kind.OTHER, 401, null, "Session expired",
                 expired.getMessage(), null, expired);
         }

@@ -22,7 +22,9 @@ package com.tsanet.api;
  *       {@link #title()} is {@value #TOKEN_ENDPOINT}.</li>
  *   <li>{@link Kind#OTHER}: a non-2xx with no recognizable body, where {@link #detail()} carries
  *       at most a short excerpt of it; a redirect, which the client never follows; or a call the
- *       caller interrupted, with status 0 and {@link #detail()} {@code interrupted}.</li>
+ *       caller interrupted, with status 0 and {@link #detail()} {@code interrupted}; or a token
+ *       request that failed without being refused, with status 0, {@link #title()}
+ *       {@value #TOKEN_REQUEST} and a fixed {@link #detail()}.</li>
  * </ul>
  *
  * <p>The message is value-free by construction: status, kind, the API's own title and detail,
@@ -40,6 +42,9 @@ public class ConnectApiException extends RuntimeException {
 
     /** The {@link #title()} of a {@link Kind#CONNECTIVITY} failure on the OAuth token call. */
     public static final String TOKEN_ENDPOINT = "OAuth token endpoint";
+
+    /** The {@link #title()} of a token request that failed without being refused. */
+    public static final String TOKEN_REQUEST = "Token request";
 
     private final Kind kind;
     private final int status;
@@ -85,6 +90,17 @@ public class ConnectApiException extends RuntimeException {
     }
 
     /**
+     * A token request failed without being refused: a URL the client won't use, or an answer the SDK
+     * can't use. Not an expired session, because logging in again wouldn't help. A refusal stays the
+     * gateways' {@code IllegalStateException}, which an expired session reports as a 401. Status 0,
+     * no cause, and {@code detail} is one of the gateways' fixed strings: Jackson and the JDK quote what
+     * they refuse, which can be the token (see {@code BearerTokens}).
+     */
+    public static ConnectApiException tokenRequestFailed(String detail) {
+        return new ConnectApiException(Kind.OTHER, 0, null, TOKEN_REQUEST, detail, null, null);
+    }
+
+    /**
      * The calling thread was interrupted while the call was in flight. The thread's interrupt flag
      * stays set. Kind {@link Kind#OTHER} with status 0, not {@link Kind#CONNECTIVITY}: the caller
      * cancelled, so retrying the same call is not the remedy (tsanetgit/Connect_SDK#131).
@@ -100,7 +116,7 @@ public class ConnectApiException extends RuntimeException {
     /**
      * The status the API asserted: for {@link Kind#PROBLEM} the body's own {@code status} when it
      * carries one (which can differ from the wire status, see tsanetgit/Connect-API-Code#122),
-     * otherwise the wire status; 0 for {@link Kind#CONNECTIVITY} and an interrupted call. Not a
+     * otherwise the wire status; 0 for {@link Kind#CONNECTIVITY}, an interrupted call and a token request that failed without being refused. Not a
      * transport-level fact.
      */
     public int status() {
@@ -154,6 +170,10 @@ public class ConnectApiException extends RuntimeException {
                 }
             }
             case OTHER -> {
+                if (TOKEN_REQUEST.equals(title)) {
+                    message.append(detail);
+                    break;
+                }
                 message.append(status == 0 ? "Connect API call" : "HTTP " + status + " from the Connect API");
                 if (detail != null && !detail.isBlank()) {
                     message.append(": ").append(detail);

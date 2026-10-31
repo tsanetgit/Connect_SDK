@@ -92,9 +92,11 @@ class SessionGuardTest {
             SessionGuard guard = tokens.guard();
 
             assertThatThrownBy(guard::session)
-                .isInstanceOfSatisfying(ResponseStatusException.class, e -> {
-                    assertThat(e.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
-                    assertThat(e.getReason()).isEqualTo("The token response holds an access token that can't be sent in a header");
+                .isInstanceOfSatisfying(com.tsanet.api.ConnectApiException.class, e -> {
+                    var answer = new ApiErrorHandler().handleConnectApi(e);
+                    assertThat(answer.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+                    assertThat(answer.getBody()).containsEntry("error", "Token request").containsEntry("detail",
+                        "The token response holds an access token that can't be sent in a header");
                 });
         }
     }
@@ -112,6 +114,8 @@ class SessionGuardTest {
                 () -> SessionGuard.sdkInput(() -> session.webhooks().listSubscriptions()));
 
             assertThat(thrown).isNotNull().isNotInstanceOf(ResponseStatusException.class);
+            assertThat(thrown).isInstanceOfSatisfying(com.tsanet.api.ConnectApiException.class,
+                e -> assertThat(new ApiErrorHandler().handleConnectApi(e).getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY));
             for (Throwable t = thrown; t != null; t = t.getCause() == t ? null : t.getCause()) {
                 assertThat(String.valueOf(t.getMessage())).doesNotContain("MARKER");
             }

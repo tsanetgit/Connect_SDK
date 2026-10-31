@@ -1,5 +1,7 @@
 package com.tsanet.api.connectapi.internal;
 
+import com.tsanet.api.ConnectApiException;
+
 /** The one check on a token from a token response, before anything stores or sends it. */
 final class BearerTokens {
     private BearerTokens() {
@@ -16,7 +18,7 @@ final class BearerTokens {
         for (int i = 0; i < token.length(); i++) {
             char c = token.charAt(i);
             if (c < 0x21 || c > 0x7e) {
-                throw new IllegalStateException(
+                throw ConnectApiException.tokenRequestFailed(
                     "The token response holds an access token that can't be sent in a header");
             }
         }

@@ -37,7 +37,8 @@ public class OAuthTokenGateway {
     /**
      * The token call rides the session's JDK client but none of the Connect API's error handling:
      * a refusal stays the {@code IllegalStateException} below, with the status and at most OAuth's
-     * error code, and a transport failure is {@code ConnectApiException} with no URL or tenant
+     * error code; a URL or answer it can't use is {@link ConnectApiException#tokenRequestFailed}; and
+     * a transport failure is {@code ConnectApiException} with no URL or tenant
      * (tsanetgit/Connect_SDK#131).
      */
     public OAuthTokenGateway(HttpClient httpClient) {
@@ -69,15 +70,18 @@ public class OAuthTokenGateway {
         } catch (IllegalArgumentException ex) {
             // Spring's message can quote the URL it couldn't expand, and the URL carries the tenant. The
             // JDK client throws this too on a response it can't read, so the message covers both.
-            throw new IllegalStateException("The OAuth token request failed: its URL or the response isn't usable");
+            throw ConnectApiException.tokenRequestFailed("The OAuth token request failed: its URL or the response isn't usable");
         } catch (RestClientResponseException ex) {
             // No cause: Spring's message names the token URL, which carries the tenant, and quotes
             // Entra's error body, which names the app (tsanetgit/Connect_SDK#131). That is also why
             // only the error code is read from the body, never error_description.
-            throw new IllegalStateException(
-                "OAuth client-credentials request failed: HTTP " + ex.getStatusCode().value()
-                    + oauthErrorCodeSuffix(ex.getResponseBodyAsString())
-            );
+            String failed = "OAuth client-credentials request failed: HTTP " + ex.getStatusCode().value()
+                + oauthErrorCodeSuffix(ex.getResponseBodyAsString());
+            // A 5xx is the endpoint failing, not a refusal of these credentials.
+            if (ex.getStatusCode().is5xxServerError()) {
+                throw ConnectApiException.tokenRequestFailed(failed);
+            }
+            throw new IllegalStateException(failed);
         } catch (ResourceAccessException ex) {
             // Spring's message embeds the token URL, and the URL carries the tenant: keep only the
             // transport's own exception (tsanetgit/Connect_SDK#131). Spring's JDK request reports an
@@ -113,10 +117,10 @@ public class OAuthTokenGateway {
             token = new OAuthAccessToken(accessToken, expiresIn);
         } catch (IllegalStateException missing) {
             // textValue's own message, which names the field and no value.
-            throw new IllegalStateException("Failed to parse OAuth token response", missing);
+            throw ConnectApiException.tokenRequestFailed(missing.getMessage());
         } catch (Exception ex) {
             // No cause: Jackson's message quotes a token it doesn't recognize, which can be this one.
-            throw new IllegalStateException("Failed to parse OAuth token response");
+            throw ConnectApiException.tokenRequestFailed("Failed to parse OAuth token response");
         }
         BearerTokens.requireSendable(token.accessToken());
         return token;
