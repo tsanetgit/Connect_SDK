@@ -16,11 +16,24 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@link PartnerKeys} from a JWKS URL pinned per company in configuration, fetched over HTTPS (plain
  * HTTP only to this machine, for tests and a local key server) and cached. A fetch that fails, answers anything but 200, or returns a set with a private key is
  * refused; a cached set is used until it is older than the cache lifetime.
+ *
+ * <p>After a failed fetch, a lookup that would fetch that company's set throws instead for the next
+ * minute, whatever the cache lifetime, so an endpoint that is down gets one request a minute per
+ * company. A set still within its lifetime is served as usual. Lookups running at the same moment
+ * don't share a fetch, so each can fetch until the first failure is recorded. A fetch that was
+ * interrupted counts as failed once it has run for two seconds, so an endpoint that hangs is limited
+ * too, even with callers that cancel inside the fetch timeout. Interrupted sooner, it records no
+ * failure, so a hang is limited only for callers whose budget is at least that long.
  */
 public final class PinnedJwksPartnerKeys implements PartnerKeys {
     private static final Duration FETCH_TIMEOUT = Duration.ofSeconds(10);
     private static final int MAX_JWKS_BYTES = 64 * 1024;
+    // Both the refetch limit after a success and the wait after a failure.
     private static final Duration MIN_REFRESH_INTERVAL = Duration.ofMinutes(1);
+    // A fetch cancelled after this long counts as failed. Well above a normal fetch of a small JSON
+    // document, so a caller's short budget can't block a healthy endpoint's keys for a minute, and
+    // below the 4 s budget Connect_Gateway's key warm-up cancels at, which must count.
+    static final Duration CANCELLED_FETCH_AGE = Duration.ofSeconds(2);
     // Virtual threads, so a stalled read never holds a pool thread; it ends when the stream is closed.
     private static final java.util.concurrent.ExecutorService READERS =
         java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
@@ -31,6 +44,7 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
     private final Clock clock;
     private final Duration fetchTimeout;
     private final Map<String, Cached> cache = new ConcurrentHashMap<>();
+    private final Map<String, Instant> lastFailure = new ConcurrentHashMap<>();
 
     private record Cached(JWKSet keys, Instant fetchedAt) {
     }
@@ -73,7 +87,9 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
     /**
      * Fetches again, unless this company's set was fetched within the last minute: after a partner
      * rotates its signing key, its first manifest under the new {@code kid} isn't refused for the
-     * rest of the cache lifetime, and a sender naming unknown kids can't make every read a fetch.
+     * rest of the cache lifetime, and a sender naming unknown kids can't make every read a fetch. A
+     * fetch for this company that failed within the last minute makes this throw without fetching,
+     * so that holds while the endpoint is down too.
      */
     @Override
     public JWKSet refreshedPublicKeys(String companyId) throws IOException {
@@ -86,9 +102,7 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
         if (cached != null && cached.fetchedAt().plus(MIN_REFRESH_INTERVAL).isAfter(now)) {
             return cached.keys();
         }
-        JWKSet fetched = fetch(url, companyId);
-        cache.put(companyId, new Cached(fetched, now));
-        return fetched;
+        return fetchAndCache(url, companyId, now);
     }
 
     @Override
@@ -102,8 +116,32 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
         if (cached != null && cached.fetchedAt().plus(cacheLifetime).isAfter(now)) {
             return cached.keys();
         }
-        JWKSet fetched = fetch(url, companyId);
+        return fetchAndCache(url, companyId, now);
+    }
+
+    // The one place a lookup reaches the network, so the wait after a failure applies only where a
+    // fetch would happen. Lookups don't share a fetch: one that started first can fail just after
+    // another succeeds, starting a wait next to a fresh set. That set is still served; once it's a
+    // minute old, a refetch for an unknown kid in that wait reads as KeysUnavailable, which is retryable.
+    private JWKSet fetchAndCache(URI url, String companyId, Instant now) throws IOException {
+        Instant failedAt = lastFailure.get(companyId);
+        if (failedAt != null && failedAt.plus(MIN_REFRESH_INTERVAL).isAfter(now)) {
+            throw new IOException("The JWKS for company " + companyId + " wasn't fetched: a fetch failed within the last minute");
+        }
+        JWKSet fetched;
+        try {
+            fetched = fetch(url, companyId);
+        } catch (IOException failed) {
+            // An early interrupt is this caller's short budget, not the partner's failure. Timed when
+            // the fetch ended, or a slow failure would use up the wait while it ran.
+            Instant ended = clock.instant();
+            if (!Thread.currentThread().isInterrupted() || !ended.isBefore(now.plus(CANCELLED_FETCH_AGE))) {
+                lastFailure.put(companyId, ended);
+            }
+            throw failed;
+        }
         cache.put(companyId, new Cached(fetched, now));
+        lastFailure.remove(companyId);
         return fetched;
     }
 
@@ -115,6 +153,10 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
             throw new IOException("Interrupted fetching the JWKS for company " + companyId);
+        } catch (IllegalArgumentException malformed) {
+            // The JDK client throws this on a response it can't read, such as a Content-Length that isn't
+            // a number. The partner chooses that response, so it's a failed fetch like any other.
+            throw new IOException("The JWKS for company " + companyId + " answered with a malformed HTTP response");
         }
         try (java.io.InputStream body = response.body()) {
             if (response.statusCode() != 200) {
