@@ -39,7 +39,7 @@ import tools.jackson.databind.node.ObjectNode;
  * <p>The demo's own company is never in the table: {@link #view} answers it from the demo's own
  * public set, never fetched. Every write rebuilds the pinned fetcher, which copies its URL map.
  */
-public class PartnerKeysStore {
+public class PartnerKeysStore implements AutoCloseable {
 
     public static final String SOURCE_URL = "url";
     public static final String SOURCE_JWKS = "jwks";
@@ -172,8 +172,23 @@ public class PartnerKeysStore {
     // The new snapshot is built, and so checked, before anything is written or published.
     private void commit(Map<String, Entry> next) {
         Snapshot built = Snapshot.of(next);
-        write(next);
+        try {
+            write(next);
+        } catch (RuntimeException failed) {
+            built.pinned().close();
+            throw failed;
+        }
+        Snapshot replaced = this.snapshot;
         this.snapshot = built;
+        // A lookup that read the old snapshot just before this finishes a fetch already sent, is answered
+        // from a set it holds, or reads as KeysUnavailable, which a retry answers from the new one.
+        replaced.pinned().close();
+    }
+
+    /** Stops the current fetcher's client; for when the demo shuts down. */
+    @Override
+    public synchronized void close() {
+        snapshot.pinned().close();
     }
 
     /**

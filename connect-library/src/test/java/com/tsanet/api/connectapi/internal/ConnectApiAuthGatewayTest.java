@@ -44,7 +44,7 @@ class ConnectApiAuthGatewayTest {
         ConnectApiAuthGateway gateway = new ConnectApiAuthGateway(identityApi);
 
         assertThatThrownBy(() -> gateway.login("api@test.com", "secret"))
-            .isInstanceOf(IllegalStateException.class)
+            .isInstanceOf(com.tsanet.api.ConnectApiException.class)
             .hasMessageContaining("accessToken is missing");
     }
 }

@@ -46,6 +46,13 @@ class ConnectApiNotesGatewayTest {
     }
 
     @Test
+    void aNoteWithNoPriorityIsRefusedWithAReason() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> gateway.createNote("tok", "summary", "description", null))
+            .isExactlyInstanceOf(IllegalArgumentException.class)
+            .hasMessage("A note priority is required");
+    }
+
+    @Test
     void itMapsNotesAndPersistsThem() {
         CaseNoteDTO apiNote = new CaseNoteDTO()
             .id(7L)

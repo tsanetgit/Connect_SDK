@@ -24,15 +24,19 @@ import java.util.concurrent.ConcurrentHashMap;
  * interrupted counts as failed once it has run for two seconds, so an endpoint that hangs is limited
  * too, even with callers that cancel inside the fetch timeout. Interrupted sooner, it records no
  * failure, so a hang is limited only for callers whose budget is at least that long.
+ *
+ * <p>An instance holds a JDK {@code HttpClient}, with its selector thread, from the moment it's built.
+ * {@link #close} one you drop, for example when the JWKS URLs change. {@link PartnerKeys} has no
+ * close, since other sources may hold nothing, so whoever builds this instance owns closing it.
  */
-public final class PinnedJwksPartnerKeys implements PartnerKeys {
+public final class PinnedJwksPartnerKeys implements PartnerKeys, AutoCloseable {
     private static final Duration FETCH_TIMEOUT = Duration.ofSeconds(10);
     private static final int MAX_JWKS_BYTES = 64 * 1024;
     // Both the refetch limit after a success and the wait after a failure.
     private static final Duration MIN_REFRESH_INTERVAL = Duration.ofMinutes(1);
     // A fetch cancelled after this long counts as failed. Well above a normal fetch of a small JSON
     // document, so a caller's short budget can't block a healthy endpoint's keys for a minute, and
-    // below the 4 s budget Connect_Gateway's key warm-up cancels at, which must count.
+    // low enough that a caller cancelling at a budget of a few seconds still counts.
     static final Duration CANCELLED_FETCH_AGE = Duration.ofSeconds(2);
     // Virtual threads, so a stalled read never holds a pool thread; it ends when the stream is closed.
     private static final java.util.concurrent.ExecutorService READERS =
@@ -45,6 +49,7 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
     private final Duration fetchTimeout;
     private final Map<String, Cached> cache = new ConcurrentHashMap<>();
     private final Map<String, Instant> lastFailure = new ConcurrentHashMap<>();
+    private final boolean ownsClient;
 
     private record Cached(JWKSet keys, Instant fetchedAt) {
     }
@@ -56,12 +61,28 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
      * @throws IllegalArgumentException if a URL has no host or uses an unsupported scheme
      */
     public PinnedJwksPartnerKeys(Map<String, URI> jwksUrls, Duration cacheLifetime) {
-        this(jwksUrls, cacheLifetime, HttpClient.newBuilder().connectTimeout(FETCH_TIMEOUT).build(), Clock.systemUTC(),
-            FETCH_TIMEOUT);
+        // Checked as the first argument, so a refused URL never starts a client that nothing would stop.
+        this(checked(jwksUrls), cacheLifetime, HttpClient.newBuilder().connectTimeout(FETCH_TIMEOUT).build(),
+            Clock.systemUTC(), FETCH_TIMEOUT, true);
     }
 
+    /** With a client the caller owns, which {@link #close} leaves running. */
     PinnedJwksPartnerKeys(Map<String, URI> jwksUrls, Duration cacheLifetime, HttpClient http, Clock clock,
                           Duration fetchTimeout) {
+        this(checked(jwksUrls), cacheLifetime, http, clock, fetchTimeout, false);
+    }
+
+    private PinnedJwksPartnerKeys(Map<String, URI> jwksUrls, Duration cacheLifetime, HttpClient http, Clock clock,
+                                  Duration fetchTimeout, boolean ownsClient) {
+        this.jwksUrls = jwksUrls;
+        this.cacheLifetime = cacheLifetime;
+        this.http = http;
+        this.clock = clock;
+        this.fetchTimeout = fetchTimeout;
+        this.ownsClient = ownsClient;
+    }
+
+    private static Map<String, URI> checked(Map<String, URI> jwksUrls) {
         for (URI url : jwksUrls.values()) {
             if (url.getHost() == null) {
                 throw new IllegalArgumentException("A JWKS URL must have a host");
@@ -70,11 +91,23 @@ public final class PinnedJwksPartnerKeys implements PartnerKeys {
                 throw new IllegalArgumentException("A JWKS URL must be HTTPS");
             }
         }
-        this.jwksUrls = Map.copyOf(jwksUrls);
-        this.cacheLifetime = cacheLifetime;
-        this.http = http;
-        this.clock = clock;
-        this.fetchTimeout = fetchTimeout;
+        // The copy too, since it refuses a null key: everything that can refuse runs before the client starts.
+        return Map.copyOf(jwksUrls);
+    }
+
+    /**
+     * Stops the client this instance built. It doesn't wait: a fetch already sent runs to completion
+     * and its set is returned. After that, a lookup a held set answers is still answered, and one that
+     * would fetch throws {@code IOException}, which {@code E2eeProfile} reports as
+     * {@code KeysUnavailable}, so closing can't turn a valid record into a refusal. Closing twice
+     * does nothing more.
+     */
+    // shutdown, not close: close waits for fetches in flight, which would stall replacing an instance.
+    @Override
+    public void close() {
+        if (ownsClient) {
+            http.shutdown();
+        }
     }
 
     // Plain HTTP only to this machine, for tests and a local key server; never to another host.

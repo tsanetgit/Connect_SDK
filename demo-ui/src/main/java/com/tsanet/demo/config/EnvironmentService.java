@@ -216,6 +216,8 @@ public class EnvironmentService {
     public void close() {
         sessions.values().forEach(holder -> holder.session().close());
         sessions.clear();
+        partnerKeyStores.values().forEach(PartnerKeysStore::close);
+        partnerKeyStores.clear();
     }
 
     private TsaNetApiSession create(

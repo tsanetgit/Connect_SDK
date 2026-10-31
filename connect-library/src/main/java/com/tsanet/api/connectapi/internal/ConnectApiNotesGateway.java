@@ -92,6 +92,9 @@ public class ConnectApiNotesGateway {
         CaseNoteTemplateDTO template = new CaseNoteTemplateDTO();
         template.setSummary(encrypted ? summary : summary.strip());
         template.setDescription(encrypted ? description : description.strip());
+        if (priority == null) {
+            throw new IllegalArgumentException("A note priority is required");
+        }
         template.setPriority(NotePriority.fromValue(priority));
         if (type != null) {
             template.setType(new NoteTypeReferenceDTO().code(type));

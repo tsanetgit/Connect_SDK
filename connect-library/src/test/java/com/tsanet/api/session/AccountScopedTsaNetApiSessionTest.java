@@ -133,13 +133,16 @@ class AccountScopedTsaNetApiSessionTest {
             }
         })).toList();
 
-        for (int i = 0; i < 20_000 && failure.get() == null; i++) {
-            session.bindAccountForTesting("alpha");
-            session.close();
-        }
-        stop.set(true);
-        for (Thread thread : threads) {
-            thread.join();
+        try {
+            for (int i = 0; i < 20_000 && failure.get() == null; i++) {
+                session.bindAccountForTesting("alpha");
+                session.close();
+            }
+        } finally {
+            stop.set(true);
+            for (Thread thread : threads) {
+                thread.join();
+            }
         }
 
         assertThat(failure.get()).isNull();

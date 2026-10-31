@@ -139,6 +139,78 @@ class OAuthTokenGatewayTest {
             .hasNoCause();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "http://[MARKER/oauth2/v2.0/token",
+        "http://bad host/MARKER/oauth2/v2.0/token",
+        "http://login.example/{MARKER}/oauth2/v2.0/token",
+        "not a url MARKER"
+    })
+    void aTokenUrlThatCantBeParsedIsRefusedWithoutQuotingIt(String tokenUrl) {
+        OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
+
+        Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> gateway.fetchClientCredentialsToken(
+            new ClientCredentialsAuthConfig("tenant", tokenUrl, "client-id", "client-secret", "api://audience", null)));
+
+        assertThat(thrown).isNotNull();
+        for (Throwable t = thrown; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            assertThat(t.toString()).doesNotContain("MARKER").doesNotContain("login.example");
+        }
+    }
+
+    @Test
+    void aTokenUrlSpringCantExpandIsAFixedMessageWithNoCause() {
+        OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
+
+        assertThatThrownBy(() -> gateway.fetchClientCredentialsToken(new ClientCredentialsAuthConfig(
+            "tenant", "http://login.example/{MARKER}/token", "client-id", "client-secret", "api://audience", null)))
+            .isExactlyInstanceOf(com.tsanet.api.ConnectApiException.class)
+            .hasMessage("The OAuth token request failed: its URL or the response isn't usable")
+            .hasNoCause();
+    }
+
+    /** The other source of the same type: the JDK client on a response it can't read. */
+    @Test
+    void aResponseTheClientCantReadIsTheSameFixedMessage() throws Exception {
+        try (java.net.ServerSocket endpoint = new java.net.ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            Thread answer = Thread.ofVirtual().start(() -> {
+                try (java.net.Socket client = endpoint.accept()) {
+                    client.getInputStream().readNBytes(1);
+                    client.getOutputStream().write(
+                        "HTTP/1.1 400 Bad Request\r\nContent-Length: MARKER\r\n\r\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+                    client.getOutputStream().flush();
+                    Thread.sleep(200);
+                } catch (Exception ignored) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            String tokenUrl = "http://127.0.0.1:" + endpoint.getLocalPort() + "/token";
+            OAuthTokenGateway gateway = new OAuthTokenGateway(ConnectApiRestTemplates.newHttpClient());
+
+            Throwable thrown = org.assertj.core.api.Assertions.catchThrowable(() -> gateway.fetchClientCredentialsToken(
+                new ClientCredentialsAuthConfig("tenant", tokenUrl, "client-id", "client-secret", "api://audience", null)));
+
+            assertThat(thrown).isExactlyInstanceOf(com.tsanet.api.ConnectApiException.class)
+                .hasMessage("The OAuth token request failed: its URL or the response isn't usable")
+                .hasNoCause();
+            answer.join(java.time.Duration.ofSeconds(2));
+        }
+    }
+
+    @Test
+    void aTokenResponseWithNoAccessTokenNamesTheField() {
+        RestTemplate restTemplate = new RestTemplate();
+        MockRestServiceServer server = MockRestServiceServer.createServer(restTemplate);
+        server.expect(requestTo("https://login.microsoftonline.com/tenant/oauth2/v2.0/token"))
+            .andRespond(withSuccess("{\"expires_in\":3600}", MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> new OAuthTokenGateway(restTemplate).fetchClientCredentialsToken(
+            new ClientCredentialsAuthConfig("tenant", null, "client-id", "client-secret", "api://audience", null)))
+            .isExactlyInstanceOf(com.tsanet.api.ConnectApiException.class)
+            .hasMessage("OAuth token response missing access_token")
+            .hasNoCause();
+    }
+
     @Test
     void anUnreachableTokenEndpointIsConnectivityNamingNeitherTheUrlNorTheTenant() throws Exception {
         int closedPort;
