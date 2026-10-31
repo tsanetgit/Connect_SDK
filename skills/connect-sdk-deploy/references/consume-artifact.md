@@ -492,10 +492,10 @@ Watch the release notes on each release.
     the token, and a space, a tab or a Latin-1 character was sent. A malformed token response, an
     unusable token URL and a webhook callback URL that isn't a URI are refused with fixed messages
     that no longer quote them. Code that read those messages sees the new text. Three of them also
-    change type, so a 4.0.0 `catch` stops matching: an unusable token URL, and a token or login
-    response the JDK client can't read, go from `IllegalArgumentException` to
-    `IllegalStateException`, and a malformed login body goes from `RestClientException` to
-    `IllegalStateException`. A webhook callback URL stays `IllegalArgumentException`. A note with
+    change type, so a 4.0.0 `catch` stops matching: an unusable token URL or API base URL at
+    sign-in, and a token or login response the JDK client can't read, go from
+    `IllegalArgumentException` to `IllegalStateException`, and a malformed login body goes from
+    `RestClientException` to `IllegalStateException`. A webhook callback URL stays `IllegalArgumentException`. A note with
     no priority is refused with `A note priority is required`, not `Unexpected value 'null'`.
   - Malformed partner input no longer throws. A manifest or protected value that is the JSON
     `null`, or a recipient `kid` that isn't a string, is now a `Refused`. A JWKS endpoint serving
