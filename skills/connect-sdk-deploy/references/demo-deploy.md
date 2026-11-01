@@ -78,7 +78,9 @@ ends; never leave it up unattended, because the local app has no auth gate.
 
 The root `Dockerfile` builds a **runtime-only** image: it packages a jar you already
 built (the codegen needs the spec sibling, which the Docker build context lacks).
-Build the jar first, then:
+The page header shows `git describe` from the build, so build after any release tag and from
+a checkout that has its tags (`git fetch --tags`). A jar built before the tag names the
+previous tag and a commit count. Build the jar first, then:
 
 ```bash
 docker build --platform linux/amd64 -t connect-sdk-demo .
