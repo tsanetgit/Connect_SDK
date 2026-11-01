@@ -48,4 +48,43 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <!-- Stamps git.properties, which Spring Boot reads for /api/version. git-commit-id-maven-plugin
+                 isn't used here: in a linked worktree, where the deploy recipe builds, it reads the main
+                 clone's HEAD and stamps the wrong commit. Without a shell the version reads "unknown". -->
+            <id>stamp-version</id>
+            <activation>
+                <os>
+                    <family>unix</family>
+                </os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>stamp-version</id>
+                                <phase>process-classes</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>sh</executable>
+                                    <arguments>
+                                        <argument>-c</argument>
+                                        <argument>echo "git.commit.id.describe=$(git describe --tags --match 'v*' --always --dirty --abbrev=7 2>/dev/null)"; echo "git.commit.id.abbrev=$(git rev-parse --short=7 HEAD 2>/dev/null)"</argument>
+                                    </arguments>
+                                    <outputFile>${project.build.outputDirectory}/git.properties</outputFile>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

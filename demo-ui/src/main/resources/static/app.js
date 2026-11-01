@@ -1256,4 +1256,11 @@ document.getElementById('webhook-form').addEventListener('submit', async (event)
 
 // ---------- init ----------
 
+// On its own: a failure here hides the line and touches nothing else on the page.
+fetchJson('/api/version').then(({version}) => {
+    const line = document.getElementById('app-version');
+    line.textContent = `Version ${version}`;
+    line.hidden = false;
+}).catch(() => {});
+
 refreshIdentity().then(loadRequests);

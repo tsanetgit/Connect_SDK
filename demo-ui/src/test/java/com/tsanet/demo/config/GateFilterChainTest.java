@@ -111,6 +111,13 @@ class GateFilterChainTest {
             .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void theVersionIsBehindTheGate() throws Exception {
+        mvc.perform(get("/api/version")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/version").header(HttpHeaders.AUTHORIZATION, basic("oracle", "g")))
+            .andExpect(status().isOk());
+    }
+
     private Cookie csrfCookie(String authorization) throws Exception {
         Cookie cookie = mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, authorization))
             .andReturn().getResponse().getCookie("XSRF-TOKEN");
