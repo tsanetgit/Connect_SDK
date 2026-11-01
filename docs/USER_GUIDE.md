@@ -95,7 +95,7 @@ them, its mutating call answers `403` before the gate is checked, even with no l
 also configure a second gate login for guests (`TSANET_DEMO_AUTH_GUEST_USER` and
 `TSANET_DEMO_AUTH_GUEST_PASSWORD`); it opens the same demo with the same rights, except that a guest login has a
 lower upload limit: 1 GB by default (`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`), against the operator's 20 GB. A guest's `POST`, `PUT` or
-`PATCH` must declare a `Content-Length`, and any request's must be no greater than that: over it answers `413`, and a chunked request or a missing length answers `411`. The page always passes. A guest
+`PATCH` must declare a `Content-Length`, and any request's `Content-Length` must be no greater than that: over it answers `413`, and a chunked request or a missing length answers `411`. The page always passes. A guest
 sees whatever member credentials are currently stored and, unless the
 operator has locked them, can change them. With `TSANET_DEMO_CREDENTIALS_LOCKED`
 set, each environment card shows who the demo is signed in as, with the Make Active

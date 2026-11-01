@@ -112,7 +112,7 @@ you pay for Fargate, the load balancer and logs while the service exists (there 
 SSM Parameter Store as SecureStrings and let the task read them as secrets, so nothing sits in
 plaintext in the service configuration. The three `GUEST` values are optional: set the user and password to give
 members a second login with the same rights and a lower upload limit. A guest's `POST`, `PUT` or `PATCH` must declare a
-`Content-Length`, and any request's must be within the limit. `TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES` is that limit in bytes,
+`Content-Length`, and any request's `Content-Length` must be within the limit. `TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES` is that limit in bytes,
 1 GB when it isn't set; it isn't a secret, and goes through SSM here because that's this deploy's one route for the task's settings.
 Without a guest login, delete all three names from the loop (SSM refuses an empty SecureString) and the three matching
 `secrets` entries below. To keep the default guest username (`guest`), delete only the `GUEST_USER` name and entry. To keep
