@@ -179,7 +179,7 @@ If you give a guest login to people outside your team with E2EE on, run the demo
 needs the member seeds (see the lock paragraph below). On an unlocked demo, any gate login can add
 a partner JWKS URL, and the demo task then fetches it.
 
-**Build, push, create.** Build the jar (step 1), then:
+**Build, push, create.** The page header shows `git describe` from the build, so tag the release first and build from a checkout that has its tags (`git fetch --tags`). A jar built before the tag names the previous tag and a commit count. Build the jar (step 1), then:
 
 ```bash
 cd <DEMO_REPO>
