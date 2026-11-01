@@ -84,10 +84,19 @@ Save replaces it.
 When the app is deployed with the Basic-auth gate enabled
 (`TSANET_DEMO_AUTH_PASSWORD` set), the browser prompts for the gate
 credentials before the page loads — that gate protects the demo itself and is
-unrelated to the BETA member credentials entered inside it. The operator can
+unrelated to the BETA member credentials entered inside it. The demo is protected
+against cross-site requests whether or not the gate is on: every mutating call must
+carry a token from the `XSRF-TOKEN` cookie as an `X-XSRF-TOKEN` header, which the page
+does for you, so another site can't act through a browser holding the login. A refused
+call shows a message asking you to reload the page. A script that drives the demo's API
+has to do the same: read the cookie from any `GET`, then send it back with the header. Without
+them, its mutating call answers `403` before the gate is checked, even with no login. It has to be the header: the
+`_csrf` form parameter isn't read. With the gate on, `/healthz` and the public-key path are open to a plain `GET` only. The operator can
 also configure a second gate login for guests (`TSANET_DEMO_AUTH_GUEST_USER` and
-`TSANET_DEMO_AUTH_GUEST_PASSWORD`); it opens the same demo with the same rights,
-so a guest sees whatever member credentials are currently stored and, unless the
+`TSANET_DEMO_AUTH_GUEST_PASSWORD`); it opens the same demo with the same rights, except that a guest login has a
+lower upload limit: 1 GB by default (`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`), against the operator's 20 GB. A guest's `POST`, `PUT` or
+`PATCH` must declare a `Content-Length`, and any request's `Content-Length` must be no greater than that: over it answers `413`, and a chunked request or a missing length answers `411`. The page always passes. A guest
+sees whatever member credentials are currently stored and, unless the
 operator has locked them, can change them. With `TSANET_DEMO_CREDENTIALS_LOCKED`
 set, each environment card shows who the demo is signed in as, with the Make Active
 button on the other environments; saving or clearing credentials is refused, and the
@@ -253,7 +262,7 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 | Badge: "Auth failed: Authentication Failed — …" | Wrong BETA credentials (HTTP 401 problem details) |
 | Actions fail with "<title> — <detail>" | Upstream validation: wrong case state, off-domain engineer email. The API's problem-details title and detail are shown; a legacy `{"message"}` body is classified and shown the same way |
 | Case list loads but partner search errors | Partner search requires a valid session — re-check the badge first |
-| Build fails: `cannot find symbol … WebhooksApi` | Sibling `Connect-API-Code` checkout is on the wrong branch — needs `beta` |
+| Build fails: `cannot find symbol … WebhooksApi` | Sibling `Connect-API-Code` checkout is on the wrong branch: use the one that matches this repo's branch, `beta` for `main`, `develop` for `develop` |
 | Startup fails: "base URL must use https" | An environment's `api-base-url` is plain http. Fix the URL; `tsanet.demo.allow-insecure-http=true` is for a local mock only |
 
 ## 9. What the demo intentionally does not do
@@ -267,6 +276,6 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 
 - Upstream SDK: `tsanetgit/Connect_SDK` (branch `main`)
 - Transport contract: `tsanetgit/Connect-API-Code`
-  `connect-core-api/src/main/resources/openapi.yaml` (branch `beta`)
+  `connect-core-api/src/main/resources/openapi.yaml` (branch `beta` for this repo's `main`, `develop` for `develop`)
 - Business rules (case lifecycle validity): TSANet Connect GitBook /
   Integration Guide — never inferred from the schema

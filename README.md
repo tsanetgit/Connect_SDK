@@ -34,8 +34,10 @@ The working steps, in order:
 ## Branch notes: what builds today
 
 - **`main` and `develop`.** `main` is what works against the released platform: it
-  builds against Connect-API-Code `beta`, and releases are cut from it. `develop` is
-  where work that needs unreleased API changes lands first: it builds against
+  builds against Connect-API-Code `beta`, and releases are cut from it. `publish.yml`
+  refuses any commit that isn't on `main`'s first-parent line, so a hotfix or `release/*`
+  branch has to merge to `main` first, and the release is cut from the resulting commit on `main`.
+  `develop` is where work that needs unreleased API changes lands first: it builds against
   Connect-API-Code `develop`. Library and console PRs target `develop`, including a
   `demo-ui` change that needs library work; a change only to `demo-ui` and its docs, the
   hosted demo or repo config targets `main`. Other docs and skill changes follow what
@@ -84,18 +86,22 @@ The `demo-ui` module (adopted from `shawn-tsanet/connect-sdk-demo` in
 `tsanetgit/Connect_SDK#59`) is documented under [`docs/`](docs/):
 
 - [USER_GUIDE](docs/USER_GUIDE.md): what the demo does and how to drive it
-- [RUNBOOK](docs/RUNBOOK.md): build, start, credentials, tunnel, shutdown
-- [azure-deployment](docs/azure-deployment.md) and
-  [aws-hosting-options](docs/aws-hosting-options.md): hosting
+- [RUNBOOK](docs/RUNBOOK.md): build, start, credentials, tunnel, shutdown, and
+  [hosting on AWS](docs/RUNBOOK.md#6-optional-hosted-on-aws-ecs-express-mode)
+- [azure-deployment](docs/azure-deployment.md): hosting on Azure
+- [aws-hosting-options](docs/aws-hosting-options.md): the July 2026 AWS decision
+  record, kept as history
 - [porting-scope](docs/porting-scope.md): Python/JS/TS follow-on scoping
 
 The root `Dockerfile` builds the demo-ui runtime image; the jar is built outside
 docker first (see the Dockerfile header). A hosted deploy must set
 `TSANET_DEMO_AUTH_PASSWORD`, or the app runs with no auth gate. An optional
-second login for members, with the same rights, comes from
+second login for members, with the same rights and a lower upload limit, comes from
 `TSANET_DEMO_AUTH_GUEST_USER` (default `guest`) and
 `TSANET_DEMO_AUTH_GUEST_PASSWORD`; it is active only when that password is set
-(`tsanetgit/Connect_SDK#148`). When the operator pre-loads the member credentials,
+(`tsanetgit/Connect_SDK#148`). A guest's `POST`, `PUT` or `PATCH` must declare a
+`Content-Length`, and any request's `Content-Length` must be within the limit, 1 GB by default against the operator's 20 GB
+(`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`), so a guest can't send chunked. When the operator pre-loads the member credentials,
 `TSANET_DEMO_CREDENTIALS_LOCKED=true` turns Settings into a read-only "Signed in as"
 view with the environment switch, and the save and clear endpoints refuse
 (`tsanetgit/Connect_SDK#152`). To pre-load those credentials on an ephemeral host,

@@ -10,7 +10,7 @@ WORKDIR /app
 
 COPY demo-ui/target/demo-ui-0.0.1-SNAPSHOT.jar app.jar
 
-# Per-env credentials + sqlite caches land here; ephemeral on App Runner by design.
+# Per-env credentials + sqlite caches land here; ephemeral on a hosted container by design.
 ENV TSANET_DEMO_DATA_DIR=/tmp/tsanet-demo
 
 EXPOSE 8090

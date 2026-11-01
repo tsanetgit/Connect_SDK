@@ -83,7 +83,7 @@ TsaNetApiSession account = factory.openSessionForAccount("api@appko.com", "secre
 
 Each `sessionLabel` gets its own database file: `data-acme.db`, `data-beta.db` (when the base path ends with `.db`). `openSessionForAccount()` uses `AccountSessionLabel.fromUsername()` so `api@appko.com` maps to `data-api-appko.com.db`.
 
-A session holds an HTTP client from the moment it opens. `TsaNetApiSession` is `AutoCloseable`: close a session you drop, for example when credentials change. `close()` doesn't wait: requests already sent run to completion, and a later request fails the way an unreachable API does (`ConnectApiException` of kind `CONNECTIVITY`, or `AttachmentV2Exception` `client/connectivity` on the V2 facades), so a `send` still running can't complete its grant, which stays open until it expires. The SQLite cache stays on disk. `AccountScopedTsaNetApiSession` differs: `close()` leaves it with no session until the next login, and a login or authenticate as a different account closes the previous account's session.
+A session holds an HTTP client from the moment it opens. `TsaNetApiSession` is `AutoCloseable`: close a session you drop, for example when credentials change. `close()` doesn't wait: requests already sent run to completion, and a later request fails the way an unreachable API does (`ConnectApiException` of kind `CONNECTIVITY`, or `AttachmentV2Exception` `client/connectivity` on the V2 facades), so a further batch of links or a link refresh fails and stops an upload already running, and a `send` still running can't complete its grant, which stays open until it expires. The SQLite cache stays on disk. `AccountScopedTsaNetApiSession` differs: `close()` leaves it with no session until the next login, and a login or authenticate as a different account closes the previous account's session.
 
 ## SQLite persistence
 
@@ -222,8 +222,8 @@ which report failures as `AttachmentV2Exception` instead.
 
 | Member | Meaning |
 |--------|---------|
-| `kind()` | `PROBLEM` (an RFC 7807 body), `LEGACY` (the `{"message"}` body), `CONNECTIVITY` (the API could not be reached, or its answer was lost), `OTHER` (a non-2xx with no recognizable body; a redirect, which the library never follows; or a call the caller interrupted). |
-| `status()` | The status the API asserted: a problem body's own `status` when it carries one, otherwise the wire status; `0` for `CONNECTIVITY` and an interrupted call. |
+| `kind()` | `PROBLEM` (an RFC 7807 body), `LEGACY` (the `{"message"}` body), `CONNECTIVITY` (the API could not be reached, or its answer was lost), `OTHER` (a non-2xx with no recognizable body; a redirect, which the library never follows; a call the caller interrupted; or a token request that failed without being refused). |
+| `status()` | The status the API asserted: a problem body's own `status` when it carries one, otherwise the wire status; `0` for `CONNECTIVITY`, an interrupted call and a token request that failed without being refused. |
 | `type()`, `title()`, `detail()`, `instance()` | The problem-details fields, or null where the answer had none. For `LEGACY`, only `detail()` is set: the body's `message`, with any `validationErrors` folded in as `[field: message]`. For `CONNECTIVITY`, `detail()` is the failure's class name only, and `title()` is `OAuth token endpoint` when the OAuth client-credentials token call is what failed. |
 | `isProblem(typeSuffix)` | `true` when `type()` ends with the given suffix, e.g. `isProblem("case-update-error")`. |
 | `getMessage()` | `HTTP <status> <title> (<type suffix>): <detail>` for `PROBLEM`, `HTTP <status> (legacy error): <detail>` for `LEGACY`, built from the fields above. |

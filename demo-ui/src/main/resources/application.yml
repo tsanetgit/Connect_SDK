@@ -8,8 +8,18 @@ spring:
       # this is a deliberate contract change, not an upgrade side effect.
       fail-on-null-for-primitives: false
 
+  mvc:
+    formcontent:
+      filter:
+        # It runs ahead of the login check and reads a form-encoded PUT, PATCH or DELETE body.
+        # Every mutating route here takes JSON or multipart, so nothing uses it.
+        enabled: false
+
   servlet:
     multipart:
+      # Read a multipart body only when a controller asks for a part, not for every request that
+      # declares one, whatever its method or path.
+      resolve-lazily: true
       # The direct-delivery (V2) demo hands a file to the SDK to stream into the
       # partner's store; the default 1 MB cap would stop it before the first grant.
       max-file-size: 20GB
@@ -80,9 +90,12 @@ tsanet:
       # place those defaults live.
       username: ${TSANET_DEMO_AUTH_USER:}
       password: ${TSANET_DEMO_AUTH_PASSWORD:}
-      # Optional second login with the same rights, for members using a hosted demo
+      # Optional second login with the same rights and a lower upload limit, for members using a hosted demo
       # (tsanetgit/Connect_SDK#148). Active only when its password is set; a guest
       # password with no operator password, or the same username for both, fails startup.
       guest:
         username: ${TSANET_DEMO_AUTH_GUEST_USER:}
         password: ${TSANET_DEMO_AUTH_GUEST_PASSWORD:}
+        # A guest login's upload limit, in bytes. Blank means 1 GB (in DemoAuthProperties). The
+        # operator keeps spring.servlet.multipart's limit above.
+        max-upload-bytes: ${TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES:}

@@ -115,7 +115,7 @@ public class SettingsController {
         }
         try {
             if (url) {
-                URI jwksUrl = URI.create(body.jwksUrl().strip());
+                URI jwksUrl = parseJwksUrl(body.jwksUrl().strip());
                 // The card admits HTTPS only (#149 §1). The module also allows loopback HTTP for a local key
                 // server in tests; a gate login, the guest included, must not be able to make the hosted
                 // task fetch its own ports through here.
@@ -377,5 +377,14 @@ public class SettingsController {
     /** {@code credentialsLocked} mirrors {@code tsanet.demo.credentials-locked}, so the page needn't guess; it covers the partner table too. */
     public record SettingsStatus(String activeEnvironment, List<EnvironmentStatus> environments, boolean credentialsLocked,
                                  E2eeStatus e2ee) {
+    }
+
+    private static URI parseJwksUrl(String url) {
+        try {
+            return URI.create(url);
+        } catch (IllegalArgumentException notAUri) {
+            // The JDK's message quotes the URL, which can carry a secret in its query.
+            throw new IllegalArgumentException("A partner JWKS URL must be a valid URI");
+        }
     }
 }

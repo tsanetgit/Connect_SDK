@@ -99,8 +99,11 @@ member credentials in Settings.
 The app runs **open** when `TSANET_DEMO_AUTH_PASSWORD` is unset; that is only
 acceptable on localhost. Any deployment reachable by others MUST set
 `TSANET_DEMO_AUTH_USER` and `TSANET_DEMO_AUTH_PASSWORD`, which puts a browser
-password prompt in front of everything. `/healthz` stays open for platform health
-checks. Remember what sits behind the gate: a UI that holds live member credentials
+password prompt in front of everything. `/healthz` stays open to a plain `GET` for
+platform health checks. An optional guest login (`TSANET_DEMO_AUTH_GUEST_USER`, `TSANET_DEMO_AUTH_GUEST_PASSWORD`)
+has the operator's rights and a lower upload limit: 1 GB by default, set with
+`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`, against the operator's 20 GB. A guest's `POST`, `PUT` or
+`PATCH` must declare a `Content-Length`, and any request's `Content-Length` must be within that limit, so a guest can't send chunked: it answers `411`. Remember what sits behind the gate: a UI that holds live member credentials
 and can create real collaboration cases against partner companies.
 
 ### End-to-end encryption on the demo (optional)

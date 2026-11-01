@@ -143,6 +143,11 @@ class E2eePartnerSettingsTest {
         mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)
                 .content(json("jwksUrl", "http://keys.partner.example/jwks.json")))
             .andExpect(status().isBadRequest());
+        // A URL that isn't one is refused without quoting it: it can carry a secret in its query.
+        mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)
+                .content(json("jwksUrl", "https://bad host/jwks.json?token=MARKER")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.error").value("A partner JWKS URL must be a valid URI"));
         // Loopback HTTP, which the module allows for a local key server in tests, is refused on the card:
         // a gate login must not make the hosted task fetch its own ports.
         mvc.perform(put("/api/settings/beta/e2ee-partners/2087").contentType(MediaType.APPLICATION_JSON)

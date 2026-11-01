@@ -54,7 +54,12 @@ public class ConnectApiWebhooksGateway {
         requireLogin();
 
         CreateWebhookSubscriptionRequestDTO request = new CreateWebhookSubscriptionRequestDTO();
-        request.setCallbackUrl(URI.create(callbackUrl));
+        try {
+            request.setCallbackUrl(URI.create(callbackUrl));
+        } catch (IllegalArgumentException notAUri) {
+            // No cause: the JDK's message quotes the URL, which can carry a secret in its query.
+            throw new IllegalArgumentException("The webhook callback URL is not a valid URI");
+        }
         if (eventTypes != null && !eventTypes.isEmpty()) {
             request.setEventTypes(eventTypes.stream().map(WebhookEventType::fromValue).toList());
         }

@@ -37,10 +37,14 @@ mvn -q -pl connect-library -am install -DskipTests
 mvn -q -pl demo-ui -am package -DskipTests
 ```
 
-If the build fails with `cannot find symbol ...`, the sibling spec repo is probably on the wrong branch. Check out the one that matches this repo's branch, `beta` for `main`:
+If the build fails with `cannot find symbol ...`, the sibling spec repo is probably on the wrong branch. Check out the one that matches this repo's branch:
 
 ```bash
+# This repo on main
 cd <REPO_ROOT>/Connect-API-Code && git checkout beta
+
+# This repo on develop
+cd <REPO_ROOT>/Connect-API-Code && git checkout develop
 ```
 
 ## 2. Start the server
@@ -106,16 +110,19 @@ you pay for Fargate, the load balancer and logs while the service exists (there 
 
 **Auth gate** is mandatory on any hosted deploy. Put the gate values and the Entra values in
 SSM Parameter Store as SecureStrings and let the task read them as secrets, so nothing sits in
-plaintext in the service configuration. The two `GUEST` values are optional: set them to give
-members a second login with the same rights. Without a guest login, delete those two names from
-the loop (SSM refuses an empty SecureString) and the two matching `secrets` entries below. To
-keep the default guest username (`guest`), delete only the `GUEST_USER` name and entry. The four
+plaintext in the service configuration. The three `GUEST` values are optional: set the user and password to give
+members a second login with the same rights and a lower upload limit. A guest's `POST`, `PUT` or `PATCH` must declare a
+`Content-Length`, and any request's `Content-Length` must be within the limit. `TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES` is that limit in bytes,
+1 GB when it isn't set; it isn't a secret, and goes through SSM here because that's this deploy's one route for the task's settings.
+Without a guest login, delete all three names from the loop (SSM refuses an empty SecureString) and the three matching
+`secrets` entries below. To keep the default guest username (`guest`), delete only the `GUEST_USER` name and entry. To keep
+the 1 GB default, delete only the `GUEST_MAX_UPLOAD_BYTES` name and entry. The four
 `SEED` values are the member credentials written into each environment's store at startup (see
 the lock paragraph below); without them, delete those names, their `secrets` entries and the
 `environment` block, and run the demo unlocked.
 
 ```bash
-for v in TSANET_DEMO_AUTH_USER TSANET_DEMO_AUTH_PASSWORD TSANET_DEMO_AUTH_GUEST_USER TSANET_DEMO_AUTH_GUEST_PASSWORD TSANET_DEMO_ENTRA_TENANT TSANET_DEMO_ENTRA_AUDIENCE_BETA TSANET_DEMO_ENTRA_AUDIENCE_DEV TSANET_DEMO_SEED_BETA_USERNAME TSANET_DEMO_SEED_BETA_PASSWORD TSANET_DEMO_SEED_DEV_USERNAME TSANET_DEMO_SEED_DEV_PASSWORD; do
+for v in TSANET_DEMO_AUTH_USER TSANET_DEMO_AUTH_PASSWORD TSANET_DEMO_AUTH_GUEST_USER TSANET_DEMO_AUTH_GUEST_PASSWORD TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES TSANET_DEMO_ENTRA_TENANT TSANET_DEMO_ENTRA_AUDIENCE_BETA TSANET_DEMO_ENTRA_AUDIENCE_DEV TSANET_DEMO_SEED_BETA_USERNAME TSANET_DEMO_SEED_BETA_PASSWORD TSANET_DEMO_SEED_DEV_USERNAME TSANET_DEMO_SEED_DEV_PASSWORD; do
   aws ssm put-parameter --region <REGION> --name "/connect-sdk-demo/$v" --type SecureString --value "<value>" --overwrite
 done
 ```
@@ -199,6 +206,7 @@ don't use):
     {"name": "TSANET_DEMO_AUTH_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_PASSWORD"},
     {"name": "TSANET_DEMO_AUTH_GUEST_USER", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_USER"},
     {"name": "TSANET_DEMO_AUTH_GUEST_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_PASSWORD"},
+    {"name": "TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES"},
     {"name": "TSANET_DEMO_ENTRA_TENANT", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_TENANT"},
     {"name": "TSANET_DEMO_ENTRA_AUDIENCE_BETA", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_BETA"},
     {"name": "TSANET_DEMO_ENTRA_AUDIENCE_DEV", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_DEV"},
@@ -296,3 +304,19 @@ pkill -f ngrok
 ```
 
 Credentials stay on disk for next time unless you clear them in Settings.
+
+## 8. A publish run that failed after the GitHub Release was published
+
+Publishing a GitHub Release starts `publish.yml`, and creates the tag if the Release was created without an existing one, so a failed run can leave a public Release and tag with no complete package behind them. There's no separate test step: `mvn deploy` is the build, and each module deploys as soon as its own build finishes, starting with the parent pom. So any failure in the "Build, test and publish" step, a failing test included, normally leaves at least the parent pom published under that version. Check the repository's Packages page to see what got out.
+
+| Where the run failed | What to do |
+|---|---|
+| "Build, test and publish" | Keep the tag, say in the Release notes that the version is incomplete, and mark it a pre-release (`gh release edit <TAG> --repo tsanetgit/Connect_SDK --prerelease`) so the latest-release link doesn't point at it. Don't reuse the version. Fix the cause through a PR and cut the next patch version |
+| "Require a commit on main", or "Resolve the version to publish" (`-SNAPSHOT`, or not `x.y.z`) | Nothing was built. Delete the Release and its tag, then cut it again with a correct tag, from a commit on `main`'s first-parent line |
+| Any other step before "Build, test and publish", such as a missing `CONNECT_API_CODE_TOKEN` or a failed checkout | Nothing was built, and the commit is fine. Keep the Release and tag, fix the cause and re-run the failed run. A re-run uses `publish.yml` from the tagged commit, so if the cause is in that file, delete the Release and tag and cut it again from the fixed commit |
+
+To delete a Release and its tag:
+
+```bash
+gh release delete <TAG> --repo tsanetgit/Connect_SDK --cleanup-tag
+```

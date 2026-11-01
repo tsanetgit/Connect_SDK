@@ -282,15 +282,17 @@ class VerificationRefusalTest {
         CaseNoteDto note = v.noteRecord();
         Map<String, Object> payload = v.map("example2_note_create", "manifest_payload");
         List<Manifest.FieldDigest> digests = List.of(
-            new Manifest.FieldDigest(Profile.PROBLEM_SUMMARY, Manifest.digest("null")),
-            new Manifest.FieldDigest(Profile.PROBLEM_DESCRIPTION, Manifest.digest(note.description())));
+            new Manifest.FieldDigest(Profile.NOTE_SUMMARY, Manifest.digest("null")),
+            new Manifest.FieldDigest(Profile.NOTE_DESCRIPTION, Manifest.digest(note.description())));
         String signed = Manifest.sign(new Manifest.Claims(Profile.VERSION, (String) payload.get("iss"), (String) payload.get("aud"),
             (String) payload.get("ref"), iat, (String) payload.get("jti"), digests), v.memberAKeys());
 
         Refused<?> onNote = refusal(memberB.verifyNote(
             Vectors.noteRecord("null", note.description(), signed, 1042L), original, Receipt.STORED_READ));
         assertThat(onNote.step()).isEqualTo(Step.FIELDS);
-        assertThat(onNote.field()).isEqualTo(Profile.PROBLEM_SUMMARY);
+        assertThat(onNote.field()).isEqualTo(Profile.NOTE_SUMMARY);
+        assertThat(onNote.reason()).as("the field check, past the one that the manifest's fields are on the record")
+            .isEqualTo("not a profile JWE");
     }
 
     @Test
@@ -317,11 +319,15 @@ class VerificationRefusalTest {
                 String tamperedNote = withRecipientKid(note.summary(), kid, pick);
                 String signedNote = Manifest.sign(new Manifest.Claims(Profile.VERSION, (String) notePayload.get("iss"),
                     (String) notePayload.get("aud"), (String) notePayload.get("ref"), iat, (String) notePayload.get("jti"), List.of(
-                        new Manifest.FieldDigest(Profile.PROBLEM_SUMMARY, Manifest.digest(tamperedNote)),
-                        new Manifest.FieldDigest(Profile.PROBLEM_DESCRIPTION, Manifest.digest(note.description())))),
+                        new Manifest.FieldDigest(Profile.NOTE_SUMMARY, Manifest.digest(tamperedNote)),
+                        new Manifest.FieldDigest(Profile.NOTE_DESCRIPTION, Manifest.digest(note.description())))),
                     v.memberAKeys());
-                assertThat(refusal(memberB.verifyNote(Vectors.noteRecord(tamperedNote, note.description(), signedNote, 1042L),
-                    original, Receipt.STORED_READ)).step()).as("note " + kid + " " + pick).isEqualTo(Step.FIELDS);
+                Refused<?> onNote = refusal(memberB.verifyNote(Vectors.noteRecord(tamperedNote, note.description(), signedNote, 1042L),
+                    original, Receipt.STORED_READ));
+                assertThat(onNote.step()).as("note " + kid + " " + pick).isEqualTo(Step.FIELDS);
+                assertThat(onNote.field()).as("note " + kid + " " + pick).isEqualTo(Profile.NOTE_SUMMARY);
+                assertThat(onNote.reason()).as("the field check, past the one that the manifest's fields are on the record")
+                    .isEqualTo("not a profile JWE");
             }
         }
     }

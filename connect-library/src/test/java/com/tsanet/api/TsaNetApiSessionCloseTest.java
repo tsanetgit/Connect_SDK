@@ -32,6 +32,7 @@ class TsaNetApiSessionCloseTest {
     private final CountDownLatch releaseMe = new CountDownLatch(1);
     private final AtomicInteger meCalls = new AtomicInteger();
     private volatile boolean holdMe;
+    private final AtomicInteger requests = new AtomicInteger();
     private HttpServer server;
     private String base;
 
@@ -54,6 +55,7 @@ class TsaNetApiSessionCloseTest {
     }
 
     private void handle(HttpExchange exchange) throws IOException {
+        requests.incrementAndGet();
         String path = exchange.getRequestURI().getPath();
         exchange.getRequestBody().readAllBytes();
         if (path.equals("/v1/login")) {
@@ -122,6 +124,22 @@ class TsaNetApiSessionCloseTest {
             .extracting(failure -> ((ConnectApiException) failure).kind())
             .isEqualTo(ConnectApiException.Kind.CONNECTIVITY);
         assertThat(meCalls).hasValue(before);
+    }
+
+    @Test
+    void aV2CallMadeAfterCloseIsClientConnectivityWithoutReachingTheServer() {
+        TsaNetApiSession session = signedInSession();
+        session.close();
+        requests.set(0);
+
+        assertThatThrownBy(() -> session.attachmentsV2().getGrant("case-token", 1L))
+            .isInstanceOfSatisfying(com.tsanet.api.attachments.v2.AttachmentV2Exception.class,
+                failure -> assertThat(failure.code()).isEqualTo("client/connectivity"));
+        // The calls an upload already running makes for a further batch of links.
+        assertThatThrownBy(() -> session.attachmentsV2().s3PartLinks("case-token", 1L, java.util.List.of(1)))
+            .isInstanceOfSatisfying(com.tsanet.api.attachments.v2.AttachmentV2Exception.class,
+                failure -> assertThat(failure.code()).isEqualTo("client/connectivity"));
+        assertThat(requests).hasValue(0);
     }
 
     @Test
