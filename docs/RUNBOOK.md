@@ -223,8 +223,8 @@ example below. It is a JSON list with one object per workspace:
   environment of every workspace, or expect the startup warning that names the workspace.
 - The demo refuses to start, naming `TSANET_DEMO_WORKSPACES`, the entry and the rule and never a value,
   when the list is not valid JSON, an entry has a field the demo does not know, a name is repeated or
-  not allowed, two logins share a username (operator, guest and workspaces together, without regard to
-  case), a seed is incomplete or mixes the two forms, a `clientId` seed is for an environment without
+  not allowed, a username has a colon in it (a browser's login cannot send one), two logins share a
+  username (operator, guest and workspaces together, without regard to case), a seed is incomplete or mixes the two forms, a `clientId` seed is for an environment without
   an Entra tenant and audience, a seed or partner seed names an environment that does not exist, or the
   gate is off (no `TSANET_DEMO_AUTH_PASSWORD`).
 

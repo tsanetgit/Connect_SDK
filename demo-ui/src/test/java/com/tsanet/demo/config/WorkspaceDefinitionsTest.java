@@ -112,6 +112,7 @@ class WorkspaceDefinitionsTest {
         "[{\"name\": \"default\", \"username\": \"team-a\", \"password\": \"s3cret-gate-pw\"}] | entry 1 is named default, which is the operator's own workspace",
         "[{\"name\": \"team-a\", \"username\": \"team-a\"}]                           | workspace team-a needs a username and a password",
         "[{\"name\": \"team-a\", \"username\": \"  \", \"password\": \"s3cret-gate-pw\"}] | workspace team-a needs a username and a password",
+        "[{\"name\": \"team-a\", \"username\": \"team:a\", \"password\": \"s3cret-gate-pw\"}] | workspace team-a has a colon in its username, which a login cannot carry",
         "[{\"name\": \"team-a\", \"username\": \"u1\", \"password\": \"s3cret-gate-pw\"}, {\"name\": \"team-a\", \"username\": \"u2\", \"password\": \"s3cret-gate-pw\"}] | names two workspaces team-a",
     })
     void aListThatCannotBeUsedIsRefusedSayingWhy(String json, String why) {

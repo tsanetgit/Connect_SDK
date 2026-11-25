@@ -17,7 +17,8 @@ import tools.jackson.databind.json.JsonMapper;
  *   "seeds": {"beta": {"username": "...", "password": "..."},
  *             "dev": {"clientId": "...", "clientSecret": "..."}},
  *   "e2eePartners": {"beta": {"<company id>": {"jwksUrl": "https://keys.partner.example/.well-known/jwks.json"}}}}]</pre>
- * {@code name}, {@code username} and {@code password} are required. {@code seeds} holds, by
+ * {@code name}, {@code username} and {@code password} are required, and the username holds no colon,
+ * which a Basic login cannot carry. {@code seeds} holds, by
  * environment key, the member credentials written into that environment's empty store at startup:
  * a username and password, or a client id and client secret. {@code e2eePartners} holds, by
  * environment key, a partner key table in the shape {@link PartnerKeysStore} reads.
@@ -90,6 +91,10 @@ final class WorkspaceDefinitions {
         String password = text(entry, "password");
         if (username == null || password == null) {
             throw refuse(workspace + " needs a username and a password");
+        }
+        if (username.indexOf(':') >= 0) {
+            // HTTP Basic sends "username:password" and splits it at the first colon, so this login could never succeed.
+            throw refuse(workspace + " has a colon in its username, which a login cannot carry");
         }
         Map<String, CredentialsStore.Credentials> seeds = new LinkedHashMap<>();
         for (Map.Entry<String, JsonNode> seed : perEnvironment(entry, "seeds", workspace, properties).entrySet()) {
