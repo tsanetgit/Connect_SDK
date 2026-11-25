@@ -103,10 +103,29 @@ button on the other environments; saving or clearing credentials is refused, and
 receiver-storage section is unaffected. The lock covers the E2EE partner keys too: the
 card lists the table and the demo's JWKS URL read-only, with no Add / Replace form and
 no Remove buttons, and the add and remove endpoints refuse. On a locked hosted demo the
-pilot's keys arrive through `TSANET_DEMO_E2EE_PARTNERS_BETA` and `_DEV` (RUNBOOK §6). When the operator has also seeded both environments
+pilot's keys arrive through `TSANET_DEMO_E2EE_PARTNERS_BETA` and `_DEV` (RUNBOOK §6), or for a configured workspace through its own entry in `TSANET_DEMO_WORKSPACES`. When the operator has also seeded both environments
 (see the RUNBOOK), the hosted demo comes up already signed in on each, so a visitor only
 ever switches environments. Hand the guest login to
 people you would hand the demo to, not as a per-person account.
+
+When several member teams use one hosted demo, the operator can give each team a **workspace**
+(`TSANET_DEMO_WORKSPACES`, RUNBOOK §6). A workspace has its own gate login. Behind that login it has
+its own member sign-in for each environment, its own Dashboard, its own active environment and its
+own E2EE partner table:
+
+- Each workspace is signed in to Connect as its own member company, so its Dashboard lists that
+  company's cases and nobody else's. Connect decides that, not the demo.
+- Switching environments, or changing the partner table where it isn't locked, changes one workspace
+  and no other.
+- An upload's progress can be read only from the workspace that started it.
+- The operator login opens the operator's own workspace, and so does the guest login when one is
+  configured.
+- A workspace login has the guest's upload limit, with the same rules for `Content-Length`.
+- `TSANET_DEMO_CREDENTIALS_LOCKED` is one setting for the whole demo: it locks every workspace's
+  credentials and partner table alike.
+
+A browser keeps the gate login it was given for a site. To move from one workspace to another, use a
+private window or a separate browser profile.
 
 ### E2EE partner keys
 
@@ -127,7 +146,8 @@ exactly as before.
   Replace** writes the entry for that company id; **Remove** deletes it.
 - The table is kept per environment next to that environment's credentials,
   so on the hosted demo it is lost on redeploy like the credentials. The
-  operator's seed variable restores it at startup (Runbook §6). With
+  operator's seed restores it at startup: a variable for the operator's workspace, and for a
+  configured workspace its entry in `TSANET_DEMO_WORKSPACES` (Runbook §6). With
   `TSANET_DEMO_CREDENTIALS_LOCKED` set the table is read-only on the card and
   the seed is its only source.
 - The demo's own company is never in the table: its keys come from its own set.
@@ -268,7 +288,8 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 ## 9. What the demo intentionally does not do
 
 - No inbound webhook receiver (subscriptions management only)
-- No multi-user/session handling — one shared SDK session per server instance
+- No per-person accounts or sessions: everyone who uses one gate login shares that workspace's
+  sign-in, SDK session and state. Workspaces separate teams, not people
 - No case assignment, SLA, or reporting views — outside the SDK's surface
 - No first-receipt (`iat`, `jti`) checks on encrypted records: with no webhook receiver every record is a stored read, verified for signature, binding and digests only. No key rotation (one current key pair; replace the value and redeploy) and no key service (`SoftwareKeyOperations` holds the demo's own keys)
 

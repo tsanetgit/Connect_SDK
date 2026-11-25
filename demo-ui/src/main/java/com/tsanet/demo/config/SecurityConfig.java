@@ -69,7 +69,8 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, DemoAuthProperties auth) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http, DemoAuthProperties auth, Workspaces workspaces)
+            throws Exception {
         // A browser replays cached Basic credentials on a request another site triggers, so the gate
         // alone doesn't stop a cross-site form. fetchJson in app.js sends the cookie's token as a header.
         // The header alone: reading the form's parameter would read the whole body before the login check.
@@ -85,7 +86,10 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.GET, "/healthz", JwksController.PATH).permitAll()
                     .anyRequest().authenticated())
                 .httpBasic(Customizer.withDefaults());
-            if (auth.guestEnabled()) {
+            // The guest login and every workspace login are held to the guest's limit.
+            boolean anyLimited = workspaces.all().stream()
+                .anyMatch(workspace -> workspace.logins().stream().anyMatch(Workspaces.Login::limitedUploads));
+            if (anyLimited) {
                 http.addFilterAfter(new GuestUploadLimitFilter(auth.guestMaxUploadBytes()), BasicAuthenticationFilter.class);
             }
         } else {

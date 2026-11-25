@@ -105,7 +105,14 @@ password prompt in front of everything. `/healthz` stays open to a plain `GET` f
 platform health checks. An optional guest login (`TSANET_DEMO_AUTH_GUEST_USER`, `TSANET_DEMO_AUTH_GUEST_PASSWORD`)
 has the operator's rights and a lower upload limit: 1 GB by default, set with
 `TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`, against the operator's 20 GB. A guest's `POST`, `PUT` or
-`PATCH` must declare a `Content-Length`, and any request's `Content-Length` must be within that limit, so a guest can't send chunked: it answers `411`. Remember what sits behind the gate: a UI that holds live member credentials
+`PATCH` must declare a `Content-Length`, and any request's `Content-Length` must be within that limit, so a guest can't send chunked: it answers `411`. When several member teams share one hosted demo,
+`TSANET_DEMO_WORKSPACES` gives each team a workspace of its own: a JSON list with one entry per team,
+each with a `name`, its own gate `username` and `password`, and optionally its own member credentials
+(`seeds`) and E2EE partner keys (`e2eePartners`) per environment. Each workspace has its own member
+sign-in, case list, active environment and partner table, and its login has the guest's upload limit.
+The list holds passwords, so it is a secret like the gate password; it needs the operator password set,
+and a list the demo cannot use stops it at startup. The shape and its rules are in `docs/RUNBOOK.md`
+section 6. Remember what sits behind the gate: a UI that holds live member credentials
 and can create real collaboration cases against partner companies.
 
 ### End-to-end encryption on the demo (optional)
@@ -133,7 +140,8 @@ What a member gets once it is on:
   JWKS URL (https) or its pasted public JWKS (for a partner that hardcodes keys per endpoint).
   A pasted set holding a private key is refused. The table lives in the ephemeral data dir on
   a hosted demo; `TSANET_DEMO_E2EE_PARTNERS_BETA` / `_DEV` (the same JSON shape) restore it at
-  startup when the file is absent.
+  startup when the file is absent. Those two are for the operator's workspace: a workspace
+  configured in `TSANET_DEMO_WORKSPACES` takes its table from its own `e2eePartners`.
 - **Encrypt (E2EE)** on New Collaboration (pre-checked when the partner has a key entry) and on
   Add Note (pre-checked on an encrypted case). Checked without a key entry is a 400 naming the
   company id, never a plaintext send.

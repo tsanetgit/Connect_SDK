@@ -101,7 +101,13 @@ second login for members, with the same rights and a lower upload limit, comes f
 `TSANET_DEMO_AUTH_GUEST_PASSWORD`; it is active only when that password is set
 (`tsanetgit/Connect_SDK#148`). A guest's `POST`, `PUT` or `PATCH` must declare a
 `Content-Length`, and any request's `Content-Length` must be within the limit, 1 GB by default against the operator's 20 GB
-(`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`), so a guest can't send chunked. When the operator pre-loads the member credentials,
+(`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`), so a guest can't send chunked. To give each member team
+a workspace of its own on one hosted demo, set `TSANET_DEMO_WORKSPACES` to a JSON list with one entry
+per team (`tsanetgit/Connect_SDK#190`): a name, the team's own gate login, and optionally its own
+member credentials and E2EE partner keys per environment. Each workspace has its own member sign-in,
+case cache, active environment, partner table and upload progress, and its login has the guest's
+upload limit. Unset, the demo has the one workspace the operator and guest logins share. The shape and
+its rules are in the [RUNBOOK](docs/RUNBOOK.md#6-optional-hosted-on-aws-ecs-express-mode). When the operator pre-loads the member credentials,
 `TSANET_DEMO_CREDENTIALS_LOCKED=true` turns Settings into a read-only "Signed in as"
 view with the environment switch, and the save and clear endpoints refuse
 (`tsanetgit/Connect_SDK#152`). To pre-load those credentials on an ephemeral host,
@@ -111,4 +117,6 @@ environment's store at startup when the store is empty, and never overwrites one
 `TSANET_DEMO_E2EE_PRIVATE_JWKS` holds the demo's own private JWK set (generated
 by `com.tsanet.demo.E2eeKeyGenerator`, see the RUNBOOK); unset, the demo is
 unchanged. On a locked demo the E2EE partner table is read-only too and comes
-from `TSANET_DEMO_E2EE_PARTNERS_BETA` / `_DEV`.
+from `TSANET_DEMO_E2EE_PARTNERS_BETA` / `_DEV`. Those two, and the `SEED` pairs above, are for the
+operator's workspace: a configured workspace takes its credentials and partner keys from its own
+entry in `TSANET_DEMO_WORKSPACES`.

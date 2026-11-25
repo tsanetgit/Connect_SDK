@@ -95,8 +95,8 @@ class CredentialSeederTest {
 
     @Test
     void aSeedForAnUnknownEnvironmentFailsStartup() {
-        CredentialSeeder seeder = seeder(null, Map.of("prod", new DemoProperties.Seed("api@demo.example", SECRET)));
-        assertThatThrownBy(seeder::seed)
+        // Refused when the workspaces are put together, before anything is seeded.
+        assertThatThrownBy(() -> seeder(null, Map.of("prod", new DemoProperties.Seed("api@demo.example", SECRET))))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("tsanet.demo.seeds.prod")
             .hasMessageNotContaining(SECRET);
@@ -107,6 +107,64 @@ class CredentialSeederTest {
         // A profile that drops an environment still binds the shipped yml's blank seed for it.
         seeder(null, Map.of("prod", new DemoProperties.Seed("", ""))).seed();
         assertThat(storedFiles()).isZero();
+    }
+
+    /** A deploy with one configured workspace, team-a; dev has an Entra tenant and audience, beta has not. */
+    private CredentialSeeder seederWithTeamA(Boolean locked, String teamASeeds) {
+        DemoProperties properties = new DemoProperties(
+            Map.of(
+                "beta", new DemoProperties.EnvironmentDef("Beta", "http://localhost:9", null, null),
+                "dev", new DemoProperties.EnvironmentDef("Dev", "http://localhost:9", "tenant", "api://audience")),
+            "beta",
+            dataDir.toString(),
+            true,  // never contacted: nothing here builds a session
+            null,
+            locked,
+            Map.of("beta", new DemoProperties.Seed("operator@demo.example", SECRET), "dev", new DemoProperties.Seed("operator@dev.example", SECRET))
+        );
+        workspaces = new Workspaces(properties, E2eeKeys.disabled(), new DemoE2eeProperties(null, null),
+            new DemoAuthProperties("operator", "op", null),
+            new DemoWorkspacesProperties("[{\"name\": \"team-a\", \"username\": \"team-a\", \"password\": \"a-gate-pw\""
+                + teamASeeds + "}]"));
+        return new CredentialSeeder(properties, workspaces);
+    }
+
+    private Workspaces workspaces;
+
+    @Test
+    void eachWorkspaceIsSeededFromItsOwnSeedInEitherForm(CapturedOutput output) {
+        seederWithTeamA(null, ", \"seeds\": {\"beta\": {\"username\": \"a@demo.example\", \"password\": \"a-member-" + SECRET + "\"},"
+            + " \"dev\": {\"clientId\": \"client-of-a\", \"clientSecret\": \"a-client-" + SECRET + "\"}}").seed();
+
+        EnvironmentService operators = workspaces.all().get(0).environments();
+        EnvironmentService teamAs = workspaces.all().get(1).environments();
+        assertThat(operators.credentialsFor("beta").load()).hasValueSatisfying(c -> assertThat(c.username()).isEqualTo("operator@demo.example"));
+        assertThat(teamAs.credentialsFor("beta").load()).hasValueSatisfying(c -> {
+            assertThat(c.mode()).isEqualTo(CredentialsStore.MODE_PASSWORD);
+            assertThat(c.username()).isEqualTo("a@demo.example");
+            assertThat(c.password()).isEqualTo("a-member-" + SECRET);
+        });
+        assertThat(teamAs.credentialsFor("dev").load()).hasValueSatisfying(c -> {
+            assertThat(c.mode()).isEqualTo(CredentialsStore.MODE_OAUTH);
+            assertThat(c.clientId()).isEqualTo("client-of-a");
+            assertThat(c.clientSecret()).isEqualTo("a-client-" + SECRET);
+        });
+        assertThat(output.getAll())
+            .contains("Seeded environment beta of workspace default with credentials for operator@demo.example")
+            .contains("Seeded environment beta of workspace team-a with credentials for a@demo.example")
+            .contains("Seeded environment dev of workspace team-a with credentials for client-of-a")
+            .doesNotContain(SECRET)
+            .doesNotContain("a-gate-pw");
+    }
+
+    @Test
+    void lockedWarnsForTheWorkspaceThatHasNothingToSignInAs(CapturedOutput output) {
+        seederWithTeamA(true, "").seed();
+
+        assertThat(output.getAll())
+            .contains("Credentials are locked but environment beta holds none in workspace team-a")
+            .contains("Credentials are locked but environment dev holds none in workspace team-a")
+            .doesNotContain("holds none in workspace default");
     }
 
     @Test

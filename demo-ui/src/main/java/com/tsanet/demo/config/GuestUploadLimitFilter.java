@@ -15,7 +15,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * A guest login has a lower upload limit than the operator: a declared length over the limit, or chunked
+ * A guest login, and each workspace login (tsanetgit/Connect_SDK#190), has a lower upload limit than the
+ * operator: a declared length over the limit, or chunked
  * framing, on any method, and no declared length on a POST, PUT or PATCH, is answered here, after the login
  * is known and before anything reads the body. Tomcat holds a request to its declared length. The page's
  * requests always pass: FormData and JSON bodies declare a length, as Chromium does for a bodyless POST.
