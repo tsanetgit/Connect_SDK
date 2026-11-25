@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.tsanet.api.TsaNetApiSession;
+import com.tsanet.demo.E2eeTestVectors;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -11,6 +12,10 @@ import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -53,6 +58,109 @@ class WorkspacesTest {
     private Workspaces deployed(String password, String guestPassword) {
         return new Workspaces(properties(), E2eeKeys.disabled(), new DemoE2eeProperties(null, null),
             new DemoAuthProperties("operator", password, new DemoAuthProperties.Guest("visitor", guestPassword, null)));
+    }
+
+    private static final String TEAM_A = "{\"name\": \"team-a\", \"username\": \"Team-A\", \"password\": \"s3cret-a-pw\"}";
+
+    /** What a deploy with the operator and guest logins and this TSANET_DEMO_WORKSPACES value builds. */
+    private Workspaces configured(String workspaces) {
+        return new Workspaces(properties(), E2eeKeys.disabled(), new DemoE2eeProperties(null, null),
+            new DemoAuthProperties("operator", "op", new DemoAuthProperties.Guest("visitor", "g", null)),
+            new DemoWorkspacesProperties(workspaces));
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "[]"})
+    void withNoWorkspacesConfiguredThereIsOnlyTheDefaultOne(String workspaces) {
+        assertThat(configured(workspaces).all()).extracting(Workspaces.Workspace::name).containsExactly(Workspaces.DEFAULT);
+        assertThat(dataDir.resolve("workspaces")).doesNotExist();
+    }
+
+    @Test
+    void aConfiguredWorkspaceHasItsOwnLoginAndKeepsItsStateInItsOwnDirectory() {
+        Workspaces workspaces = configured("[" + TEAM_A + "]");
+        assertThat(workspaces.all()).extracting(Workspaces.Workspace::name).containsExactly(Workspaces.DEFAULT, "team-a");
+
+        signedInAs("Team-A");
+        assertThat(workspaces.current().name()).isEqualTo("team-a");
+        assertThat(workspaces.current().logins()).singleElement().satisfies(login -> assertThat(login.limitedUploads()).isTrue());
+        workspaces.current().environments().switchTo("dev");
+
+        assertThat(dataDir.resolve("workspaces/team-a/active-environment")).hasContent("dev");
+        assertThat(dataDir.resolve("active-environment")).doesNotExist();
+        signedInAs("operator");
+        assertThat(workspaces.current().name()).isEqualTo(Workspaces.DEFAULT);
+        assertThat(workspaces.current().environments().activeEnvironment()).isEqualTo("beta");
+    }
+
+    @Test
+    void workspacesWithTheGateOffAreRefused() {
+        assertThatThrownBy(() -> new Workspaces(properties(), E2eeKeys.disabled(), new DemoE2eeProperties(null, null),
+                new DemoAuthProperties(null, "", null), new DemoWorkspacesProperties("[" + TEAM_A + "]")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("TSANET_DEMO_WORKSPACES is set but TSANET_DEMO_AUTH_PASSWORD is not")
+            .hasMessageNotContaining("s3cret-a-pw");
+        assertThat(dataDir.resolve("workspaces")).doesNotExist();
+    }
+
+    // The username already taken, by whom, and what the refusal calls that login.
+    @ParameterizedTest
+    @CsvSource({
+        "OPERATOR, the operator login (TSANET_DEMO_AUTH_USER)",
+        "Visitor, the guest login (TSANET_DEMO_AUTH_GUEST_USER)",
+        "TEAM-a, workspace team-a",
+    })
+    void aUsernameAnotherLoginHasIsRefusedNamingTheLoginsAndNotTheUsername(String username, String owner) {
+        String teamB = "{\"name\": \"team-b\", \"username\": \"" + username + "\", \"password\": \"s3cret-b-pw\"}";
+
+        assertThatThrownBy(() -> configured("[" + TEAM_A + ", " + teamB + "]"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("gives workspace team-b the same username as " + owner)
+            .hasMessageNotContaining(username)
+            .hasMessageNotContaining("s3cret-a-pw")
+            .hasMessageNotContaining("s3cret-b-pw");
+        assertThat(dataDir.resolve("workspaces")).doesNotExist();
+    }
+
+    @Test
+    void aPartnerSeedThatCannotBeUsedNamesItsWorkspaceAndClosesWhatWasAlreadyBuilt() throws Exception {
+        java.util.Set<Long> before = selectorThreads();
+        E2eeKeys keys = E2eeKeys.fromJson(E2eeTestVectors.load().memberAPrivateJwks());
+        // In this order, so team-b's beta table is read, with its key fetcher, before its dev seed is refused.
+        Map<String, DemoProperties.EnvironmentDef> betaThenDev = new java.util.LinkedHashMap<>();
+        betaThenDev.put("beta", new DemoProperties.EnvironmentDef("Beta", "http://localhost:9", null, null));
+        betaThenDev.put("dev", new DemoProperties.EnvironmentDef("Dev", "http://localhost:9", null, null));
+        DemoProperties ordered = new DemoProperties(betaThenDev, "beta", dataDir.toString(), true, null, null, null);
+        String teamB = "{\"name\": \"team-b\", \"username\": \"team-b\", \"password\": \"s3cret-b-pw\","
+            + " \"e2eePartners\": {\"beta\": {}, \"dev\": {\"not-a-company-id\": {}}}}";
+
+        // With keys loaded each workspace's partner tables are read as its state is built: the default
+        // workspace's and team-a's are built, and half of team-b's, before team-b's dev seed is refused.
+        assertThatThrownBy(() -> new Workspaces(ordered, keys, new DemoE2eeProperties(null, null),
+                new DemoAuthProperties("operator", "op", null), new DemoWorkspacesProperties("[" + TEAM_A + ", " + teamB + "]")))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("TSANET_DEMO_WORKSPACES (workspace team-b, e2eePartners for dev) is not a usable partner key table")
+            .hasMessageNotContaining("s3cret");
+
+        java.util.Set<Long> left = selectorThreads();
+        left.removeAll(before);
+        long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+        while (!left.isEmpty() && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+            left.retainAll(selectorThreads());
+        }
+        assertThat(left).isEmpty();
+    }
+
+    private static java.util.Set<Long> selectorThreads() {
+        java.util.Set<Long> ids = new java.util.HashSet<>();
+        for (Thread thread : Thread.getAllStackTraces().keySet()) {
+            if (thread.getName().contains("SelectorManager")) {
+                ids.add(thread.threadId());
+            }
+        }
+        return ids;
     }
 
     /** A workspace with one login, its state under its own directory of the data dir. */
@@ -145,7 +253,7 @@ class WorkspacesTest {
 
         assertThatThrownBy(() -> new Workspaces(clash, true))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("TEAM")
+            .hasMessageContaining("Two gate logins share a username")
             .hasMessageNotContaining("s3cret-a-pw")
             .hasMessageNotContaining("s3cret-b-pw");
     }

@@ -87,8 +87,14 @@ public class EnvironmentService {
         // fails startup naming its variable instead of failing the Settings page on its first click.
         // Gated on the keys so that, unset, nothing E2EE runs.
         if (e2eeKeys.enabled() && properties.environments() != null) {
-            for (String key : properties.environments().keySet()) {
-                partnerKeysFor(key);
+            try {
+                for (String key : properties.environments().keySet()) {
+                    partnerKeysFor(key);
+                }
+            } catch (RuntimeException unusable) {
+                // The tables read before the unusable one hold key fetchers, and nobody holds this instance to close it.
+                close();
+                throw unusable;
             }
         }
     }

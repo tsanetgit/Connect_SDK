@@ -25,6 +25,11 @@ import org.springframework.stereotype.Component;
  * <p>The default workspace is built from the configuration the demo has always read: its state lives
  * directly under the data dir, the operator login and the guest login both open it, and its seeds are
  * {@code tsanet.demo.seeds}. With the gate off there are no logins and every request gets it.
+ *
+ * <p>Each entry of {@code TSANET_DEMO_WORKSPACES} ({@link WorkspaceDefinitions}) adds a workspace with
+ * one login of its own, its state under {@code workspaces/<name>} in the data dir, and its own seeds.
+ * Names, logins and seeds are all checked before any state is built. A partner seed is checked as its
+ * workspace's state is built, and a refusal then closes the state built before it.
  */
 @Component
 public class Workspaces {
@@ -59,15 +64,83 @@ public class Workspaces {
     /** What every request gets while the gate is off; null while it is on. */
     private final Workspace open;
 
-    // PROVISIONAL(tsanetgit/Connect_SDK#190): only the default workspace is built until the configured
-    // list of workspaces is read; that change adds one workspace per entry here.
     @Autowired
     public Workspaces(DemoProperties properties, E2eeKeys e2eeKeys, DemoE2eeProperties e2eeProperties,
+                      DemoAuthProperties auth, DemoWorkspacesProperties configured) {
+        this(build(properties, e2eeKeys, e2eeProperties, auth, configured), auth.enabled());
+    }
+
+    /** With no workspaces configured: the default one alone. */
+    public Workspaces(DemoProperties properties, E2eeKeys e2eeKeys, DemoE2eeProperties e2eeProperties,
                       DemoAuthProperties auth) {
-        this(List.of(new Workspace(DEFAULT,
-                new EnvironmentService(properties, e2eeKeys, e2eeProperties, Path.of(properties.dataDir())),
-                logins(auth), seeds(properties))),
-            auth.enabled());
+        this(properties, e2eeKeys, e2eeProperties, auth, new DemoWorkspacesProperties(null));
+    }
+
+    private static List<Workspace> build(DemoProperties properties, E2eeKeys e2eeKeys, DemoE2eeProperties e2eeProperties,
+                                         DemoAuthProperties auth, DemoWorkspacesProperties configured) {
+        Map<String, CredentialsStore.Credentials> defaultSeeds = seeds(properties);
+        List<WorkspaceDefinitions.Definition> definitions = WorkspaceDefinitions.parse(configured.definitions(), properties);
+        if (!definitions.isEmpty() && !auth.enabled()) {
+            throw new IllegalStateException(DemoWorkspacesProperties.VARIABLE + " is set but TSANET_DEMO_AUTH_PASSWORD is not:"
+                + " the gate would be off while workspace logins are configured. Set the operator password or unset the workspaces.");
+        }
+        requireDistinctUsernames(auth, definitions);
+        Path dataDir = Path.of(properties.dataDir());
+        List<Workspace> built = new ArrayList<>();
+        try {
+            built.add(new Workspace(DEFAULT, new EnvironmentService(properties, e2eeKeys, e2eeProperties, dataDir),
+                logins(auth), defaultSeeds));
+            for (WorkspaceDefinitions.Definition definition : definitions) {
+                built.add(new Workspace(definition.name(),
+                    new EnvironmentService(properties, e2eeKeys, partnerSeeds(definition),
+                        dataDir.resolve("workspaces").resolve(definition.name())),
+                    List.of(definition.login()), definition.seeds()));
+            }
+        } catch (RuntimeException failed) {
+            // A partner seed that cannot be used is found only as its state is built. The context never
+            // starts, so nothing else would close what was already built.
+            built.forEach(workspace -> workspace.environments().close());
+            throw failed;
+        }
+        return built;
+    }
+
+    /**
+     * Usernames are compared across every login, without regard to case, as the in-memory user store
+     * keys them. The message names the workspaces, never a username: a value entered in the wrong
+     * field could be a password.
+     */
+    private static void requireDistinctUsernames(DemoAuthProperties auth, List<WorkspaceDefinitions.Definition> definitions) {
+        Map<String, String> owners = new HashMap<>();
+        if (auth.enabled()) {
+            owners.put(auth.effectiveUsername().toLowerCase(Locale.ROOT), "the operator login (TSANET_DEMO_AUTH_USER)");
+        }
+        if (auth.guestEnabled()) {
+            owners.put(auth.effectiveGuestUsername().toLowerCase(Locale.ROOT), "the guest login (TSANET_DEMO_AUTH_GUEST_USER)");
+        }
+        for (WorkspaceDefinitions.Definition definition : definitions) {
+            String earlier = owners.putIfAbsent(definition.login().username().toLowerCase(Locale.ROOT),
+                "workspace " + definition.name());
+            if (earlier != null) {
+                throw WorkspaceDefinitions.refuse("gives workspace " + definition.name() + " the same username as "
+                    + earlier + " (usernames are compared without regard to case)");
+            }
+        }
+    }
+
+    /** A workspace's partner seeds, which say where they came from when one cannot be used. */
+    private static PartnerSeeds partnerSeeds(WorkspaceDefinitions.Definition definition) {
+        return new PartnerSeeds() {
+            @Override
+            public String partnerSeed(String key) {
+                return definition.partnerSeeds().get(key);
+            }
+
+            @Override
+            public String partnerSeedSource(String key) {
+                return DemoWorkspacesProperties.VARIABLE + " (workspace " + definition.name() + ", e2eePartners for " + key + ")";
+            }
+        };
     }
 
     /**
@@ -80,8 +153,7 @@ public class Workspaces {
             for (Login login : workspace.logins()) {
                 // Two logins under one name would leave the second one's requests in the first one's workspace.
                 if (byLogin.putIfAbsent(login.username().toLowerCase(Locale.ROOT), workspace) != null) {
-                    throw new IllegalStateException("Two gate logins share the username " + login.username()
-                        + " (compared case-insensitively).");
+                    throw new IllegalStateException("Two gate logins share a username (compared without regard to case).");
                 }
             }
         }

@@ -50,18 +50,22 @@ public class CredentialSeeder {
             CredentialsStore.Credentials seed = entry.getValue();
             CredentialsStore store = environments.credentialsFor(key);
             if (store.load().isPresent()) {
-                log.info("Environment {} already holds credentials: seed not applied", key);
+                log.info("Environment {} of workspace {} already holds credentials: seed not applied", key, workspace.name());
                 continue;
             }
-            store.save(seed.username(), seed.password());
-            log.info("Seeded environment {} with credentials for {}", key, seed.username());
+            if (seed.isOAuth()) {
+                store.saveOAuth(seed.clientId(), seed.clientSecret());
+            } else {
+                store.save(seed.username(), seed.password());
+            }
+            log.info("Seeded environment {} of workspace {} with credentials for {}", key, workspace.name(), seed.principal());
         }
         if (properties.credentialChangesLocked()) {
             // Visitors can switch environments even when locked, so every configured environment
             // with an empty store is a place a visitor can land signed in as nobody.
             for (String key : properties.environments().keySet()) {
                 if (environments.credentialsFor(key).load().isEmpty()) {
-                    log.warn("Credentials are locked but environment {} holds none: a visitor switching to it sees a demo signed in as nobody", key);
+                    log.warn("Credentials are locked but environment {} holds none in workspace {}: a visitor switching to it sees a demo signed in as nobody", key, workspace.name());
                 }
             }
         }

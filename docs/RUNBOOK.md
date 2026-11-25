@@ -179,6 +179,61 @@ If you give a guest login to people outside your team with E2EE on, run the demo
 needs the member seeds (see the lock paragraph below). On an unlocked demo, any gate login can add
 a partner JWKS URL, and the demo task then fetches it.
 
+**Workspaces** (`tsanetgit/Connect_SDK#190`; optional). When several member teams use one hosted
+demo, give each team a workspace: its own gate login, and behind it its own member sign-in, case
+cache, active environment, partner table and upload progress. Each workspace signs in to Connect as
+its own member company, so Connect itself keeps one team's cases from another. Put the list in SSM as
+one SecureString, `TSANET_DEMO_WORKSPACES`; its `secrets` entry is in the `primary-container.json`
+example below. It is a JSON list with one object per workspace:
+
+```json
+[
+  {
+    "name": "team-a",
+    "username": "<GATE_USER>",
+    "password": "<GATE_PASSWORD>",
+    "seeds": {
+      "beta": {"username": "<MEMBER_USER>", "password": "<MEMBER_PASSWORD>"},
+      "dev": {"clientId": "<CLIENT_ID>", "clientSecret": "<CLIENT_SECRET>"}
+    },
+    "e2eePartners": {
+      "beta": {"<PARTNER_COMPANY_ID>": {"jwksUrl": "https://<partner host>/.well-known/jwks.json"}}
+    }
+  }
+]
+```
+
+- `name`, `username` and `password` are required. The name is lower-case letters, digits and hyphens,
+  starting with a letter or a digit and at most 32 long, and becomes the workspace's directory, `workspaces/<name>/` under the data dir. The
+  name `default` is taken: it is the operator's own workspace, which keeps its files directly under the
+  data dir, and which the guest login also opens when one is configured.
+- `seeds` is optional, by environment. A seed is either a `username` and `password`, or a `clientId`
+  and `clientSecret` for an environment that has its Entra tenant and audience set. It is written into
+  that workspace's store at startup when the store is empty, like the `SEED` values above, which seed
+  the operator's workspace and stay username and password only. A client id and secret are separate
+  from the member's password, so a team that changes that password does not sign its workspace out.
+- `e2eePartners` is optional, by environment, in the shape of `TSANET_DEMO_E2EE_PARTNERS_BETA`. It
+  seeds that workspace's partner table. A workspace does not inherit the operator's table.
+- A workspace login has the guest's upload limit (`TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`), with or
+  without a guest login.
+- `TSANET_DEMO_CREDENTIALS_LOCKED` and the one E2EE key pair apply to every workspace. On a locked demo
+  a workspace's seeds are the only way its credentials and partner keys get in, so seed every
+  environment of every workspace, or expect the startup warning that names the workspace.
+- The demo refuses to start, naming `TSANET_DEMO_WORKSPACES`, the entry and the rule and never a value,
+  when the list is not valid JSON, an entry has a field the demo does not know, a name is repeated or
+  not allowed, two logins share a username (operator, guest and workspaces together, without regard to
+  case), a seed is incomplete or mixes the two forms, a `clientId` seed is for an environment without
+  an Entra tenant and audience, a seed or partner seed names an environment that does not exist, or the
+  gate is off (no `TSANET_DEMO_AUTH_PASSWORD`).
+
+The `${` rule further down applies here too: it must not appear anywhere in the value. A standard SSM parameter holds 4 KB. One entry with a seed for each environment is about
+300 bytes, so about a dozen fit; a partner entry adds about 100 bytes as a JWKS URL and several
+hundred as a pasted key set, which brings that down to a handful. An advanced parameter holds 8 KB. Rotating a workspace's gate password or a seed is a new value plus a
+redeploy, as for the other secrets. On a host that keeps its data dir, a seed never overwrites a
+stored credential, and a workspace taken off the list leaves its directory behind, with its stored
+credentials file: delete `workspaces/<name>/` by hand. Moving a team from the guest login to a
+workspace starts that workspace empty.
+
 **Build, push, create.** The page header shows `git describe` from the build, so tag the release first and build from a checkout that has its tags (`git fetch --tags`). A jar built before the tag names the previous tag and a commit count. Build the jar (step 1), then:
 
 ```bash
@@ -194,8 +249,8 @@ docker push "<ECR_REGISTRY>/connect-sdk-demo:${SHA}"
 
 `primary-container.json` (pin the sha tag, not `latest`, so the running build is always
 readable from `describe-express-gateway-service`; delete the `secrets` entry for any value you
-did not put in SSM, including the three `E2EE` entries when E2EE is off and any partner seed you
-don't use):
+did not put in SSM, including the three `E2EE` entries when E2EE is off, any partner seed you
+don't use, and `TSANET_DEMO_WORKSPACES` when you configure no workspaces):
 
 ```json
 {
@@ -207,6 +262,7 @@ don't use):
     {"name": "TSANET_DEMO_AUTH_GUEST_USER", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_USER"},
     {"name": "TSANET_DEMO_AUTH_GUEST_PASSWORD", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_PASSWORD"},
     {"name": "TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES"},
+    {"name": "TSANET_DEMO_WORKSPACES", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_WORKSPACES"},
     {"name": "TSANET_DEMO_ENTRA_TENANT", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_TENANT"},
     {"name": "TSANET_DEMO_ENTRA_AUDIENCE_BETA", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_BETA"},
     {"name": "TSANET_DEMO_ENTRA_AUDIENCE_DEV", "valueFrom": "arn:aws:ssm:<REGION>:<AWS_ACCOUNT_ID>:parameter/connect-sdk-demo/TSANET_DEMO_ENTRA_AUDIENCE_DEV"},
@@ -278,9 +334,10 @@ startup for every environment whose store is empty: seed both, or expect visitor
 the other one to see a demo signed in as nobody. The gate passwords live only in SSM and your local untracked notes. Rotating either
 password is a new SSM value plus the same `update-express-gateway-service` call, which starts a
 new deployment even when the container settings are unchanged (observed: an update with an
-identical container block started a new deployment; the app reads both logins once at startup,
+identical container block started a new deployment; the app reads every login once at startup,
 and ECS resolves secrets when a task starts). A gate configuration the app refuses (a guest
-password with no operator password, or the same username for both logins) exits the task at
+password with no operator password, the same username for two logins, or a workspace list it cannot
+use) exits the task at
 startup, so the deployment never reaches `SUCCESSFUL` in `list-service-deployments`; the reason
 is the `APPLICATION FAILED TO START` block in `aws logs tail <LOG_GROUP>`. A seed the demo cannot
 write (an unwritable data dir) or a seed naming an environment that does not exist fails startup

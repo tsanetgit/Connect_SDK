@@ -108,6 +108,25 @@ pilot's keys arrive through `TSANET_DEMO_E2EE_PARTNERS_BETA` and `_DEV` (RUNBOOK
 ever switches environments. Hand the guest login to
 people you would hand the demo to, not as a per-person account.
 
+When several member teams use one hosted demo, the operator can give each team a **workspace**
+(`TSANET_DEMO_WORKSPACES`, RUNBOOK §6). A workspace has its own gate login. Behind that login it has
+its own member sign-in for each environment, its own Dashboard, its own active environment and its
+own E2EE partner table:
+
+- Each workspace is signed in to Connect as its own member company, so its Dashboard lists that
+  company's cases and nobody else's. Connect decides that, not the demo.
+- Switching environments, or changing the partner table where it isn't locked, changes one workspace
+  and no other.
+- An upload's progress can be read only from the workspace that started it.
+- The operator login opens the operator's own workspace, and so does the guest login when one is
+  configured.
+- A workspace login has the guest's upload limit, with the same rules for `Content-Length`.
+- `TSANET_DEMO_CREDENTIALS_LOCKED` is one setting for the whole demo: it locks every workspace's
+  credentials and partner table alike.
+
+A browser keeps the gate login it was given for a site. To move from one workspace to another, use a
+private window or a separate browser profile.
+
 ### E2EE partner keys
 
 When the demo holds its own end-to-end encryption keys (the operator set

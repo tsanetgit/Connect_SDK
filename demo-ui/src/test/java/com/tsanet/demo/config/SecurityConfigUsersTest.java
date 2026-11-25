@@ -43,6 +43,22 @@ class SecurityConfigUsersTest {
     }
 
     @Test
+    void aWorkspaceLoginGetsTheSameRoleAndTheUploadLimitMarker() {
+        var users = new SecurityConfig().demoUsers(new Workspaces(
+            new DemoProperties(Map.of(), "beta", dataDir.toString(), null, null, null, null),
+            E2eeKeys.disabled(),
+            new DemoE2eeProperties(null, null),
+            new DemoAuthProperties("shawn", "op", null),
+            new DemoWorkspacesProperties("[{\"name\": \"team-a\", \"username\": \"team-a\", \"password\": \"a-pw\"}]")));
+
+        var team = users.loadUserByUsername("team-a");
+        assertThat(ENCODER.matches("a-pw", team.getPassword())).isTrue();
+        assertThat(team.getAuthorities()).extracting(Object::toString)
+            .containsExactlyInAnyOrder("ROLE_DEMO", GuestUploadLimitFilter.LIMITED_UPLOADS);
+        assertThat(users.loadUserByUsername("shawn").getAuthorities()).extracting(Object::toString).containsExactly("ROLE_DEMO");
+    }
+
+    @Test
     void guestIsAbsentWhenItsPasswordIsBlank() {
         var users = new SecurityConfig().demoUsers(of("shawn", "op", "oracle", ""));
 

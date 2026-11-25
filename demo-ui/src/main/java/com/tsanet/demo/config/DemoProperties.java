@@ -34,8 +34,9 @@ public record DemoProperties(
      * On a hosted demo the operator pre-loads a credential per environment and turns this on, so
      * visitors only switch environments: the page shows who the demo is signed in as, and the
      * save and clear endpoints refuse (tsanetgit/Connect_SDK#152). Off by default because a local
-     * run has nobody but the operator to enter credentials. Independent of the gate login: both
-     * gate users see the same page (tsanetgit/Connect_SDK#148).
+     * run has nobody but the operator to enter credentials. Independent of the gate login: it is
+     * one setting for the deploy, so every login sees it, in every workspace
+     * (tsanetgit/Connect_SDK#148, tsanetgit/Connect_SDK#190).
      */
     public boolean credentialChangesLocked() {
         return Boolean.TRUE.equals(credentialsLocked);

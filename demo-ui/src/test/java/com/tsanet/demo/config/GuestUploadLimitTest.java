@@ -56,6 +56,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
     "tsanet.demo.auth.guest.username=visitor",
     "tsanet.demo.auth.guest.password=g",
     "tsanet.demo.auth.guest.max-upload-bytes=1048576",
+    "tsanet.demo.workspaces.definitions=[{\"name\": \"team-a\", \"username\": \"team-a\", \"password\": \"a\"}]",
     "tsanet.demo.data-dir=${java.io.tmpdir}/tsanet-demo-guest-limit-${random.uuid}"
 })
 class GuestUploadLimitTest {
@@ -161,6 +162,22 @@ class GuestUploadLimitTest {
     @CsvSource({V1, V2})
     void aGuestUnderTheLimitGetsThrough(String path) throws Exception {
         delivered(declared(path, "visitor", "g", LIMIT / 2), LIMIT / 2);
+    }
+
+    /** A workspace login is one handed to a member team, as the guest login is (tsanetgit/Connect_SDK#190). */
+    @ParameterizedTest
+    @CsvSource({V1, V2})
+    void aWorkspaceLoginUnderTheGuestLimitGetsThrough(String path) throws Exception {
+        delivered(declared(path, "team-a", "a", LIMIT / 2), LIMIT / 2);
+    }
+
+    @ParameterizedTest
+    @CsvSource({V1, V2})
+    void aWorkspaceLoginOverTheGuestLimitIsRefused(String path) throws Exception {
+        HttpResponse<String> answer = declared(path, "team-a", "a", LIMIT);  // the file alone is the limit; the request is over it
+
+        assertThat(answer.statusCode()).isEqualTo(413);
+        assertThat(answer.body()).contains(GuestUploadLimitFilter.OVER_THE_LIMIT);
     }
 
     @ParameterizedTest

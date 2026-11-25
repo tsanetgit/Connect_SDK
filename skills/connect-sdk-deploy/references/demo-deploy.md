@@ -105,7 +105,14 @@ password prompt in front of everything. `/healthz` stays open to a plain `GET` f
 platform health checks. An optional guest login (`TSANET_DEMO_AUTH_GUEST_USER`, `TSANET_DEMO_AUTH_GUEST_PASSWORD`)
 has the operator's rights and a lower upload limit: 1 GB by default, set with
 `TSANET_DEMO_AUTH_GUEST_MAX_UPLOAD_BYTES`, against the operator's 20 GB. A guest's `POST`, `PUT` or
-`PATCH` must declare a `Content-Length`, and any request's `Content-Length` must be within that limit, so a guest can't send chunked: it answers `411`. Remember what sits behind the gate: a UI that holds live member credentials
+`PATCH` must declare a `Content-Length`, and any request's `Content-Length` must be within that limit, so a guest can't send chunked: it answers `411`. When several member teams share one hosted demo,
+`TSANET_DEMO_WORKSPACES` gives each team a workspace of its own: a JSON list with one entry per team,
+each with a `name`, its own gate `username` and `password`, and optionally its own member credentials
+(`seeds`) and E2EE partner keys (`e2eePartners`) per environment. Each workspace has its own member
+sign-in, case list, active environment and partner table, and its login has the guest's upload limit.
+The list holds passwords, so it is a secret like the gate password; it needs the operator password set,
+and a list the demo cannot use stops it at startup. The shape and its rules are in `docs/RUNBOOK.md`
+section 6. Remember what sits behind the gate: a UI that holds live member credentials
 and can create real collaboration cases against partner companies.
 
 ### End-to-end encryption on the demo (optional)
