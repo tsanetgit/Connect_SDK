@@ -14,7 +14,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *                     when its file is absent (TSANET_DEMO_E2EE_PARTNERS_BETA and _DEV); blank means none
  */
 @ConfigurationProperties(prefix = "tsanet.demo.e2ee")
-public record DemoE2eeProperties(String privateJwks, Map<String, String> partnerSeeds) {
+public record DemoE2eeProperties(String privateJwks, Map<String, String> partnerSeeds) implements PartnerSeeds {
 
     public DemoE2eeProperties {
         if (partnerSeeds == null) {
@@ -23,9 +23,15 @@ public record DemoE2eeProperties(String privateJwks, Map<String, String> partner
     }
 
     /** The seed for environment {@code key}, or null when none is set. */
+    @Override
     public String partnerSeed(String key) {
         String seed = partnerSeeds.get(key);
         return seed == null || seed.isBlank() ? null : seed;
+    }
+
+    @Override
+    public String partnerSeedSource(String key) {
+        return partnerSeedVariable(key);
     }
 
     /** The environment variable the seed for {@code key} comes from, for messages. */

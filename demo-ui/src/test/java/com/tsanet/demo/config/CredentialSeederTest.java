@@ -95,8 +95,8 @@ class CredentialSeederTest {
 
     @Test
     void aSeedForAnUnknownEnvironmentFailsStartup() {
-        CredentialSeeder seeder = seeder(null, Map.of("prod", new DemoProperties.Seed("api@demo.example", SECRET)));
-        assertThatThrownBy(seeder::seed)
+        // Refused when the workspaces are put together, before anything is seeded.
+        assertThatThrownBy(() -> seeder(null, Map.of("prod", new DemoProperties.Seed("api@demo.example", SECRET))))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("tsanet.demo.seeds.prod")
             .hasMessageNotContaining(SECRET);

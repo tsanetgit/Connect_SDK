@@ -46,7 +46,7 @@ public class EnvironmentService {
 
     private final DemoProperties properties;
     private final E2eeKeys e2eeKeys;
-    private final DemoE2eeProperties e2eeProperties;
+    private final PartnerSeeds partnerSeeds;
     private final Map<String, SessionHolder> sessions = new ConcurrentHashMap<>();
     private final Map<String, CredentialsStore> credentialStores = new ConcurrentHashMap<>();
     private final Map<String, PartnerKeysStore> partnerKeyStores = new ConcurrentHashMap<>();
@@ -64,11 +64,13 @@ public class EnvironmentService {
         this(properties, e2eeKeys, e2eeProperties, Path.of(properties.dataDir()));
     }
 
-    /** @param dataDir where this instance keeps its marker file, credentials, caches and partner tables */
-    public EnvironmentService(DemoProperties properties, E2eeKeys e2eeKeys, DemoE2eeProperties e2eeProperties,
-                              Path dataDir) {
+    /**
+     * @param partnerSeeds what seeds this instance's partner tables when their files are absent
+     * @param dataDir      where this instance keeps its marker file, credentials, caches and partner tables
+     */
+    public EnvironmentService(DemoProperties properties, E2eeKeys e2eeKeys, PartnerSeeds partnerSeeds, Path dataDir) {
         this.e2eeKeys = e2eeKeys;
-        this.e2eeProperties = e2eeProperties;
+        this.partnerSeeds = partnerSeeds;
         // Environments are configuration, not user input, so every base URL is checked once,
         // here at startup: a bearer over plain http is a credential on the wire.
         if (properties.environments() != null) {
@@ -311,7 +313,7 @@ public class EnvironmentService {
         properties.require(key);
         return partnerKeyStores.computeIfAbsent(key,
             k -> new PartnerKeysStore(dataDir.resolve("e2ee-partners-" + k + ".json"),
-                e2eeProperties.partnerSeed(k), DemoE2eeProperties.partnerSeedVariable(k)));
+                partnerSeeds.partnerSeed(k), partnerSeeds.partnerSeedSource(k)));
     }
 
     /** Credentials store for the active environment. */

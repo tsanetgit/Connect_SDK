@@ -8,8 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Writes each workspace's configured {@link DemoProperties.Seed}s into its environments' credential
- * stores at startup, when a store is empty. Runs during singleton initialization, before the server
+ * Writes each workspace's seeds ({@link Workspaces.Workspace#seeds()}) into its environments'
+ * credential stores at startup, when a store is empty. Runs during singleton initialization, before the server
  * accepts requests, so a hosted demo on an ephemeral filesystem never answers a request signed in
  * as nobody (tsanetgit/Connect_SDK#152). A seed never overwrites what the store holds, which on a
  * persisted data dir means rotation needs the store cleared first. Writes go to the store
@@ -35,7 +35,7 @@ public class CredentialSeeder {
 
     /** Over one set of state, seeded from {@code tsanet.demo.seeds}. */
     public CredentialSeeder(DemoProperties properties, EnvironmentService environments) {
-        this(properties, Workspaces.single(environments, properties.seedsOrEmpty()));
+        this(properties, Workspaces.single(environments, Workspaces.seeds(properties)));
     }
 
     @PostConstruct
@@ -45,23 +45,9 @@ public class CredentialSeeder {
 
     private void seed(Workspaces.Workspace workspace) {
         EnvironmentService environments = workspace.environments();
-        Map<String, DemoProperties.EnvironmentDef> envs = properties.environments();
-        for (Map.Entry<String, DemoProperties.Seed> entry : workspace.seeds().entrySet()) {
+        for (Map.Entry<String, CredentialsStore.Credentials> entry : workspace.seeds().entrySet()) {
             String key = entry.getKey();
-            DemoProperties.Seed seed = entry.getValue();
-            if (seed == null || (!seed.present() && !seed.partial())) {
-                // The shipped yml binds every environment's seed, blank when unset; blank is no seed.
-                continue;
-            }
-            if (!envs.containsKey(key)) {
-                // A value for an environment that does not exist is configuration, not user input:
-                // refuse at startup like the https check does.
-                throw new IllegalStateException("tsanet.demo.seeds." + key + " names no configured environment");
-            }
-            if (seed.partial()) {
-                log.warn("Seed for environment {} is incomplete (username or password blank): ignored", key);
-                continue;
-            }
+            CredentialsStore.Credentials seed = entry.getValue();
             CredentialsStore store = environments.credentialsFor(key);
             if (store.load().isPresent()) {
                 log.info("Environment {} already holds credentials: seed not applied", key);
@@ -73,7 +59,7 @@ public class CredentialSeeder {
         if (properties.credentialChangesLocked()) {
             // Visitors can switch environments even when locked, so every configured environment
             // with an empty store is a place a visitor can land signed in as nobody.
-            for (String key : envs.keySet()) {
+            for (String key : properties.environments().keySet()) {
                 if (environments.credentialsFor(key).load().isEmpty()) {
                     log.warn("Credentials are locked but environment {} holds none: a visitor switching to it sees a demo signed in as nobody", key);
                 }

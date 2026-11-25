@@ -4,9 +4,12 @@ import jakarta.annotation.PreDestroy;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -26,6 +29,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class Workspaces {
 
+    private static final Logger log = LoggerFactory.getLogger(Workspaces.class);
+
     /** The workspace the operator and guest logins open, and the one every request gets while the gate is off. */
     public static final String DEFAULT = "default";
 
@@ -39,9 +44,13 @@ public class Workspaces {
         }
     }
 
-    /** One workspace: its state, the logins that open it, and the seeds for its empty credential stores. */
+    /**
+     * One workspace: its state, the logins that open it, and by environment key the credentials
+     * {@link CredentialSeeder} writes into a store that is empty. The seeds are checked before the
+     * workspace exists, so each one names a configured environment and is complete.
+     */
     public record Workspace(String name, EnvironmentService environments, List<Login> logins,
-                            Map<String, DemoProperties.Seed> seeds) {
+                            Map<String, CredentialsStore.Credentials> seeds) {
     }
 
     private final List<Workspace> all;
@@ -57,7 +66,7 @@ public class Workspaces {
                       DemoAuthProperties auth) {
         this(List.of(new Workspace(DEFAULT,
                 new EnvironmentService(properties, e2eeKeys, e2eeProperties, Path.of(properties.dataDir())),
-                logins(auth), properties.seedsOrEmpty())),
+                logins(auth), seeds(properties))),
             auth.enabled());
     }
 
@@ -80,8 +89,34 @@ public class Workspaces {
     }
 
     /** One ungated workspace over {@code environments}, for a caller that holds a single set of state. */
-    public static Workspaces single(EnvironmentService environments, Map<String, DemoProperties.Seed> seeds) {
+    public static Workspaces single(EnvironmentService environments, Map<String, CredentialsStore.Credentials> seeds) {
         return new Workspaces(List.of(new Workspace(DEFAULT, environments, List.of(), seeds)), false);
+    }
+
+    /**
+     * The default workspace's seeds, from {@code tsanet.demo.seeds}. The shipped yml binds every
+     * environment's seed, blank when unset, so blank is no seed. An incomplete one is a
+     * misconfiguration worth a warning, never a seed. A seed for an environment that does not exist is
+     * configuration, not user input: it is refused at startup like the https check is.
+     */
+    public static Map<String, CredentialsStore.Credentials> seeds(DemoProperties properties) {
+        Map<String, CredentialsStore.Credentials> seeds = new LinkedHashMap<>();
+        for (Map.Entry<String, DemoProperties.Seed> entry : properties.seedsOrEmpty().entrySet()) {
+            String key = entry.getKey();
+            DemoProperties.Seed seed = entry.getValue();
+            if (seed == null || (!seed.present() && !seed.partial())) {
+                continue;
+            }
+            if (!properties.environments().containsKey(key)) {
+                throw new IllegalStateException("tsanet.demo.seeds." + key + " names no configured environment");
+            }
+            if (seed.partial()) {
+                log.warn("Seed for environment {} is incomplete (username or password blank): ignored", key);
+                continue;
+            }
+            seeds.put(key, CredentialsStore.Credentials.password(seed.username(), seed.password()));
+        }
+        return seeds;
     }
 
     private static List<Login> logins(DemoAuthProperties auth) {
