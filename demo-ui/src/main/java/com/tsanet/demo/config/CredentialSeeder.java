@@ -4,11 +4,12 @@ import jakarta.annotation.PostConstruct;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Writes each configured {@link DemoProperties.Seed} into its environment's credential store at
- * startup, when that store is empty. Runs during singleton initialization, before the server
+ * Writes each workspace's configured {@link DemoProperties.Seed}s into its environments' credential
+ * stores at startup, when a store is empty. Runs during singleton initialization, before the server
  * accepts requests, so a hosted demo on an ephemeral filesystem never answers a request signed in
  * as nobody (tsanetgit/Connect_SDK#152). A seed never overwrites what the store holds, which on a
  * persisted data dir means rotation needs the store cleared first. Writes go to the store
@@ -24,17 +25,28 @@ public class CredentialSeeder {
     private static final Logger log = LoggerFactory.getLogger(CredentialSeeder.class);
 
     private final DemoProperties properties;
-    private final EnvironmentService environments;
+    private final Workspaces workspaces;
 
-    public CredentialSeeder(DemoProperties properties, EnvironmentService environments) {
+    @Autowired
+    public CredentialSeeder(DemoProperties properties, Workspaces workspaces) {
         this.properties = properties;
-        this.environments = environments;
+        this.workspaces = workspaces;
+    }
+
+    /** Over one set of state, seeded from {@code tsanet.demo.seeds}. */
+    public CredentialSeeder(DemoProperties properties, EnvironmentService environments) {
+        this(properties, Workspaces.single(environments, properties.seedsOrEmpty()));
     }
 
     @PostConstruct
     public void seed() {
+        workspaces.all().forEach(this::seed);
+    }
+
+    private void seed(Workspaces.Workspace workspace) {
+        EnvironmentService environments = workspace.environments();
         Map<String, DemoProperties.EnvironmentDef> envs = properties.environments();
-        for (Map.Entry<String, DemoProperties.Seed> entry : properties.seedsOrEmpty().entrySet()) {
+        for (Map.Entry<String, DemoProperties.Seed> entry : workspace.seeds().entrySet()) {
             String key = entry.getKey();
             DemoProperties.Seed seed = entry.getValue();
             if (seed == null || (!seed.present() && !seed.partial())) {

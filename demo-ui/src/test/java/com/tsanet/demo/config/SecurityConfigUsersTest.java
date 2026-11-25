@@ -3,18 +3,29 @@ package com.tsanet.demo.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.nio.file.Path;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-/** The user store the gate is built from, called directly; no Spring context. */
+/** The user store the gate is built from the workspaces' logins, called directly; no Spring context. */
 class SecurityConfigUsersTest {
 
     private static final PasswordEncoder ENCODER = PasswordEncoderFactories.createDelegatingPasswordEncoder();
 
-    private static DemoAuthProperties of(String user, String password, String guestUser, String guestPassword) {
-        return new DemoAuthProperties(user, password, new DemoAuthProperties.Guest(guestUser, guestPassword, null));
+    @TempDir
+    Path dataDir;
+
+    /** The workspaces a deploy with these gate settings builds; nothing is written under the data dir. */
+    private Workspaces of(String user, String password, String guestUser, String guestPassword) {
+        return new Workspaces(
+            new DemoProperties(Map.of(), "beta", dataDir.toString(), null, null, null, null),
+            E2eeKeys.disabled(),
+            new DemoE2eeProperties(null, null),
+            new DemoAuthProperties(user, password, new DemoAuthProperties.Guest(guestUser, guestPassword, null)));
     }
 
     @Test

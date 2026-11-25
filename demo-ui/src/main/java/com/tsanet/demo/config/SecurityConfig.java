@@ -94,26 +94,23 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /**
+     * Every workspace's logins; with the gate off there are none. Which workspace a login opens is
+     * {@link Workspaces#current()}'s to say.
+     */
     @Bean
-    public UserDetailsService demoUsers(DemoAuthProperties auth) {
-        if (!auth.enabled()) {
-            return new InMemoryUserDetailsManager();
-        }
+    public UserDetailsService demoUsers(Workspaces workspaces) {
         var encoder = PasswordEncoderFactories.createDelegatingPasswordEncoder();
         var users = new ArrayList<UserDetails>();
-        users.add(User.builder()
-            .username(auth.effectiveUsername())
-            .password(encoder.encode(auth.password()))
-            .roles("DEMO")
-            .build());
-        if (auth.guestEnabled()) {
-            // Same role on purpose: the gate is the only perimeter (tsanetgit/Connect_SDK#148).
-            users.add(User.builder()
-                .username(auth.effectiveGuestUsername())
-                .password(encoder.encode(auth.guest().password()))
-                // The same role, and a marker only GuestUploadLimitFilter reads.
-                .authorities("ROLE_DEMO", GuestUploadLimitFilter.LIMITED_UPLOADS)
-                .build());
+        for (Workspaces.Workspace workspace : workspaces.all()) {
+            for (Workspaces.Login login : workspace.logins()) {
+                var user = User.builder().username(login.username()).password(encoder.encode(login.password()));
+                // Same role on purpose: the gate is the only perimeter (tsanetgit/Connect_SDK#148).
+                // A limited login gets the same role, and a marker only GuestUploadLimitFilter reads.
+                users.add(login.limitedUploads()
+                    ? user.authorities("ROLE_DEMO", GuestUploadLimitFilter.LIMITED_UPLOADS).build()
+                    : user.roles("DEMO").build());
+            }
         }
         return new InMemoryUserDetailsManager(users);
     }

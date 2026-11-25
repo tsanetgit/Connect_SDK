@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -164,6 +165,77 @@ class UploadFileNameTest {
                 && (path.getFileName().toString().startsWith("tsanet-demo-deliver")
                     || path.getFileName().toString().startsWith("tsanet-demo-attach"))).collect(Collectors.toSet());
         }
+    }
+
+    /** An upload's status answers only in the workspace that started it (tsanetgit/Connect_SDK#190). */
+    @org.junit.jupiter.api.Test
+    void anotherWorkspaceCannotReadAnUploadsStatus() throws Exception {
+        TsaNetApiSession session = mock(TsaNetApiSession.class);
+        when(session.attachmentsV2()).thenReturn(attachmentsV2);
+        SessionGuard guard = mock(SessionGuard.class);
+        when(guard.session()).thenReturn(session);
+        when(guard.workspace()).thenReturn("team-a");
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AttachmentsController(guard))
+            .setControllerAdvice(new ApiErrorHandler()).build();
+        String started = mvc.perform(multipart("/api/requests/tok/attachments/v2")
+                .file(new MockMultipartFile("file", "report.txt", "text/plain", new byte[] {1})))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String uploadId = com.jayway.jsonpath.JsonPath.read(started, "$.uploadId");
+
+        mvc.perform(get("/api/uploads/" + uploadId)).andExpect(status().isOk());
+
+        // From another workspace the id answers exactly as one nobody started, so it confirms nothing.
+        when(guard.workspace()).thenReturn("team-b");
+        var fromAnother = mvc.perform(get("/api/uploads/" + uploadId)).andExpect(status().isNotFound())
+            .andReturn().getResponse();
+        var neverStarted = mvc.perform(get("/api/uploads/no-such-upload")).andExpect(status().isNotFound())
+            .andReturn().getResponse();
+        assertThat(fromAnother.getContentAsString()).isEqualTo(neverStarted.getContentAsString());
+        assertThat(fromAnother.getErrorMessage()).isEqualTo(neverStarted.getErrorMessage());
+    }
+
+    /**
+     * The workspace is read on the request's thread, before the delivery starts: with the gate on, the
+     * delivery thread carries no login to read it from (tsanetgit/Connect_SDK#190). A mocked guard answers
+     * the same on any thread, so this one records where it was asked.
+     */
+    @org.junit.jupiter.api.Test
+    void theWorkspaceIsReadOnTheRequestsThreadNotTheDeliveryThread() throws Exception {
+        Thread request = Thread.currentThread(); // a standalone MockMvc runs the controller on the calling thread
+        Set<Thread> askedOn = java.util.concurrent.ConcurrentHashMap.newKeySet();
+        CompletableFuture<Thread> delivery = new CompletableFuture<>();
+        TsaNetApiSession session = mock(TsaNetApiSession.class);
+        when(session.attachmentsV2()).thenReturn(attachmentsV2);
+        when(attachmentsV2.send(anyString(), any(Path.class), any())).thenAnswer(call -> {
+            delivery.complete(Thread.currentThread());
+            return null;
+        });
+        SessionGuard guard = mock(SessionGuard.class);
+        when(guard.session()).thenReturn(session);
+        when(guard.workspace()).thenAnswer(call -> {
+            askedOn.add(Thread.currentThread());
+            return "team-a";
+        });
+        MockMvc mvc = MockMvcBuilders.standaloneSetup(new AttachmentsController(guard))
+            .setControllerAdvice(new ApiErrorHandler()).build();
+
+        String started = mvc.perform(multipart("/api/requests/tok/attachments/v2")
+                .file(new MockMultipartFile("file", "report.txt", "text/plain", new byte[] {1})))
+            .andExpect(status().isOk())
+            .andReturn().getResponse().getContentAsString();
+        String uploadId = com.jayway.jsonpath.JsonPath.read(started, "$.uploadId");
+
+        // The delivery ran on a thread of its own, and is given the time to finish recording its outcome.
+        assertThat(delivery.get(5, TimeUnit.SECONDS)).isNotSameAs(request);
+        String phase = null;
+        for (int i = 0; i < 250 && !"done".equals(phase); i++) {
+            Thread.sleep(20);
+            phase = com.jayway.jsonpath.JsonPath.read(
+                mvc.perform(get("/api/uploads/" + uploadId)).andReturn().getResponse().getContentAsString(), "$.phase");
+        }
+        assertThat(phase).isEqualTo("done");
+        assertThat(askedOn).containsExactly(request);
     }
 
     /** Once the app is shutting down, an upload that reaches the delivery queue is refused and cleaned up. */

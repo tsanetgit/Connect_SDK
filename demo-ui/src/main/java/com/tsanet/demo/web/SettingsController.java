@@ -11,10 +11,13 @@ import com.tsanet.demo.config.DemoProperties;
 import com.tsanet.demo.config.E2eeKeys;
 import com.tsanet.demo.config.EnvironmentService;
 import com.tsanet.demo.config.PartnerKeysStore;
+import com.tsanet.demo.config.Workspaces;
 import java.net.URI;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,21 +33,32 @@ import org.springframework.web.server.ResponseStatusException;
 @RestController
 public class SettingsController {
 
-    private final EnvironmentService environments;
+    private final Workspaces workspaces;
     private final SessionGuard guard;
     private final DemoProperties properties;
 
-    public SettingsController(EnvironmentService environments, SessionGuard guard, DemoProperties properties) {
-        this.environments = environments;
+    @Autowired
+    public SettingsController(Workspaces workspaces, SessionGuard guard, DemoProperties properties) {
+        this.workspaces = workspaces;
         this.guard = guard;
         this.properties = properties;
     }
 
+    /** Over one set of state, whoever asks. */
+    public SettingsController(EnvironmentService environments, SessionGuard guard, DemoProperties properties) {
+        this(Workspaces.single(environments, Map.of()), guard, properties);
+    }
+
+    /** The state of the workspace the request's login opens (tsanetgit/Connect_SDK#190). */
+    private EnvironmentService environments() {
+        return workspaces.current().environments();
+    }
+
     @GetMapping("/api/settings")
     public SettingsStatus getSettings() {
-        List<EnvironmentStatus> envs = environments.environments().entrySet().stream()
+        List<EnvironmentStatus> envs = environments().environments().entrySet().stream()
             .map(e -> {
-                var creds = environments.credentialsFor(e.getKey()).load();
+                var creds = environments().credentialsFor(e.getKey()).load();
                 return new EnvironmentStatus(
                     e.getKey(),
                     e.getValue().label(),
@@ -57,8 +71,8 @@ public class SettingsController {
                 );
             })
             .toList();
-        boolean e2ee = environments.e2eeKeys().enabled();
-        return new SettingsStatus(environments.activeEnvironment(), envs, properties.credentialChangesLocked(),
+        boolean e2ee = environments().e2eeKeys().enabled();
+        return new SettingsStatus(environments().activeEnvironment(), envs, properties.credentialChangesLocked(),
             new E2eeStatus(e2ee, e2ee ? JwksController.PATH : null));
     }
 
@@ -90,10 +104,10 @@ public class SettingsController {
 
     // With E2EE off the table isn't read: the page shows nothing E2EE, as before #149.
     private List<PartnerKeyStatus> partnerKeyStatuses(String env) {
-        if (!environments.e2eeKeys().enabled()) {
+        if (!environments().e2eeKeys().enabled()) {
             return List.of();
         }
-        return environments.partnerKeysFor(env).entries().entrySet().stream()
+        return environments().partnerKeysFor(env).entries().entrySet().stream()
             .map(e -> new PartnerKeyStatus(e.getKey(), e.getValue().source(),
                 e.getValue().jwksUrl() == null ? null : e.getValue().jwksUrl().toString(), e.getValue().kids()))
             .toList();
@@ -140,20 +154,20 @@ public class SettingsController {
 
     private PartnerKeysStore partnerKeyStore(String env) {
         requirePartnerTableUnlocked();
-        if (!environments.e2eeKeys().enabled()) {
+        if (!environments().e2eeKeys().enabled()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                 "E2EE is off for this demo: " + E2eeKeys.VARIABLE + " is not set");
         }
-        if (!environments.environments().containsKey(env)) {
+        if (!environments().environments().containsKey(env)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown environment: " + env);
         }
-        return environments.partnerKeysFor(env);
+        return environments().partnerKeysFor(env);
     }
 
     @PostMapping("/api/settings/environment")
     public SettingsStatus switchEnvironment(@RequestBody SwitchBody body) {
         try {
-            environments.switchTo(body.environment());
+            environments().switchTo(body.environment());
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
@@ -171,7 +185,7 @@ public class SettingsController {
         } else if (isBlank(body.username()) || isBlank(body.password())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "username and password are required");
         }
-        var def = environments.environments().get(env);
+        var def = environments().environments().get(env);
         if (def == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown environment: " + env);
         }
@@ -186,14 +200,14 @@ public class SettingsController {
                 oauth ? body.clientSecret() : body.password()
             );
             if (oauth) {
-                environments.credentialsFor(env).saveOAuth(body.clientId(), body.clientSecret());
+                environments().credentialsFor(env).saveOAuth(body.clientId(), body.clientSecret());
             } else {
-                environments.credentialsFor(env).save(body.username(), body.password());
+                environments().credentialsFor(env).save(body.username(), body.password());
             }
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
-        environments.invalidate(env);
+        environments().invalidate(env);
         return getSettings();
     }
 
@@ -206,11 +220,11 @@ public class SettingsController {
     public void clearCredentials(@PathVariable String env) {
         requireCredentialsUnlocked();
         try {
-            environments.credentialsFor(env).clear();
+            environments().credentialsFor(env).clear();
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         }
-        environments.invalidate(env);
+        environments().invalidate(env);
     }
 
     /**
@@ -252,7 +266,7 @@ public class SettingsController {
     }
 
     private TsaNetApiSession sessionFor(String env) {
-        if (!environments.environments().containsKey(env)) {
+        if (!environments().environments().containsKey(env)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown environment: " + env);
         }
         return guard.session(env);

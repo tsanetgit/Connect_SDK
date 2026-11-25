@@ -4,23 +4,43 @@ import com.tsanet.api.TsaNetApiSession;
 import com.tsanet.demo.config.CredentialsStore;
 import com.tsanet.demo.config.DemoProperties;
 import com.tsanet.demo.config.EnvironmentService;
+import com.tsanet.demo.config.Workspaces;
 import com.tsanet.e2ee.E2eeProfile;
+import java.util.Map;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Resolves the active environment's SDK session and ensures it is authenticated
- * before facade calls, using that environment's persisted credentials.
+ * before facade calls, using that environment's persisted credentials. The
+ * environments are those of the workspace the request's login opens
+ * (tsanetgit/Connect_SDK#190).
  */
 @Component
 public class SessionGuard {
 
-    private final EnvironmentService environments;
+    private final Workspaces workspaces;
 
+    @Autowired
+    public SessionGuard(Workspaces workspaces) {
+        this.workspaces = workspaces;
+    }
+
+    /** Over one set of state, whoever asks. */
     public SessionGuard(EnvironmentService environments) {
-        this.environments = environments;
+        this(Workspaces.single(environments, Map.of()));
+    }
+
+    private EnvironmentService environments() {
+        return workspaces.current().environments();
+    }
+
+    /** The name of the workspace the request's login opens, for state a controller keeps per workspace. */
+    public String workspace() {
+        return workspaces.current().name();
     }
 
     /**
@@ -35,7 +55,7 @@ public class SessionGuard {
      * session, sending the first environment's secret to the second's API.
      */
     public TsaNetApiSession session() {
-        return session(environments.activeEnvironment());
+        return session(environments().activeEnvironment());
     }
 
     /**
@@ -46,6 +66,7 @@ public class SessionGuard {
      * another's API.
      */
     public TsaNetApiSession session(String key) {
+        EnvironmentService environments = environments();
         DemoProperties.EnvironmentDef def = environments.definitionFor(key);
         CredentialsStore.Credentials credentials = environments.credentialsFor(key).load()
             .orElseThrow(() -> new ResponseStatusException(
@@ -108,11 +129,11 @@ public class SessionGuard {
      * gets null refuses; it never falls back to plaintext.
      */
     public E2eeProfile e2ee(TsaNetApiSession session) {
-        return environments.e2eeFor(session);
+        return environments().e2eeFor(session);
     }
 
     /** Whether the demo holds its own E2EE keys; with them loaded, a null {@link #e2ee} means a replaced session. */
     public boolean e2eeEnabled() {
-        return environments.e2eeKeys().enabled();
+        return environments().e2eeKeys().enabled();
     }
 }

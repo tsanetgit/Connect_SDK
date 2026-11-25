@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.nio.charset.StandardCharsets;
@@ -50,6 +51,9 @@ class GateFilterChainTest {
 
     @Autowired
     private FilterChainProxy springSecurityFilterChain;
+
+    @Autowired
+    private DemoAuthProperties auth;
 
     private MockMvc mvc;
 
@@ -116,6 +120,32 @@ class GateFilterChainTest {
         mvc.perform(get("/api/version")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/version").header(HttpHeaders.AUTHORIZATION, basic("oracle", "g")))
             .andExpect(status().isOk());
+    }
+
+    private void switchEnvironment(String login, String environment) throws Exception {
+        Cookie cookie = csrfCookie(login);
+        mvc.perform(post("/api/settings/environment")
+                .header(HttpHeaders.AUTHORIZATION, login)
+                .cookie(cookie)
+                .header("X-XSRF-TOKEN", cookie.getValue())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"environment\":\"" + environment + "\"}"))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void theOperatorAndTheGuestShareOneWorkspace() throws Exception {
+        // As before workspaces (tsanetgit/Connect_SDK#190): either login's environment switch is the other's too.
+        String operator = basic(auth.effectiveUsername(), auth.password());
+        String guest = basic(auth.effectiveGuestUsername(), auth.guest().password());
+
+        switchEnvironment(guest, "dev");
+        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, operator))
+            .andExpect(jsonPath("$.activeEnvironment").value("dev"));
+
+        switchEnvironment(operator, "beta");
+        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, guest))
+            .andExpect(jsonPath("$.activeEnvironment").value("beta"));
     }
 
     private Cookie csrfCookie(String authorization) throws Exception {
