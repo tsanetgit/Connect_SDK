@@ -111,12 +111,13 @@ class CredentialSeederTest {
 
     @Test
     void theContainerRunsTheSeederDuringContextRefresh() {
-        // The @PostConstruct path under Spring: binding, EnvironmentService and the seeder wired
-        // as beans, with the data dir and a seed given as properties. This proves the hook runs
+        // The @PostConstruct path under Spring: binding, Workspaces and the seeder wired
+        // as beans, with the gate off and the data dir and a seed given as properties. This proves the hook runs
         // during refresh (singleton initialization); that the embedded server starts only after
         // refresh is Spring Boot's lifecycle (WebServerStartStopLifecycle), not asserted here.
         new ApplicationContextRunner()
-            .withUserConfiguration(Bound.class, DemoSessionConfiguration.class, E2eeKeys.class, EnvironmentService.class, CredentialSeeder.class)
+            .withUserConfiguration(Bound.class, DemoSessionConfiguration.class, E2eeKeys.class, Workspaces.class, CredentialSeeder.class)
+            .withBean(DemoAuthProperties.class, () -> new DemoAuthProperties(null, null, null))
             .withPropertyValues(
                 "tsanet.demo.environments.beta.label=Beta",
                 "tsanet.demo.environments.beta.api-base-url=https://connect.example",
@@ -126,7 +127,7 @@ class CredentialSeederTest {
                 "tsanet.demo.seeds.beta.password=" + SECRET)
             .run(context -> {
                 assertThat(context).hasNotFailed();
-                EnvironmentService wired = context.getBean(EnvironmentService.class);
+                EnvironmentService wired = context.getBean(Workspaces.class).current().environments();
                 assertThat(wired.credentialsFor("beta").load())
                     .hasValueSatisfying(c -> assertThat(c.username()).isEqualTo("api@demo.example"));
             });

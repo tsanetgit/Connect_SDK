@@ -38,12 +38,18 @@ public class AttachmentsController {
     private static final String DEFAULT_NAME = "attachment";
 
     private final SessionGuard guard;
-    /** In-flight and finished V2 deliveries, keyed by upload id; demo-side state only. */
-    private final Map<String, UploadState> uploads = new ConcurrentHashMap<>();
+    /**
+     * In-flight and finished V2 deliveries, keyed by the workspace that started each one and its upload
+     * id, so another workspace's id is unknown here (tsanetgit/Connect_SDK#190); demo-side state only.
+     */
+    private final Map<UploadKey, UploadState> uploads = new ConcurrentHashMap<>();
     private final ExecutorService deliveries = Executors.newVirtualThreadPerTaskExecutor();
 
     public AttachmentsController(SessionGuard guard) {
         this.guard = guard;
+    }
+
+    private record UploadKey(String workspace, String uploadId) {
     }
 
     /**
@@ -91,6 +97,8 @@ public class AttachmentsController {
         // Resolve the facade here, on the request thread: an account-scoped session picks its
         // delegate per call, and a delivery must not follow an account switch made mid-flight.
         AttachmentsV2Facade attachments = guard.session().attachmentsV2();
+        // The workspace too: the delivery thread carries no login to read it from.
+        String workspace = guard.workspace();
         Path temp;
         try {
             temp = store("tsanet-demo-deliver", file);
@@ -99,22 +107,23 @@ public class AttachmentsController {
         }
         String original = temp.getFileName().toString();
         String uploadId = UUID.randomUUID().toString();
-        uploads.put(uploadId, new UploadState(uploadId, original, "starting", null, 0, 0, 0, file.getSize(), null, null));
+        UploadKey key = new UploadKey(workspace, uploadId);
+        uploads.put(key, new UploadState(uploadId, original, "starting", null, 0, 0, 0, file.getSize(), null, null));
         try {
             deliveries.submit(() -> {
                 try {
                     AttachmentGrant outcome = attachments.send(token, temp,
-                        progress -> uploads.computeIfPresent(uploadId, (k, v) -> v.progressed(progress)));
-                    uploads.computeIfPresent(uploadId, (k, v) -> v.finished(outcome));
+                        progress -> uploads.computeIfPresent(key, (k, v) -> v.progressed(progress)));
+                    uploads.computeIfPresent(key, (k, v) -> v.finished(outcome));
                 } catch (RuntimeException e) {
                     String failure = e instanceof AttachmentV2Exception v2 ? v2.code() + ": " + e.getMessage() : e.getMessage();
-                    uploads.computeIfPresent(uploadId, (k, v) -> v.failed(failure));
+                    uploads.computeIfPresent(key, (k, v) -> v.failed(failure));
                 } finally {
                     removeDirectory(temp.getParent());
                 }
             });
         } catch (RejectedExecutionException shuttingDown) {
-            uploads.remove(uploadId);
+            uploads.remove(key);
             removeDirectory(temp.getParent());
             throw shuttingDown;
         }
@@ -200,7 +209,7 @@ public class AttachmentsController {
     @GetMapping("/api/uploads/{uploadId}")
     public UploadState uploadState(@PathVariable String uploadId) {
         guard.session(); // same login requirement as every other case endpoint
-        UploadState state = uploads.get(uploadId);
+        UploadState state = uploads.get(new UploadKey(guard.workspace(), uploadId));
         if (state == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "unknown upload");
         }

@@ -8,7 +8,6 @@ import com.tsanet.api.auth.AccountAuthConfig;
 import com.tsanet.api.auth.ClientCredentialsAuthConfig;
 import com.tsanet.api.auth.PasswordAuthConfig;
 import com.tsanet.e2ee.E2eeProfile;
-import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -20,8 +19,6 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
 /**
  * Owns the active-environment state and one lazily-created SDK session per
@@ -41,8 +38,10 @@ import org.springframework.stereotype.Component;
  * session, built lazily once the session can answer {@code /v1/me} for the company id, and held in
  * the same holder, so a credentials change or {@link #invalidate} drops it with the session. With
  * E2EE off ({@link E2eeKeys#enabled()} false) no profile is ever built.
+ *
+ * <p>One instance is one workspace's state (tsanetgit/Connect_SDK#190): {@link Workspaces} builds
+ * it, gives it the directory its files live under, and closes it at shutdown.
  */
-@Component
 public class EnvironmentService {
 
     private final DemoProperties properties;
@@ -51,6 +50,7 @@ public class EnvironmentService {
     private final Map<String, SessionHolder> sessions = new ConcurrentHashMap<>();
     private final Map<String, CredentialsStore> credentialStores = new ConcurrentHashMap<>();
     private final Map<String, PartnerKeysStore> partnerKeyStores = new ConcurrentHashMap<>();
+    private final Path dataDir;
     private final Path activeEnvFile;
     private volatile String activeEnvironment;
 
@@ -59,8 +59,14 @@ public class EnvironmentService {
         this(properties, E2eeKeys.disabled(), new DemoE2eeProperties(null, null));
     }
 
-    @Autowired
+    /** With its files directly under {@code tsanet.demo.data-dir}. */
     public EnvironmentService(DemoProperties properties, E2eeKeys e2eeKeys, DemoE2eeProperties e2eeProperties) {
+        this(properties, e2eeKeys, e2eeProperties, Path.of(properties.dataDir()));
+    }
+
+    /** @param dataDir where this instance keeps its marker file, credentials, caches and partner tables */
+    public EnvironmentService(DemoProperties properties, E2eeKeys e2eeKeys, DemoE2eeProperties e2eeProperties,
+                              Path dataDir) {
         this.e2eeKeys = e2eeKeys;
         this.e2eeProperties = e2eeProperties;
         // Environments are configuration, not user input, so every base URL is checked once,
@@ -72,7 +78,8 @@ public class EnvironmentService {
             }
         }
         this.properties = properties;
-        this.activeEnvFile = dataDir().resolve("active-environment");
+        this.dataDir = dataDir;
+        this.activeEnvFile = dataDir.resolve("active-environment");
         this.activeEnvironment = loadPersistedEnvironment();
         // With keys loaded, every environment's partner table is read now, so an unusable seed or file
         // fails startup naming its variable instead of failing the Settings page on its first click.
@@ -82,10 +89,6 @@ public class EnvironmentService {
                 partnerKeysFor(key);
             }
         }
-    }
-
-    private Path dataDir() {
-        return Path.of(properties.dataDir());
     }
 
     private String loadPersistedEnvironment() {
@@ -212,7 +215,6 @@ public class EnvironmentService {
         }
     }
 
-    @PreDestroy
     public void close() {
         sessions.values().forEach(holder -> holder.session().close());
         sessions.clear();
@@ -228,7 +230,7 @@ public class EnvironmentService {
         AccountAuthConfig auth = toAuthConfig(def, credentials);
         return TsaNetApi.initialize(new TsaNetApiConfiguration(
             def.apiBaseUrl(),
-            dataDir().resolve("data-" + key + ".db").toString(),
+            dataDir.resolve("data-" + key + ".db").toString(),
             credentials.principal(),
             auth
         ));
@@ -308,7 +310,7 @@ public class EnvironmentService {
     public PartnerKeysStore partnerKeysFor(String key) {
         properties.require(key);
         return partnerKeyStores.computeIfAbsent(key,
-            k -> new PartnerKeysStore(dataDir().resolve("e2ee-partners-" + k + ".json"),
+            k -> new PartnerKeysStore(dataDir.resolve("e2ee-partners-" + k + ".json"),
                 e2eeProperties.partnerSeed(k), DemoE2eeProperties.partnerSeedVariable(k)));
     }
 
@@ -320,6 +322,6 @@ public class EnvironmentService {
     public CredentialsStore credentialsFor(String key) {
         properties.require(key);
         return credentialStores.computeIfAbsent(key,
-            k -> new CredentialsStore(dataDir().resolve("credentials-" + k + ".properties")));
+            k -> new CredentialsStore(dataDir.resolve("credentials-" + k + ".properties")));
     }
 }
