@@ -103,7 +103,7 @@ button on the other environments; saving or clearing credentials is refused, and
 receiver-storage section is unaffected. The lock covers the E2EE partner keys too: the
 card lists the table and the demo's JWKS URL read-only, with no Add / Replace form and
 no Remove buttons, and the add and remove endpoints refuse. On a locked hosted demo the
-pilot's keys arrive through `TSANET_DEMO_E2EE_PARTNERS_BETA` and `_DEV` (RUNBOOK §6). When the operator has also seeded both environments
+pilot's keys arrive through `TSANET_DEMO_E2EE_PARTNERS_BETA` and `_DEV` (RUNBOOK §6), or for a configured workspace through its own entry in `TSANET_DEMO_WORKSPACES`. When the operator has also seeded both environments
 (see the RUNBOOK), the hosted demo comes up already signed in on each, so a visitor only
 ever switches environments. Hand the guest login to
 people you would hand the demo to, not as a per-person account.
@@ -146,7 +146,8 @@ exactly as before.
   Replace** writes the entry for that company id; **Remove** deletes it.
 - The table is kept per environment next to that environment's credentials,
   so on the hosted demo it is lost on redeploy like the credentials. The
-  operator's seed variable restores it at startup (Runbook §6). With
+  operator's seed restores it at startup: a variable for the operator's workspace, and for a
+  configured workspace its entry in `TSANET_DEMO_WORKSPACES` (Runbook §6). With
   `TSANET_DEMO_CREDENTIALS_LOCKED` set the table is read-only on the card and
   the seed is its only source.
 - The demo's own company is never in the table: its keys come from its own set.

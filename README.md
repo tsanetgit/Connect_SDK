@@ -117,4 +117,6 @@ environment's store at startup when the store is empty, and never overwrites one
 `TSANET_DEMO_E2EE_PRIVATE_JWKS` holds the demo's own private JWK set (generated
 by `com.tsanet.demo.E2eeKeyGenerator`, see the RUNBOOK); unset, the demo is
 unchanged. On a locked demo the E2EE partner table is read-only too and comes
-from `TSANET_DEMO_E2EE_PARTNERS_BETA` / `_DEV`.
+from `TSANET_DEMO_E2EE_PARTNERS_BETA` / `_DEV`. Those two, and the `SEED` pairs above, are for the
+operator's workspace: a configured workspace takes its credentials and partner keys from its own
+entry in `TSANET_DEMO_WORKSPACES`.

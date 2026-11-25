@@ -140,7 +140,8 @@ What a member gets once it is on:
   JWKS URL (https) or its pasted public JWKS (for a partner that hardcodes keys per endpoint).
   A pasted set holding a private key is refused. The table lives in the ephemeral data dir on
   a hosted demo; `TSANET_DEMO_E2EE_PARTNERS_BETA` / `_DEV` (the same JSON shape) restore it at
-  startup when the file is absent.
+  startup when the file is absent. Those two are for the operator's workspace: a workspace
+  configured in `TSANET_DEMO_WORKSPACES` takes its table from its own `e2eePartners`.
 - **Encrypt (E2EE)** on New Collaboration (pre-checked when the partner has a key entry) and on
   Add Note (pre-checked on an encrypted case). Checked without a key entry is a 400 naming the
   company id, never a plaintext send.

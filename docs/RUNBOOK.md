@@ -173,7 +173,9 @@ table as JSON: each partner company id maps to `{"jwksUrl": "https://..."}` or
 seed applies only when that environment's table file is absent; a table edited on the card wins
 until the next redeploy. On a locked demo (`TSANET_DEMO_CREDENTIALS_LOCKED`) the card cannot
 edit the table, so the seed is the only way the pilot's keys get in. The same JSON shape is what the demo writes to `e2ee-partners-<env>.json`
-in the data dir, so a table built on the card can be copied out as the seed.
+in the data dir, so a table built on the card can be copied out as the seed. These two variables
+seed the operator's workspace. A configured workspace's table is seeded from its own `e2eePartners`
+(Workspaces, below) and takes nothing from them.
 
 If you give a guest login to people outside your team with E2EE on, run the demo locked, which
 needs the member seeds (see the lock paragraph below). On an unlocked demo, any gate login can add
@@ -315,15 +317,15 @@ with the previous sha tag. Logs: `aws logs tail <LOG_GROUP> --region <REGION> --
 (the group name is in `describe-express-gateway-service` under `awsLogsConfiguration`).
 
 The container filesystem is ephemeral: re-enter member credentials in Settings after every
-deploy, or seed them so each deploy re-creates them: put each environment's member username and password in
+deploy, or seed them so each deploy re-creates them: for the operator's workspace, put each environment's member username and password in
 SSM (`/connect-sdk-demo/TSANET_DEMO_SEED_BETA_USERNAME`, `.../TSANET_DEMO_SEED_BETA_PASSWORD`, and
-the `DEV` pair), add them to the container's `secrets` like the gate values, and the demo writes
+the `DEV` pair; a configured workspace's seeds are in its entry in `TSANET_DEMO_WORKSPACES`, above), add them to the container's `secrets` like the gate values, and the demo writes
 them into the matching store at startup when that store is empty. With the seeds in place, keep
 the `environment` block from the example above (`TSANET_DEMO_CREDENTIALS_LOCKED` = `true`) and
 deploy: Settings becomes a read-only "Signed in as" view with the environment switch, and
 credential saves and clears are refused. The lock covers the E2EE partner table as well: its
 add and remove endpoints refuse, the card shows the table read-only, and the pilot's keys come
-from `TSANET_DEMO_E2EE_PARTNERS_BETA` and `TSANET_DEMO_E2EE_PARTNERS_DEV` (above), which the locked demo reads at startup. Rotating a seeded credential is a new SSM value plus a
+from `TSANET_DEMO_E2EE_PARTNERS_BETA` and `TSANET_DEMO_E2EE_PARTNERS_DEV` (above), or for a configured workspace from its `e2eePartners`, which the locked demo reads at startup. Rotating a seeded credential is a new SSM value plus a
 redeploy, and that works only because the ECS filesystem is ephemeral: a seed never overwrites a
 stored credential, so on a persisted data dir you would clear `credentials-<env>.properties`
 first. Two rules for every value that reaches the demo through an environment variable (seeds and
