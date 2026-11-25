@@ -48,14 +48,14 @@ class SecurityConfigUsersTest {
             new DemoProperties(Map.of(), "beta", dataDir.toString(), null, null, null, null),
             E2eeKeys.disabled(),
             new DemoE2eeProperties(null, null),
-            new DemoAuthProperties("shawn", "op", null),
+            new DemoAuthProperties("operator", "op", null),
             new DemoWorkspacesProperties("[{\"name\": \"team-a\", \"username\": \"team-a\", \"password\": \"a-pw\"}]")));
 
         var team = users.loadUserByUsername("team-a");
         assertThat(ENCODER.matches("a-pw", team.getPassword())).isTrue();
         assertThat(team.getAuthorities()).extracting(Object::toString)
             .containsExactlyInAnyOrder("ROLE_DEMO", GuestUploadLimitFilter.LIMITED_UPLOADS);
-        assertThat(users.loadUserByUsername("shawn").getAuthorities()).extracting(Object::toString).containsExactly("ROLE_DEMO");
+        assertThat(users.loadUserByUsername("operator").getAuthorities()).extracting(Object::toString).containsExactly("ROLE_DEMO");
     }
 
     @Test
