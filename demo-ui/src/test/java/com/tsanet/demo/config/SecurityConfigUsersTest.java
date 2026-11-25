@@ -30,10 +30,10 @@ class SecurityConfigUsersTest {
 
     @Test
     void registersOperatorAndGuestWithTheSameRole() {
-        var users = new SecurityConfig().demoUsers(of("shawn", "op", "oracle", "g"));
+        var users = new SecurityConfig().demoUsers(of("operator", "op", "visitor", "g"));
 
-        var operator = users.loadUserByUsername("shawn");
-        var guest = users.loadUserByUsername("oracle");
+        var operator = users.loadUserByUsername("operator");
+        var guest = users.loadUserByUsername("visitor");
         assertThat(ENCODER.matches("op", operator.getPassword())).isTrue();
         assertThat(ENCODER.matches("g", guest.getPassword())).isTrue();
         assertThat(ENCODER.matches("op", guest.getPassword())).isFalse();
@@ -44,18 +44,18 @@ class SecurityConfigUsersTest {
 
     @Test
     void guestIsAbsentWhenItsPasswordIsBlank() {
-        var users = new SecurityConfig().demoUsers(of("shawn", "op", "oracle", ""));
+        var users = new SecurityConfig().demoUsers(of("operator", "op", "visitor", ""));
 
-        assertThat(users.loadUserByUsername("shawn")).isNotNull();
-        assertThatThrownBy(() -> users.loadUserByUsername("oracle")).isInstanceOf(UsernameNotFoundException.class);
+        assertThat(users.loadUserByUsername("operator")).isNotNull();
+        assertThatThrownBy(() -> users.loadUserByUsername("visitor")).isInstanceOf(UsernameNotFoundException.class);
         assertThatThrownBy(() -> users.loadUserByUsername("guest")).isInstanceOf(UsernameNotFoundException.class);
     }
 
     @Test
     void gateOffRegistersNobody() {
-        var users = new SecurityConfig().demoUsers(of("shawn", "", null, null));
+        var users = new SecurityConfig().demoUsers(of("operator", "", null, null));
 
-        assertThatThrownBy(() -> users.loadUserByUsername("shawn")).isInstanceOf(UsernameNotFoundException.class);
+        assertThatThrownBy(() -> users.loadUserByUsername("operator")).isInstanceOf(UsernameNotFoundException.class);
         assertThatThrownBy(() -> users.loadUserByUsername("demo")).isInstanceOf(UsernameNotFoundException.class);
     }
 }

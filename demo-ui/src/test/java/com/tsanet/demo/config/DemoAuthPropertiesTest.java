@@ -29,20 +29,20 @@ class DemoAuthPropertiesTest {
 
     @Test
     void guestOnWhenBothPasswordsSet() {
-        var props = of("shawn", "op", null, "g");
+        var props = of("operator", "op", null, "g");
         assertThat(props.guestEnabled()).isTrue();
         assertThat(props.effectiveGuestUsername()).isEqualTo("guest");
     }
 
     @Test
     void guestUsernameWithoutPasswordIsNotAGuest() {
-        var props = of("shawn", "op", "oracle", " ");
+        var props = of("operator", "op", "visitor", " ");
         assertThat(props.guestEnabled()).isFalse();
     }
 
     @Test
     void absentGuestBlockBindsAsNoGuest() {
-        var props = new DemoAuthProperties("shawn", "op", null);
+        var props = new DemoAuthProperties("operator", "op", null);
         assertThat(props.guestEnabled()).isFalse();
         assertThat(props.guest()).isNotNull();
     }
@@ -50,7 +50,7 @@ class DemoAuthPropertiesTest {
     @Test
     void guestPasswordWithoutOperatorPasswordFailsStartup() {
         // The message names the variables, never the value (it is logged at startup).
-        assertThatThrownBy(() -> of("shawn", "", "oracle", "s3cret-guest-pw"))
+        assertThatThrownBy(() -> of("operator", "", "visitor", "s3cret-guest-pw"))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("TSANET_DEMO_AUTH_PASSWORD")
             .hasMessageNotContaining("s3cret-guest-pw");
@@ -58,7 +58,7 @@ class DemoAuthPropertiesTest {
 
     @Test
     void sameUsernameForBothLoginsFailsStartupCaseInsensitively() {
-        assertThatThrownBy(() -> of("Oracle", "op", "oracle", "g"))
+        assertThatThrownBy(() -> of("Visitor", "op", "visitor", "g"))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("must differ");
         // The defaults collide too when the operator is explicitly named "guest".
@@ -75,13 +75,13 @@ class DemoAuthPropertiesTest {
 
     @Test
     void toStringNeverPrintsEitherPassword() {
-        var props = of("shawn", "s3cret-operator-pw", "oracle", "s3cret-guest-pw");
+        var props = of("operator", "s3cret-operator-pw", "visitor", "s3cret-guest-pw");
         assertThat(props.toString())
-            .startsWith("DemoAuthProperties[username=shawn, password set")
-            .contains("oracle")
+            .startsWith("DemoAuthProperties[username=operator, password set")
+            .contains("visitor")
             .doesNotContain("s3cret-operator-pw", "s3cret-guest-pw");
-        assertThat(props.guest().toString()).contains("oracle").doesNotContain("s3cret-guest-pw");
-        assertThat(of("shawn", "", null, null).toString()).startsWith("DemoAuthProperties[username=shawn, no password");
+        assertThat(props.guest().toString()).contains("visitor").doesNotContain("s3cret-guest-pw");
+        assertThat(of("operator", "", null, null).toString()).startsWith("DemoAuthProperties[username=operator, no password");
     }
 
     @org.junit.jupiter.api.Test

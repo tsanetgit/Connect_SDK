@@ -38,9 +38,9 @@ import org.springframework.web.context.WebApplicationContext;
  * developer's home is touched.
  */
 @SpringBootTest(properties = {
-    "tsanet.demo.auth.username=shawn",
+    "tsanet.demo.auth.username=operator",
     "tsanet.demo.auth.password=op",
-    "tsanet.demo.auth.guest.username=oracle",
+    "tsanet.demo.auth.guest.username=visitor",
     "tsanet.demo.auth.guest.password=g",
     "tsanet.demo.data-dir=${java.io.tmpdir}/tsanet-demo-gate-test-${random.uuid}"
 })
@@ -85,13 +85,13 @@ class GateFilterChainTest {
 
     @Test
     void operatorSignsIn() throws Exception {
-        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("shawn", "op")))
+        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("operator", "op")))
             .andExpect(status().isOk());
     }
 
     @Test
     void guestSignsIn() throws Exception {
-        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("oracle", "g")))
+        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("visitor", "g")))
             .andExpect(status().isOk());
     }
 
@@ -99,26 +99,26 @@ class GateFilterChainTest {
     void guestUsernameIsCaseInsensitive() throws Exception {
         // The in-memory store keys users by lower-cased name, which is why the
         // duplicate-username check in DemoAuthProperties ignores case.
-        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("ORACLE", "g")))
+        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("VISITOR", "g")))
             .andExpect(status().isOk());
     }
 
     @Test
     void guestWithTheOperatorPasswordIsRefused() throws Exception {
-        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("oracle", "op")))
+        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("visitor", "op")))
             .andExpect(status().isUnauthorized());
     }
 
     @Test
     void wrongGuestPasswordIsRefused() throws Exception {
-        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("oracle", "wrong")))
+        mvc.perform(get("/api/settings").header(HttpHeaders.AUTHORIZATION, basic("visitor", "wrong")))
             .andExpect(status().isUnauthorized());
     }
 
     @Test
     void theVersionIsBehindTheGate() throws Exception {
         mvc.perform(get("/api/version")).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/version").header(HttpHeaders.AUTHORIZATION, basic("oracle", "g")))
+        mvc.perform(get("/api/version").header(HttpHeaders.AUTHORIZATION, basic("visitor", "g")))
             .andExpect(status().isOk());
     }
 
@@ -163,7 +163,7 @@ class GateFilterChainTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"shawn,op", "oracle,g"})
+    @CsvSource({"operator,op", "visitor,g"})
     void aCrossSiteFormIsRefusedEvenWithTheBrowsersCachedLogin(String user, String password) throws Exception {
         // What another site's form sends: the login and the cookie, which the browser adds, and no header.
         String login = basic(user, password);
@@ -176,7 +176,7 @@ class GateFilterChainTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"shawn,op", "oracle,g"})
+    @CsvSource({"operator,op", "visitor,g"})
     void theSpasOwnCallPassesTheCheck(String user, String password) throws Exception {
         // 428: past the CSRF check and in the controller, which has no member credentials here.
         String login = basic(user, password);
@@ -203,7 +203,7 @@ class GateFilterChainTest {
     @Test
     void aTokenInTheFormParameterIsNotRead() throws Exception {
         mvc.perform(post("/api/requests/t1/close")
-                .header(HttpHeaders.AUTHORIZATION, basic("shawn", "op"))
+                .header(HttpHeaders.AUTHORIZATION, basic("operator", "op"))
                 .cookie(new Cookie("XSRF-TOKEN", "matching-token"))
                 .param("_csrf", maskedToken("matching-token")))
             .andExpect(status().isForbidden())
@@ -212,7 +212,7 @@ class GateFilterChainTest {
 
     @Test
     void aHeaderThatDoesNotMatchTheCookieIsRefused() throws Exception {
-        String login = basic("shawn", "op");
+        String login = basic("operator", "op");
         mvc.perform(post("/api/requests/t1/close")
                 .header(HttpHeaders.AUTHORIZATION, login)
                 .cookie(csrfCookie(login))
@@ -223,7 +223,7 @@ class GateFilterChainTest {
     @ParameterizedTest
     @CsvSource({"/api/requests/t1/attachments,files", "/api/requests/t1/attachments/v2,file"})
     void anUploadIsRefusedWithoutTheHeaderAndPassesWithIt(String path, String part) throws Exception {
-        String login = basic("shawn", "op");
+        String login = basic("operator", "op");
         Cookie cookie = csrfCookie(login);
         MockMultipartFile file = new MockMultipartFile(part, "a.txt", "text/plain", new byte[] {1});
         mvc.perform(multipart(path).file(file)
@@ -248,7 +248,7 @@ class GateFilterChainTest {
 
     @Test
     void theStorageTestIsRefusedWithoutTheHeader() throws Exception {
-        String login = basic("shawn", "op");
+        String login = basic("operator", "op");
         mvc.perform(post("/api/settings/beta/receiver-storage/test")
                 .header(HttpHeaders.AUTHORIZATION, login)
                 .cookie(csrfCookie(login)))
