@@ -32,7 +32,7 @@ class WorkspaceDefinitionsTest {
 
     private static final String GATE_PW = "s3cret-gate-pw";
     private static final String MEMBER_PW = "s3cret-member-pw";
-    private static final String CLIENT_SECRET = "s3cret-client-secret";
+    private static final String OAUTH_SECRET = "s3cret-client-secret";
 
     /** beta has no Entra tenant and audience, so only dev can take a client id and secret. */
     private static final DemoProperties PROPERTIES = new DemoProperties(
@@ -58,7 +58,7 @@ class WorkspaceDefinitionsTest {
     void aWorkspaceCarriesItsLoginItsSeedsInEitherFormAndItsPartnerSeeds() {
         var definitions = parse("[{" + TEAM_A + ","
             + " \"seeds\": {\"beta\": {\"username\": \"a@example.test\", \"password\": \"" + MEMBER_PW + "\"},"
-            + "             \"dev\": {\"clientId\": \"client-a\", \"clientSecret\": \"" + CLIENT_SECRET + "\"}},"
+            + "             \"dev\": {\"clientId\": \"client-a\", \"clientSecret\": \"" + OAUTH_SECRET + "\"}},"
             + " \"e2eePartners\": {\"beta\": {\"2087\": {\"jwksUrl\": \"https://keys.partner.example/jwks.json\"}}}},"
             + " {\"name\": \"team-b\", \"username\": \"team-b\", \"password\": \"b-pw\"}]");
 
@@ -72,12 +72,12 @@ class WorkspaceDefinitionsTest {
         assertThat(teamA.seeds().get("beta").password()).isEqualTo(MEMBER_PW);
         assertThat(teamA.seeds().get("dev").isOAuth()).isTrue();
         assertThat(teamA.seeds().get("dev").clientId()).isEqualTo("client-a");
-        assertThat(teamA.seeds().get("dev").clientSecret()).isEqualTo(CLIENT_SECRET);
+        assertThat(teamA.seeds().get("dev").clientSecret()).isEqualTo(OAUTH_SECRET);
         assertThat(teamA.partnerSeeds()).containsOnlyKeys("beta");
         assertThat(teamA.partnerSeeds().get("beta")).contains("\"2087\"").contains("https://keys.partner.example/jwks.json");
         assertThat(definitions.get(1).seeds()).isEmpty();
         assertThat(definitions.get(1).partnerSeeds()).isEmpty();
-        assertThat(teamA.toString()).doesNotContain(GATE_PW).doesNotContain(MEMBER_PW).doesNotContain(CLIENT_SECRET);
+        assertThat(teamA.toString()).doesNotContain(GATE_PW).doesNotContain(MEMBER_PW).doesNotContain(OAUTH_SECRET);
     }
 
     // Each row: what follows team-a's name, username and password in its entry, then what the refusal says.
@@ -126,7 +126,7 @@ class WorkspaceDefinitionsTest {
             .hasMessageContaining(why)
             .hasMessageNotContaining(GATE_PW)
             .hasMessageNotContaining(MEMBER_PW)
-            .hasMessageNotContaining(CLIENT_SECRET)
+            .hasMessageNotContaining(OAUTH_SECRET)
             .hasNoCause();
     }
 
