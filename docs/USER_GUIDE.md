@@ -287,7 +287,8 @@ manages subscriptions and shows TSANet's delivery attempts outward.
 ## 9. What the demo intentionally does not do
 
 - No inbound webhook receiver (subscriptions management only)
-- No multi-user/session handling — one shared SDK session per server instance
+- No per-person accounts or sessions: everyone who uses one gate login shares that workspace's
+  sign-in, SDK session and state. Workspaces separate teams, not people
 - No case assignment, SLA, or reporting views — outside the SDK's surface
 - No first-receipt (`iat`, `jti`) checks on encrypted records: with no webhook receiver every record is a stored read, verified for signature, binding and digests only. No key rotation (one current key pair; replace the value and redeploy) and no key service (`SoftwareKeyOperations` holds the demo's own keys)
 
