@@ -253,7 +253,10 @@ public class PartnerKeysStore implements AutoCloseable {
             String companyId = field.getKey();
             JsonNode node = field.getValue();
             if (!companyId.matches("[0-9]+") || !node.isObject()) {
-                throw new IOException("entry " + companyId + " must be an object keyed by a numeric company id");
+                // A key that is not a company id may be text pasted in the wrong place, and this message reaches
+                // the startup log, so the key is named only when it is a plain word (tsanetgit/Connect_SDK#190).
+                throw new IOException((companyId.matches("[A-Za-z0-9_-]{1,32}") ? "entry " + companyId : "an entry")
+                    + " must be an object keyed by a numeric company id");
             }
             JsonNode url = node.get("jwksUrl");
             JsonNode jwks = node.get("jwks");

@@ -153,6 +153,59 @@ class WorkspacesTest {
         assertThat(left).isEmpty();
     }
 
+    private Throwable startWithPartnerTable(String table) {
+        E2eeKeys keys = E2eeKeys.fromJson(E2eeTestVectors.load().memberAPrivateJwks());
+        String teamB = "{\"name\": \"team-b\", \"username\": \"team-b\", \"password\": \"s3cret-b-pw\","
+            + " \"e2eePartners\": {\"beta\": " + table + "}}";
+        return org.assertj.core.api.Assertions.catchThrowable(() -> new Workspaces(properties(), keys,
+            new DemoE2eeProperties(null, null), new DemoAuthProperties("operator", "op", null),
+            new DemoWorkspacesProperties("[" + teamB + "]")));
+    }
+
+    @Test
+    void aPartnerTableKeyIsPrintedInARefusalOnlyWhenItIsAPlainWord() {
+        // A key that is not a company id may be text pasted in the wrong place, so it is treated as the
+        // parser treats a field name: named when it is a plain word, which finds a typo, and not otherwise.
+        String source = "TSANET_DEMO_WORKSPACES (workspace team-b, e2eePartners for beta) is not a usable partner key table: ";
+
+        assertThat(startWithPartnerTable("{\"s3cret pasted here!\": {}}"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage(source + "an entry must be an object keyed by a numeric company id")
+            .hasMessageNotContaining("s3cret");
+        // The company id level left out, a likely slip: the key says what happened.
+        assertThat(startWithPartnerTable("{\"jwksUrl\": \"https://keys.partner.example/jwks.json\"}"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage(source + "entry jwksUrl must be an object keyed by a numeric company id");
+    }
+
+    @Test
+    void aWorkspaceTakesNoPartnerSeedFromTheOperatorsVariables() {
+        // The decision on tsanetgit/Connect_SDK#190: a workspace's partner table is seeded from its own
+        // e2eePartners and inherits nothing from TSANET_DEMO_E2EE_PARTNERS_*, for an environment it gives
+        // no seed for as much as for a workspace that gives none at all.
+        E2eeKeys keys = E2eeKeys.fromJson(E2eeTestVectors.load().memberAPrivateJwks());
+        String operatorsTable = "{\"" + E2eeTestVectors.MEMBER_B + "\": {\"jwksUrl\": \"https://keys.operator.example/jwks.json\"}}";
+        DemoE2eeProperties operators = new DemoE2eeProperties(null, Map.of("beta", operatorsTable, "dev", operatorsTable));
+        String teamB = "{\"name\": \"team-b\", \"username\": \"team-b\", \"password\": \"s3cret-b-pw\","
+            + " \"e2eePartners\": {\"dev\": {\"" + E2eeTestVectors.MEMBER_A + "\": {\"jwksUrl\": \"https://keys.team-b.example/jwks.json\"}}}}";
+        Workspaces workspaces = new Workspaces(properties(), keys, operators,
+            new DemoAuthProperties("operator", "op", null), new DemoWorkspacesProperties("[" + TEAM_A + ", " + teamB + "]"));
+        try {
+            EnvironmentService operator = workspaces.all().get(0).environments();
+            EnvironmentService teamAs = workspaces.all().get(1).environments();
+            EnvironmentService teamBs = workspaces.all().get(2).environments();
+
+            assertThat(operator.partnerKeysFor("beta").entries()).containsOnlyKeys(E2eeTestVectors.MEMBER_B);
+            assertThat(operator.partnerKeysFor("dev").entries()).containsOnlyKeys(E2eeTestVectors.MEMBER_B);
+            assertThat(teamAs.partnerKeysFor("beta").entries()).isEmpty();
+            assertThat(teamAs.partnerKeysFor("dev").entries()).isEmpty();
+            assertThat(teamBs.partnerKeysFor("beta").entries()).isEmpty();
+            assertThat(teamBs.partnerKeysFor("dev").entries()).containsOnlyKeys(E2eeTestVectors.MEMBER_A);
+        } finally {
+            workspaces.close();
+        }
+    }
+
     private static java.util.Set<Long> selectorThreads() {
         java.util.Set<Long> ids = new java.util.HashSet<>();
         for (Thread thread : Thread.getAllStackTraces().keySet()) {
