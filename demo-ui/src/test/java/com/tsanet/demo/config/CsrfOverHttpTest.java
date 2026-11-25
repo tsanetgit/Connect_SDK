@@ -19,13 +19,13 @@ import org.springframework.boot.test.web.server.LocalServerPort;
  * {@code WWW-Authenticate} would make the browser prompt for the login.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-    "tsanet.demo.auth.username=shawn",
+    "tsanet.demo.auth.username=operator",
     "tsanet.demo.auth.password=op",
     "tsanet.demo.data-dir=${java.io.tmpdir}/tsanet-demo-csrf-test-${random.uuid}"
 })
 class CsrfOverHttpTest {
 
-    private static final String LOGIN = "Basic " + Base64.getEncoder().encodeToString("shawn:op".getBytes(StandardCharsets.UTF_8));
+    private static final String LOGIN = "Basic " + Base64.getEncoder().encodeToString("operator:op".getBytes(StandardCharsets.UTF_8));
 
     @LocalServerPort
     private int port;

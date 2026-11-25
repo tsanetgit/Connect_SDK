@@ -27,7 +27,7 @@ import org.springframework.web.context.WebApplicationContext;
  * property under test, so this boots the context, as {@link GateFilterChainTest} does.
  */
 @SpringBootTest(properties = {
-    "tsanet.demo.auth.username=shawn",
+    "tsanet.demo.auth.username=operator",
     "tsanet.demo.auth.password=op",
     "tsanet.demo.data-dir=${java.io.tmpdir}/tsanet-demo-jwks-test-${random.uuid}"
 })
